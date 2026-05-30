@@ -1,0 +1,70 @@
+<script type="text/javascript">
+  RED.nodes.registerType('imap-queue-nack', {
+    category: 'imap queue',
+    color: '#D8BFD8',
+    defaults: {
+      name: { value: '' },
+      account: { value: '', type: 'imap-queue-account', required: true },
+      mailbox: { value: 'INBOX' },
+      action: { value: 'retry' },
+      failedMailbox: { value: '.NodeRED.failed' }
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ['nack ok', 'nack error'],
+    icon: 'font-awesome/fa-times',
+    label: function () {
+      return this.name || 'imap queue nack';
+    },
+    oneditprepare: function () {
+      function updateFailedMailbox() {
+        var action = $('#node-input-action').val();
+        if (action === 'move') {
+          $('.form-row-failed-mailbox').show();
+        } else {
+          $('.form-row-failed-mailbox').hide();
+        }
+      }
+      $('#node-input-action').on('change', updateFailedMailbox);
+      updateFailedMailbox();
+    }
+  });
+</script>
+
+<script type="text/html" data-template-name="imap-queue-nack">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="IMAP Queue NACK">
+  </div>
+  <div class="form-row">
+    <label for="node-input-account"><i class="fa fa-user"></i> Account</label>
+    <input type="text" id="node-input-account">
+  </div>
+  <div class="form-row">
+    <label for="node-input-mailbox"><i class="fa fa-inbox"></i> Mailbox fallback</label>
+    <input type="text" id="node-input-mailbox" placeholder="INBOX">
+  </div>
+  <div class="form-row">
+    <label for="node-input-action">Action</label>
+    <select id="node-input-action">
+      <option value="retry">retry later - keep inflight until retry timeout</option>
+      <option value="retry-now">retry now - clear inflight only</option>
+      <option value="move">move to failed mailbox</option>
+      <option value="delete">delete</option>
+    </select>
+  </div>
+  <div class="form-row form-row-failed-mailbox">
+    <label for="node-input-failedMailbox">Failed mailbox</label>
+    <input type="text" id="node-input-failedMailbox" placeholder=".NodeRED.failed">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="imap-queue-nack">
+  <p>Optional negative acknowledgement for messages that should not continue on the normal ACK path.</p>
+  <ul>
+    <li><b>retry</b>: keep the message in the mailbox and keep the inflight entry until the retry timeout.</li>
+    <li><b>retry-now</b>: keep the message in the mailbox but clear the inflight entry.</li>
+    <li><b>move</b>: move the message to a failed mailbox.</li>
+    <li><b>delete</b>: delete the message.</li>
+  </ul>
+</script>

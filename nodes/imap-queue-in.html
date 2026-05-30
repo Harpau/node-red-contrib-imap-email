@@ -1,0 +1,110 @@
+<script type="text/javascript">
+  RED.nodes.registerType('imap-queue-in', {
+    category: 'imap queue',
+    color: '#D8BFD8',
+    defaults: {
+      name: { value: '' },
+      account: { value: '', type: 'imap-queue-account', required: true },
+      mailbox: { value: 'INBOX', required: true },
+      pollIntervalMs: { value: 1000, required: true, validate: RED.validators.number() },
+      drainIntervalMs: { value: 200, required: true, validate: RED.validators.number() },
+      batchSize: { value: 50, required: true, validate: RED.validators.number() },
+      frontWindowSize: { value: 500, required: true, validate: RED.validators.number() },
+      maxInflight: { value: 500, required: true, validate: RED.validators.number() },
+      retryAfterMs: { value: 1800000, required: true, validate: RED.validators.number() },
+      maxUidPerCommand: { value: 500, required: true, validate: RED.validators.number() },
+      skipDeleted: { value: true },
+      expungeDeletedFront: { value: true },
+      expungeDeletedFrontLimit: { value: 200, required: true, validate: RED.validators.number() },
+      includeAttachments: { value: false },
+      emitRaw: { value: false },
+      autoStart: { value: true }
+    },
+    inputs: 0,
+    outputs: 3,
+    outputLabels: ['mail', 'error / parse error', 'stats'],
+    icon: 'font-awesome/fa-envelope-o',
+    label: function () {
+      return this.name || ('imap queue ' + (this.mailbox || 'INBOX'));
+    }
+  });
+</script>
+
+<script type="text/html" data-template-name="imap-queue-in">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="IMAP Queue In">
+  </div>
+  <div class="form-row">
+    <label for="node-input-account"><i class="fa fa-user"></i> Account</label>
+    <input type="text" id="node-input-account">
+  </div>
+  <div class="form-row">
+    <label for="node-input-mailbox"><i class="fa fa-inbox"></i> Mailbox</label>
+    <input type="text" id="node-input-mailbox" placeholder="INBOX">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-pollIntervalMs">Poll ms</label>
+    <input type="number" id="node-input-pollIntervalMs">
+  </div>
+  <div class="form-row">
+    <label for="node-input-drainIntervalMs">Drain ms</label>
+    <input type="number" id="node-input-drainIntervalMs">
+  </div>
+  <div class="form-row">
+    <label for="node-input-batchSize">Batch size</label>
+    <input type="number" id="node-input-batchSize">
+  </div>
+  <div class="form-row">
+    <label for="node-input-frontWindowSize">Front window</label>
+    <input type="number" id="node-input-frontWindowSize">
+  </div>
+  <div class="form-row">
+    <label for="node-input-maxInflight">Max inflight</label>
+    <input type="number" id="node-input-maxInflight">
+  </div>
+  <div class="form-row">
+    <label for="node-input-retryAfterMs">Retry after ms</label>
+    <input type="number" id="node-input-retryAfterMs">
+  </div>
+  <div class="form-row">
+    <label for="node-input-maxUidPerCommand">UIDs/command</label>
+    <input type="number" id="node-input-maxUidPerCommand">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-skipDeleted">Skip deleted</label>
+    <input type="checkbox" id="node-input-skipDeleted" style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <div class="form-row">
+    <label for="node-input-expungeDeletedFront">Expunge front</label>
+    <input type="checkbox" id="node-input-expungeDeletedFront" style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <div class="form-row">
+    <label for="node-input-expungeDeletedFrontLimit">Expunge limit</label>
+    <input type="number" id="node-input-expungeDeletedFrontLimit">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-includeAttachments">Attachments</label>
+    <input type="checkbox" id="node-input-includeAttachments" style="display:inline-block; width:auto; vertical-align:top;">
+    <span>Include parsed attachments in msg.email.attachments</span>
+  </div>
+  <div class="form-row">
+    <label for="node-input-emitRaw">Raw source</label>
+    <input type="checkbox" id="node-input-emitRaw" style="display:inline-block; width:auto; vertical-align:top;">
+    <span>Include raw source in msg.raw</span>
+  </div>
+  <div class="form-row">
+    <label for="node-input-autoStart">Auto start</label>
+    <input type="checkbox" id="node-input-autoStart" style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="imap-queue-in">
+  <p>Reads an IMAP mailbox as an at-least-once queue.</p>
+  <p>The node only scans a bounded front window such as <code>1:500</code>, emits at most <code>batchSize</code> messages per cycle, and never deletes messages itself.</p>
+  <p>Output 1 emits parsed mails with <code>msg.imap.ackToken</code>. Wire successful processing to an <b>imap queue ack</b> node.</p>
+  <p>Output 2 emits errors and parse errors. Output 3 emits stats.</p>
+</script>

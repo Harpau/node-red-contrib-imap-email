@@ -1,0 +1,52 @@
+{
+  "name": "@compeso/node-red-contrib-imap-queue",
+  "version": "0.1.0",
+  "description": "Node-RED IMAP queue nodes with bounded front-window fetch and at-least-once ACK deletion.",
+  "license": "MIT",
+  "author": "compeso",
+  "homepage": "https://github.com/compeso/node-red-contrib-imap-queue#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/compeso/node-red-contrib-imap-queue.git"
+  },
+  "bugs": {
+    "url": "https://github.com/compeso/node-red-contrib-imap-queue/issues"
+  },
+  "keywords": [
+    "node-red",
+    "imap",
+    "email",
+    "mail",
+    "queue",
+    "at-least-once",
+    "ack"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "pack:local": "npm pack"
+  },
+  "dependencies": {
+    "imapflow": "^1.3.3",
+    "mailparser": "^3.9.8"
+  },
+  "files": [
+    "nodes",
+    "lib",
+    "examples",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "node-red": {
+    "version": ">=3.0.0",
+    "nodes": {
+      "imap-queue-account": "nodes/imap-queue-account.js",
+      "imap-queue-in": "nodes/imap-queue-in.js",
+      "imap-queue-ack": "nodes/imap-queue-ack.js",
+      "imap-queue-nack": "nodes/imap-queue-nack.js"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+<script type="text/javascript">
+  RED.nodes.registerType('imap-queue-ack', {
+    category: 'imap queue',
+    color: '#D8BFD8',
+    defaults: {
+      name: { value: '' },
+      account: { value: '', type: 'imap-queue-account', required: true },
+      mailbox: { value: 'INBOX' },
+      batchSize: { value: 100, required: true, validate: RED.validators.number() },
+      flushMs: { value: 500, required: true, validate: RED.validators.number() },
+      maxUidPerCommand: { value: 500, required: true, validate: RED.validators.number() },
+      maxBatchesPerFlush: { value: 20, required: true, validate: RED.validators.number() }
+    },
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ['ack ok', 'ack error'],
+    icon: 'font-awesome/fa-check',
+    label: function () {
+      return this.name || 'imap queue ack';
+    }
+  });
+</script>
+
+<script type="text/html" data-template-name="imap-queue-ack">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="IMAP Queue ACK">
+  </div>
+  <div class="form-row">
+    <label for="node-input-account"><i class="fa fa-user"></i> Account</label>
+    <input type="text" id="node-input-account">
+  </div>
+  <div class="form-row">
+    <label for="node-input-mailbox"><i class="fa fa-inbox"></i> Mailbox fallback</label>
+    <input type="text" id="node-input-mailbox" placeholder="INBOX">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-batchSize">Batch size</label>
+    <input type="number" id="node-input-batchSize">
+  </div>
+  <div class="form-row">
+    <label for="node-input-flushMs">Flush ms</label>
+    <input type="number" id="node-input-flushMs">
+  </div>
+  <div class="form-row">
+    <label for="node-input-maxUidPerCommand">UIDs/command</label>
+    <input type="number" id="node-input-maxUidPerCommand">
+  </div>
+  <div class="form-row">
+    <label for="node-input-maxBatchesPerFlush">Batches/flush</label>
+    <input type="number" id="node-input-maxBatchesPerFlush">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="imap-queue-ack">
+  <p>ACK node for IMAP Queue messages.</p>
+  <p>Wire this node only after successful processing. It batches incoming ACKs and deletes the corresponding messages by UID from the mailbox in <code>msg.imap.ackToken</code>.</p>
+  <p>No Inject node is required. The node uses an internal flush timer.</p>
+</script>
