@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.1.0.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.3.1.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -102,10 +102,45 @@ Danach den Config-Node `STRATO test` öffnen und Benutzername/Passwort eintragen
 Minimaler Aufbau:
 
 ```text
-imap queue in
-  -> deine Verarbeitung
-      -> imap queue ack
+Inject / Scheduler / HTTP-Trigger
+  -> imap queue in
+      -> deine Verarbeitung
+          -> imap queue ack
 ```
 
 Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node führen.
 
+
+
+## 9. Hinweis ab Version 0.2.0
+
+Der Node `imap queue in` ruft keine Mails mehr automatisch ab. Er hat einen Eingang und startet genau einen begrenzten Abrufzyklus pro eingehender Message.
+
+Das ist absichtlich so, damit der Mailabruf ausschließlich von deinem Flow gesteuert wird, zum Beispiel über einen Inject-Node, einen Scheduler, einen HTTP-Endpoint oder einen eigenen Backpressure-Mechanismus.
+
+Wenn während eines laufenden Abrufs ein weiterer Trigger eintrifft, wird kein paralleler IMAP-Abruf gestartet. Stattdessen sendet der Node auf Ausgang 3 eine Stats-Meldung mit `payload.skipped = true` und `payload.reason = "already running"`.
+
+
+## 10. Hinweis ab Version 0.3.0
+
+Der Output des Nodes `imap queue in` wurde bereinigt:
+
+```text
+msg.html             entfällt
+msg.attachments      entfällt
+msg.email.subject    heißt jetzt msg.email.topic
+msg.email.headers    heißt jetzt msg.email.header
+```
+
+Der Top-Level-Wert `msg.topic` bleibt weiterhin der Betreff der Mail. HTML-Body und Attachments liegen nur noch unter `msg.email.html` beziehungsweise `msg.email.attachments`.
+
+## 11. Hinweis ab Version 0.3.1
+
+`imap queue in` behandelt Mails robuster, die zwischen Front-Window-Scan und vollständigem Abruf bereits das IMAP-Flag `\\Deleted` bekommen haben. Solche Mails werden nicht mehr an `mailparser` übergeben und erzeugen dadurch keine Parse-Fehler vom Typ `Input cannot be null or undefined` mehr.
+
+In der Stats-Ausgabe können zusätzlich diese Werte erscheinen:
+
+```text
+deletedSkippedDuringFetch
+missingSource
+```

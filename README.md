@@ -4,6 +4,8 @@ Node-RED nodes for using an IMAP mailbox as an **at-least-once queue**.
 
 The package is designed for mailboxes that can temporarily contain many messages. It does not run an unbounded `SEARCH UNDELETED` over the whole mailbox. Instead, the input node reads a bounded front window such as `1:500`, emits only a limited batch, and waits for an ACK node to delete messages after successful processing.
 
+Since version `0.2.0`, `imap-queue-in` is **externally triggered only**. It does not poll by itself. Wire an Inject node, scheduler, HTTP endpoint, or any other trigger to its input. Every incoming trigger starts exactly one bounded fetch cycle.
+
 ## Nodes
 
 ### `imap-queue-account`
@@ -12,7 +14,9 @@ Configuration node with IMAP host, port, TLS settings and credentials.
 
 ### `imap-queue-in`
 
-Source node. It polls the configured mailbox automatically and emits parsed e-mails.
+Input node with one input and three outputs. It performs one bounded fetch cycle whenever it receives a message.
+
+It does **not** start by itself and does **not** run an internal polling or drain timer. If a trigger arrives while a fetch cycle is already running, it skips that trigger and emits a stats message on output 3 with `payload.skipped = true` and `payload.reason = "already running"`.
 
 Outputs:
 
@@ -23,15 +27,22 @@ Outputs:
 Important fields on output 1:
 
 ```js
+msg.topic             // mail subject, for Node-RED compatibility
 msg.payload           // text body
-msg.html              // html body if available
 msg.email             // parsed metadata
+msg.email.topic       // mail subject inside the email object
+msg.email.text        // text body
+msg.email.html        // html body if available
+msg.email.header      // parsed headers object
+msg.email.attachments // parsed attachments, only when enabled
 msg.imap.ackToken     // required for imap-queue-ack
 ```
 
+The node intentionally does not emit `msg.html` or `msg.attachments`. HTML and attachments are nested below `msg.email`.
+
 ### `imap-queue-ack`
 
-Input node. Wire this node only after successful processing. It batches ACKs internally and deletes messages by UID from the queue mailbox. No Inject node is required.
+Input node. Wire this node only after successful processing. It batches ACKs internally and deletes messages by UID from the queue mailbox. No additional ACK flush Inject node is required.
 
 ### `imap-queue-nack`
 
@@ -59,21 +70,35 @@ Persistent local state: not required
 
 ## Suggested settings for a queue mailbox
 
+Use an external trigger interval that matches your desired throughput, for example an Inject node every 1 second or a scheduler that triggers more often while backlog exists.
+
 ```text
-Mailbox:                 INBOX
-Poll interval:           1000 ms
-Drain interval:          200 ms
-Batch size:              50
-Front window size:       500
-Max inflight:            500
-Retry after:             1800000 ms
-ACK batch size:          100
-ACK flush:               500 ms
-UIDs per command:        500
-Skip deleted:            true
-Expunge deleted front:   true
-Expunge deleted limit:   200
+External trigger:         e.g. Inject every 1 second
+Mailbox:                  INBOX
+Batch size:               50
+Front window size:        500
+Max inflight:             500
+Retry after:              1800000 ms
+ACK batch size:           100
+ACK flush:                500 ms
+UIDs per command:         500
+Skip deleted:             true
+Expunge deleted front:    true
+Expunge deleted limit:    200
 ```
+
+If the external trigger fires faster than one fetch cycle can finish, the node does not start a second parallel IMAP fetch. It emits a skipped stats message instead.
+
+## Minimal flow
+
+```text
+Inject / scheduler / HTTP trigger
+  -> imap queue in
+      -> your successful processing path
+          -> imap queue ack
+```
+
+Only the successful processing path may lead to `imap-queue-ack`. If processing fails, do not ACK. The message stays in the mailbox and will be delivered again after the retry timeout or after a restart.
 
 ## Installation from GitHub
 
@@ -129,6 +154,25 @@ After import, open the `imap-queue-account` config node and enter username and p
 - Wire `imap-queue-ack` only after all processing that must succeed.
 - If processing fails, do not ACK. The message stays in the mailbox and will be delivered again after the retry timeout or after a restart.
 
+## Upgrade note from 0.2.x to 0.3.x
+
+Version `0.3.0` changes the output shape of `imap-queue-in`:
+
+```text
+msg.html             removed
+msg.attachments      removed
+msg.email.subject    replaced by msg.email.topic
+msg.email.headers    replaced by msg.email.header
+```
+
+The top-level `msg.topic` still contains the mail subject for normal Node-RED compatibility.
+
+## Upgrade note from 0.1.x
+
+Version `0.1.x` implemented `imap-queue-in` as an automatic source node with internal polling. Version `0.2.0` changes it to an externally triggered input node.
+
+After upgrading, add an Inject node, scheduler, or other trigger in front of `imap-queue-in`. The old settings `pollIntervalMs`, `drainIntervalMs`, and `autoStart` are no longer used.
+
 ## GitHub quick start
 
 ```bash
@@ -138,4 +182,15 @@ git commit -m "Initial IMAP queue Node-RED nodes"
 git branch -M main
 git remote add origin https://github.com/compeso/node-red-contrib-imap-queue.git
 git push -u origin main
+```
+
+## Upgrade note from 0.3.0 to 0.3.1
+
+Version `0.3.1` makes `imap-queue-in` defensive against messages that become `\\Deleted` between the lightweight front-window scan and the full source fetch. Such messages are skipped and optionally expunged instead of being passed to `mailparser` with an empty source.
+
+The stats message may include:
+
+```text
+deletedSkippedDuringFetch
+missingSource
 ```

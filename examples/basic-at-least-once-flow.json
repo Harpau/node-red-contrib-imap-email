@@ -4,7 +4,7 @@
     "type": "tab",
     "label": "IMAP Queue example",
     "disabled": false,
-    "info": "Example flow for @compeso/node-red-contrib-imap-queue"
+    "info": "Example flow for @compeso/node-red-contrib-imap-queue. The IMAP fetch is externally triggered."
   },
   {
     "id": "2b40b931e3ce3d1a",
@@ -19,14 +19,37 @@
     "socketTimeout": "300000"
   },
   {
+    "id": "348271c99c0cf7ae",
+    "type": "inject",
+    "z": "b2f6e3681c7c4801",
+    "name": "Trigger IMAP fetch",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "1",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "1",
+    "topic": "imap.fetch",
+    "payload": "",
+    "payloadType": "date",
+    "x": 150,
+    "y": 120,
+    "wires": [["52c74eb9f1841ec0"]]
+  },
+  {
     "id": "52c74eb9f1841ec0",
     "type": "imap-queue-in",
     "z": "b2f6e3681c7c4801",
     "name": "INBOX queue in",
     "account": "2b40b931e3ce3d1a",
     "mailbox": "INBOX",
-    "pollIntervalMs": "1000",
-    "drainIntervalMs": "200",
     "batchSize": "50",
     "frontWindowSize": "500",
     "maxInflight": "500",
@@ -37,8 +60,7 @@
     "expungeDeletedFrontLimit": "200",
     "includeAttachments": false,
     "emitRaw": false,
-    "autoStart": true,
-    "x": 180,
+    "x": 380,
     "y": 120,
     "wires": [
       ["4ccbf2d3a83941b1"],
@@ -58,7 +80,7 @@
     "initialize": "",
     "finalize": "",
     "libs": [],
-    "x": 440,
+    "x": 650,
     "y": 100,
     "wires": [["b0edbceee5d5e7f8"]]
   },
@@ -73,7 +95,7 @@
     "flushMs": "500",
     "maxUidPerCommand": "500",
     "maxBatchesPerFlush": "20",
-    "x": 690,
+    "x": 900,
     "y": 100,
     "wires": [["0cc333e23df86373"], ["a85897cfd9f1e067"]]
   },
@@ -90,7 +112,7 @@
     "targetType": "full",
     "statusVal": "",
     "statusType": "auto",
-    "x": 430,
+    "x": 640,
     "y": 160,
     "wires": []
   },
@@ -107,7 +129,7 @@
     "targetType": "msg",
     "statusVal": "",
     "statusType": "auto",
-    "x": 420,
+    "x": 630,
     "y": 220,
     "wires": []
   },
@@ -124,7 +146,7 @@
     "targetType": "msg",
     "statusVal": "",
     "statusType": "auto",
-    "x": 900,
+    "x": 1110,
     "y": 80,
     "wires": []
   },
@@ -141,7 +163,7 @@
     "targetType": "full",
     "statusVal": "",
     "statusType": "auto",
-    "x": 900,
+    "x": 1110,
     "y": 120,
     "wires": []
   }

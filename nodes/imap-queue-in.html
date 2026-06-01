@@ -6,8 +6,6 @@
       name: { value: '' },
       account: { value: '', type: 'imap-queue-account', required: true },
       mailbox: { value: 'INBOX', required: true },
-      pollIntervalMs: { value: 1000, required: true, validate: RED.validators.number() },
-      drainIntervalMs: { value: 200, required: true, validate: RED.validators.number() },
       batchSize: { value: 50, required: true, validate: RED.validators.number() },
       frontWindowSize: { value: 500, required: true, validate: RED.validators.number() },
       maxInflight: { value: 500, required: true, validate: RED.validators.number() },
@@ -17,10 +15,9 @@
       expungeDeletedFront: { value: true },
       expungeDeletedFrontLimit: { value: 200, required: true, validate: RED.validators.number() },
       includeAttachments: { value: false },
-      emitRaw: { value: false },
-      autoStart: { value: true }
+      emitRaw: { value: false }
     },
-    inputs: 0,
+    inputs: 1,
     outputs: 3,
     outputLabels: ['mail', 'error / parse error', 'stats'],
     icon: 'font-awesome/fa-envelope-o',
@@ -44,14 +41,6 @@
     <input type="text" id="node-input-mailbox" placeholder="INBOX">
   </div>
   <hr>
-  <div class="form-row">
-    <label for="node-input-pollIntervalMs">Poll ms</label>
-    <input type="number" id="node-input-pollIntervalMs">
-  </div>
-  <div class="form-row">
-    <label for="node-input-drainIntervalMs">Drain ms</label>
-    <input type="number" id="node-input-drainIntervalMs">
-  </div>
   <div class="form-row">
     <label for="node-input-batchSize">Batch size</label>
     <input type="number" id="node-input-batchSize">
@@ -96,15 +85,13 @@
     <input type="checkbox" id="node-input-emitRaw" style="display:inline-block; width:auto; vertical-align:top;">
     <span>Include raw source in msg.raw</span>
   </div>
-  <div class="form-row">
-    <label for="node-input-autoStart">Auto start</label>
-    <input type="checkbox" id="node-input-autoStart" style="display:inline-block; width:auto; vertical-align:top;">
-  </div>
 </script>
 
 <script type="text/html" data-help-name="imap-queue-in">
-  <p>Reads an IMAP mailbox as an at-least-once queue.</p>
-  <p>The node only scans a bounded front window such as <code>1:500</code>, emits at most <code>batchSize</code> messages per cycle, and never deletes messages itself.</p>
+  <p>Reads an IMAP mailbox as an at-least-once queue when triggered by an incoming message.</p>
+  <p>The node does not poll automatically. Each input message starts one bounded fetch cycle.</p>
+  <p>The node only scans a bounded front window such as <code>1:500</code>, emits at most <code>batchSize</code> messages per trigger, and never deletes messages itself.</p>
+  <p>If another trigger arrives while a fetch cycle is still running, the node skips that trigger and emits a stats message on output 3.</p>
   <p>Output 1 emits parsed mails with <code>msg.imap.ackToken</code>. Wire successful processing to an <b>imap queue ack</b> node.</p>
   <p>Output 2 emits errors and parse errors. Output 3 emits stats.</p>
 </script>
