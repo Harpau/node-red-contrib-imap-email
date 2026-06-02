@@ -28,7 +28,7 @@ module.exports = function registerImapQueueAck(RED) {
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
-      node.error("Missing imap-queue-account configuration");
+      node.error("Missing imap queue account configuration");
       return;
     }
 
@@ -52,7 +52,7 @@ module.exports = function registerImapQueueAck(RED) {
       if (diagnostics.wantsStats(node.diagnostics)) {
         node.send([null, null, { payload: stats }]);
       }
-      diagnostics.debug(node, node.diagnostics, "imap-queue-ack.flush", stats);
+      diagnostics.debug(node, node.diagnostics, "imap queue ack.flush", stats);
     }
 
     node.scheduleFlush = function scheduleFlush(delayMs) {
@@ -109,7 +109,7 @@ module.exports = function registerImapQueueAck(RED) {
       const groups = node.groupItems(items);
       const stats = {
         ok: true,
-        type: "imap-queue-ack-stats",
+        type: "imap queue ack stats",
         diagnostics: node.diagnostics,
         startedAt: new Date(startedAt).toISOString(),
         finishedAt: null,
@@ -281,7 +281,7 @@ module.exports = function registerImapQueueAck(RED) {
       });
 
       node.status({ fill: "yellow", shape: "ring", text: `ACK pending ${node.pending.length}` });
-      diagnostics.debug(node, node.diagnostics, "imap-queue-ack.queued", {
+      diagnostics.debug(node, node.diagnostics, "imap queue ack.queued", {
         pending: node.pending.length,
         mailbox: token.mailbox || node.mailbox || "INBOX",
         uid: token.uid,
@@ -325,5 +325,5 @@ module.exports = function registerImapQueueAck(RED) {
     });
   }
 
-  RED.nodes.registerType("imap-queue-ack", ImapQueueAckNode);
+  RED.nodes.registerType("imap queue ack", ImapQueueAckNode);
 };

@@ -1,10 +1,10 @@
 <script type="text/javascript">
-  RED.nodes.registerType('imap-queue-in', {
+  RED.nodes.registerType('imap queue in', {
     category: 'imap queue',
     color: '#D8BFD8',
     defaults: {
       name: { value: '' },
-      account: { value: '', type: 'imap-queue-account', required: true },
+      account: { value: '', type: 'imap queue account', required: true },
       mailbox: { value: 'INBOX', required: true },
       batchSize: { value: 50, required: true, validate: RED.validators.number() },
       frontWindowSize: { value: 500, required: true, validate: RED.validators.number() },
@@ -21,6 +21,7 @@
     inputs: 1,
     outputs: 3,
     outputLabels: ['mail', 'error / parse error', 'stats'],
+    paletteLabel: 'imap queue in',
     icon: 'font-awesome/fa-envelope-o',
     label: function () {
       return this.name || ('imap queue ' + (this.mailbox || 'INBOX'));
@@ -28,10 +29,10 @@
   });
 </script>
 
-<script type="text/html" data-template-name="imap-queue-in">
+<script type="text/html" data-template-name="imap queue in">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input type="text" id="node-input-name" placeholder="IMAP Queue In">
+    <input type="text" id="node-input-name" placeholder="imap queue in">
   </div>
   <div class="form-row">
     <label for="node-input-account"><i class="fa fa-user"></i> Account</label>
@@ -97,11 +98,78 @@
   </div>
 </script>
 
-<script type="text/html" data-help-name="imap-queue-in">
-  <p>Reads an IMAP mailbox as an at-least-once queue when triggered by an incoming message.</p>
-  <p>The node does not poll automatically. Each input message starts one bounded fetch cycle.</p>
-  <p>The node only scans a bounded front window such as <code>1:500</code>, emits at most <code>batchSize</code> messages per trigger, and never deletes messages itself.</p>
-  <p>If another trigger arrives while a fetch cycle is still running, the node skips that trigger and emits a stats message on output 3.</p>
-  <p>Output 1 emits parsed mails with <code>msg.imap.ackToken</code>. Wire successful processing to an <b>imap queue ack</b> node.</p>
-  <p>Output 2 emits errors and parse errors. Output 3 emits structured stats when Diagnostics is set to <code>stats</code> or <code>debug</code>.</p>
+<script type="text/html" data-help-name="imap queue in">
+  <p>Externally triggered IMAP input node for using a mailbox as an at-least-once queue.</p>
+
+  <h3>Behavior</h3>
+  <p>Each input message starts one bounded fetch cycle. The node does not poll automatically and does not delete successfully processed messages itself.</p>
+  <p>The node scans only a bounded front window such as <code>1:500</code>, emits at most the configured batch size, and attaches <code>msg.imap.ackToken</code> to every emitted mail. Wire the successful processing path to <b>imap queue ack</b>.</p>
+  <p>If another trigger arrives while a fetch cycle is already running, no parallel IMAP fetch is started. A skipped stats message is emitted on output 3 when Diagnostics is <code>stats</code> or <code>debug</code>.</p>
+
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>input <span class="property-type">msg</span></dt>
+    <dd>Triggers exactly one bounded fetch cycle.</dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <ol class="node-ports">
+    <li>Parsed mail message.</li>
+    <li>Operational error, parse error, or missing-source message.</li>
+    <li>Structured stats message when Diagnostics is <code>stats</code> or <code>debug</code>.</li>
+  </ol>
+
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>Account <span class="property-type">config</span></dt>
+    <dd>Required <b>imap queue account</b> configuration.</dd>
+    <dt>Mailbox <span class="property-type">string</span></dt>
+    <dd>Queue mailbox to read from, usually <code>INBOX</code>.</dd>
+    <dt>Batch size <span class="property-type">number</span></dt>
+    <dd>Maximum number of mails emitted per trigger.</dd>
+    <dt>Front window <span class="property-type">number</span></dt>
+    <dd>Number of messages at the front of the mailbox to inspect. The node does not scan the whole mailbox.</dd>
+    <dt>Max inflight <span class="property-type">number</span></dt>
+    <dd>Maximum number of emitted but not-yet-ACKed messages kept active in memory.</dd>
+    <dt>Retry after ms <span class="property-type">number</span></dt>
+    <dd>Time after which an un-ACKed inflight message may be emitted again.</dd>
+    <dt>UIDs/command <span class="property-type">number</span></dt>
+    <dd>Maximum number of UIDs per IMAP command/range chunk.</dd>
+    <dt>Skip deleted <span class="property-type">boolean</span></dt>
+    <dd>Skip messages that already have the IMAP <code>\Deleted</code> flag.</dd>
+    <dt>Expunge front <span class="property-type">boolean</span></dt>
+    <dd>Permanently remove already-<code>\Deleted</code> messages found in the front window.</dd>
+    <dt>Expunge limit <span class="property-type">number</span></dt>
+    <dd>Maximum number of already-<code>\Deleted</code> messages expunged per fetch cycle.</dd>
+    <dt>Attachments <span class="property-type">boolean</span></dt>
+    <dd>Include parsed attachments in <code>msg.email.attachments</code>. No top-level <code>msg.attachments</code> is emitted.</dd>
+    <dt>Raw source <span class="property-type">boolean</span></dt>
+    <dd>Include the raw RFC822 message in <code>msg.raw</code>. This can be large.</dd>
+    <dt>Diagnostics <span class="property-type">off | stats | debug</span></dt>
+    <dd><code>off</code> emits no stats; <code>stats</code> emits output 3; <code>debug</code> also writes redacted debug summaries to the runtime log.</dd>
+  </dl>
+
+  <h3>Output 1 message</h3>
+  <dl class="message-properties">
+    <dt>msg.topic <span class="property-type">string</span></dt>
+    <dd>Mail subject.</dd>
+    <dt>msg.payload <span class="property-type">string</span></dt>
+    <dd>Text body.</dd>
+    <dt>msg.email.topic <span class="property-type">string</span></dt>
+    <dd>Mail subject inside the email object.</dd>
+    <dt>msg.email.text / msg.email.html <span class="property-type">string</span></dt>
+    <dd>Parsed text and HTML body.</dd>
+    <dt>msg.email.header <span class="property-type">object</span></dt>
+    <dd>Parsed mail headers.</dd>
+    <dt>msg.email.attachments <span class="property-type">array</span></dt>
+    <dd>Only present when Attachments is enabled.</dd>
+    <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
+    <dd>Token required by <b>imap queue ack</b> or <b>imap queue nack</b>.</dd>
+  </dl>
+
+  <h3>Stats</h3>
+  <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>missingSource</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
+
+  <h3>Delivery guarantee</h3>
+  <p>The node provides at-least-once delivery when combined with <b>imap queue ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until ACK deletion succeeds.</p>
 </script>

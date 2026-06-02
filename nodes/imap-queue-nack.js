@@ -19,7 +19,7 @@ module.exports = function registerImapQueueNack(RED) {
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
-      node.error("Missing imap-queue-account configuration");
+      node.error("Missing imap queue account configuration");
       return;
     }
 
@@ -63,7 +63,7 @@ module.exports = function registerImapQueueNack(RED) {
             uid: token.uid,
             mailbox
           };
-          diagnostics.debug(node, node.diagnostics, "imap-queue-nack.retry", msg.imapNack);
+          diagnostics.debug(node, node.diagnostics, "imap queue nack.retry", msg.imapNack);
           send([msg, null]);
           if (done) {
             done();
@@ -81,7 +81,7 @@ module.exports = function registerImapQueueNack(RED) {
             uid: token.uid,
             mailbox
           };
-          diagnostics.debug(node, node.diagnostics, "imap-queue-nack.retry-now", msg.imapNack);
+          diagnostics.debug(node, node.diagnostics, "imap queue nack.retry-now", msg.imapNack);
           send([msg, null]);
           if (done) {
             done();
@@ -124,7 +124,7 @@ module.exports = function registerImapQueueNack(RED) {
           };
 
           node.status({ fill: "green", shape: "dot", text: `${node.action} UID ${token.uid}` });
-          diagnostics.debug(node, node.diagnostics, "imap-queue-nack.ok", msg.imapNack);
+          diagnostics.debug(node, node.diagnostics, "imap queue nack.ok", msg.imapNack);
           send([msg, null]);
           if (done) {
             done();
@@ -155,7 +155,7 @@ module.exports = function registerImapQueueNack(RED) {
         };
         node.status({ fill: "red", shape: "ring", text: err.message });
         node.warn(`IMAP NACK failed: ${err.message}`);
-        diagnostics.debug(node, node.diagnostics, "imap-queue-nack.error", msg.imapNack);
+        diagnostics.debug(node, node.diagnostics, "imap queue nack.error", msg.imapNack);
         send([null, msg]);
         if (done) {
           done();
@@ -164,5 +164,5 @@ module.exports = function registerImapQueueNack(RED) {
     });
   }
 
-  RED.nodes.registerType("imap-queue-nack", ImapQueueNackNode);
+  RED.nodes.registerType("imap queue nack", ImapQueueNackNode);
 };

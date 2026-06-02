@@ -39,7 +39,7 @@ module.exports = function registerImapQueueIn(RED) {
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
-      node.error("Missing imap-queue-account configuration");
+      node.error("Missing imap queue account configuration");
       return;
     }
 
@@ -53,7 +53,7 @@ module.exports = function registerImapQueueIn(RED) {
     function buildBaseStats() {
       return {
         ok: true,
-        type: "imap-queue-in-stats",
+        type: "imap queue in stats",
         diagnostics: node.diagnostics,
         mailbox: node.mailbox,
         exists: 0,
@@ -87,7 +87,7 @@ module.exports = function registerImapQueueIn(RED) {
       if (diagnostics.wantsStats(node.diagnostics)) {
         send([null, null, { payload: stats }]);
       }
-      diagnostics.debug(node, node.diagnostics, "imap-queue-in.stats", stats);
+      diagnostics.debug(node, node.diagnostics, "imap queue in.stats", stats);
     }
 
     function addTiming(timing, name, startedAt) {
@@ -142,7 +142,7 @@ module.exports = function registerImapQueueIn(RED) {
 
       node.running = true;
       node.status({ fill: "blue", shape: "dot", text: "triggered" });
-      diagnostics.debug(node, node.diagnostics, "imap-queue-in.triggered", {
+      diagnostics.debug(node, node.diagnostics, "imap queue in.triggered", {
         mailbox: node.mailbox,
         queueKey: node.queueKey
       });
@@ -477,5 +477,5 @@ module.exports = function registerImapQueueIn(RED) {
     node.status({ fill: "grey", shape: "ring", text: "waiting for trigger" });
   }
 
-  RED.nodes.registerType("imap-queue-in", ImapQueueInNode);
+  RED.nodes.registerType("imap queue in", ImapQueueInNode);
 };

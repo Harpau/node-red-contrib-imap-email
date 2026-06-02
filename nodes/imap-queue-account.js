@@ -27,7 +27,7 @@ module.exports = function registerImapQueueAccount(RED) {
     const password = options.password || this.credentials && this.credentials.password;
 
     if (!user) {
-      throw new Error("IMAP username is missing in imap-queue-account credentials");
+      throw new Error("IMAP username is missing in imap queue account credentials");
     }
 
     const auth = accessToken
@@ -35,7 +35,7 @@ module.exports = function registerImapQueueAccount(RED) {
       : { user, pass: password || "" };
 
     if (!accessToken && !auth.pass) {
-      throw new Error("IMAP password/access token is missing in imap-queue-account credentials");
+      throw new Error("IMAP password/access token is missing in imap queue account credentials");
     }
 
     return new ImapFlow({
@@ -53,7 +53,7 @@ module.exports = function registerImapQueueAccount(RED) {
     });
   };
 
-  RED.nodes.registerType("imap-queue-account", ImapQueueAccountNode, {
+  RED.nodes.registerType("imap queue account", ImapQueueAccountNode, {
     credentials: {
       username: { type: "text" },
       password: { type: "password" },

@@ -1,5 +1,5 @@
 <script type="text/javascript">
-  RED.nodes.registerType('imap-queue-account', {
+  RED.nodes.registerType('imap queue account', {
     category: 'config',
     defaults: {
       name: { value: '' },
@@ -22,10 +22,10 @@
   });
 </script>
 
-<script type="text/html" data-template-name="imap-queue-account">
+<script type="text/html" data-template-name="imap queue account">
   <div class="form-row">
     <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input type="text" id="node-config-input-name" placeholder="IMAP account">
+    <input type="text" id="node-config-input-name" placeholder="imap queue account">
   </div>
   <div class="form-row">
     <label for="node-config-input-host"><i class="fa fa-server"></i> Host</label>
@@ -71,7 +71,38 @@
   </div>
 </script>
 
-<script type="text/html" data-help-name="imap-queue-account">
-  <p>Shared IMAP account configuration for the IMAP Queue nodes.</p>
-  <p>Credentials are stored as Node-RED credentials, not as normal flow properties.</p>
+<script type="text/html" data-help-name="imap queue account">
+  <p>Shared IMAP account configuration for the <b>imap queue</b> nodes.</p>
+
+  <h3>Purpose</h3>
+  <p>This config node stores the IMAP connection settings and credentials used by <b>imap queue in</b>, <b>imap queue ack</b>, and <b>imap queue nack</b>.</p>
+
+  <h3>Settings</h3>
+  <dl class="message-properties">
+    <dt>Name <span class="property-type">string</span></dt>
+    <dd>Optional display name for this account configuration.</dd>
+    <dt>Host <span class="property-type">string</span></dt>
+    <dd>IMAP server host, for example <code>imap.strato.de</code>.</dd>
+    <dt>Port <span class="property-type">number</span></dt>
+    <dd>IMAP server port. Usually <code>993</code> when TLS is enabled.</dd>
+    <dt>TLS <span class="property-type">boolean</span></dt>
+    <dd>Use a secure TLS connection.</dd>
+    <dt>Verify cert <span class="property-type">boolean</span></dt>
+    <dd>Reject unauthorized TLS certificates. Keep this enabled for production systems.</dd>
+    <dt>Username <span class="property-type">credential</span></dt>
+    <dd>IMAP username. For STRATO this is normally the full email address.</dd>
+    <dt>Password <span class="property-type">credential</span></dt>
+    <dd>IMAP password.</dd>
+    <dt>Access token <span class="property-type">credential</span></dt>
+    <dd>Optional static OAuth2 access token. This package does not yet implement automatic OAuth2 token acquisition or refresh.</dd>
+    <dt>Connect ms <span class="property-type">number</span></dt>
+    <dd>Connection timeout in milliseconds.</dd>
+    <dt>Greeting ms <span class="property-type">number</span></dt>
+    <dd>Server greeting timeout in milliseconds.</dd>
+    <dt>Socket ms <span class="property-type">number</span></dt>
+    <dd>Socket inactivity timeout in milliseconds.</dd>
+  </dl>
+
+  <h3>Credential storage</h3>
+  <p>Username, password and access token are stored as Node-RED credentials, not as normal flow properties.</p>
 </script>
