@@ -41,7 +41,11 @@
     "payloadType": "date",
     "x": 150,
     "y": 120,
-    "wires": [["52c74eb9f1841ec0"]]
+    "wires": [
+      [
+        "52c74eb9f1841ec0"
+      ]
+    ]
   },
   {
     "id": "52c74eb9f1841ec0",
@@ -63,10 +67,17 @@
     "x": 380,
     "y": 120,
     "wires": [
-      ["4ccbf2d3a83941b1"],
-      ["79f4700514258841"],
-      ["7c0a8048075b778b"]
-    ]
+      [
+        "4ccbf2d3a83941b1"
+      ],
+      [
+        "79f4700514258841"
+      ],
+      [
+        "7c0a8048075b778b"
+      ]
+    ],
+    "diagnostics": "stats"
   },
   {
     "id": "4ccbf2d3a83941b1",
@@ -82,7 +93,11 @@
     "libs": [],
     "x": 650,
     "y": 100,
-    "wires": [["b0edbceee5d5e7f8"]]
+    "wires": [
+      [
+        "b0edbceee5d5e7f8"
+      ]
+    ]
   },
   {
     "id": "b0edbceee5d5e7f8",
@@ -97,7 +112,18 @@
     "maxBatchesPerFlush": "20",
     "x": 900,
     "y": 100,
-    "wires": [["0cc333e23df86373"], ["a85897cfd9f1e067"]]
+    "wires": [
+      [
+        "0cc333e23df86373"
+      ],
+      [
+        "a85897cfd9f1e067"
+      ],
+      [
+        "f4bc84b5c8ca42a1"
+      ]
+    ],
+    "diagnostics": "stats"
   },
   {
     "id": "79f4700514258841",
@@ -165,6 +191,23 @@
     "statusType": "auto",
     "x": 1110,
     "y": 120,
+    "wires": []
+  },
+  {
+    "id": "f4bc84b5c8ca42a1",
+    "type": "debug",
+    "z": "b2f6e3681c7c4801",
+    "name": "ack stats",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1110,
+    "y": 160,
     "wires": []
   }
 ]

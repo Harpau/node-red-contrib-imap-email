@@ -3,6 +3,7 @@
 const { extractAckToken } = require("../lib/ack-token");
 const registry = require("../lib/runtime-registry");
 const { ensureMailbox } = require("../lib/imap-utils");
+const diagnostics = require("../lib/diagnostics");
 
 module.exports = function registerImapQueueNack(RED) {
   function ImapQueueNackNode(config) {
@@ -14,6 +15,7 @@ module.exports = function registerImapQueueNack(RED) {
     node.mailbox = config.mailbox || "INBOX";
     node.action = config.action || "retry";
     node.failedMailbox = config.failedMailbox || ".NodeRED.failed";
+    node.diagnostics = diagnostics.normalizeDiagnostics(config.diagnostics, "off");
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
@@ -61,6 +63,7 @@ module.exports = function registerImapQueueNack(RED) {
             uid: token.uid,
             mailbox
           };
+          diagnostics.debug(node, node.diagnostics, "imap-queue-nack.retry", msg.imapNack);
           send([msg, null]);
           if (done) {
             done();
@@ -78,6 +81,7 @@ module.exports = function registerImapQueueNack(RED) {
             uid: token.uid,
             mailbox
           };
+          diagnostics.debug(node, node.diagnostics, "imap-queue-nack.retry-now", msg.imapNack);
           send([msg, null]);
           if (done) {
             done();
@@ -120,6 +124,7 @@ module.exports = function registerImapQueueNack(RED) {
           };
 
           node.status({ fill: "green", shape: "dot", text: `${node.action} UID ${token.uid}` });
+          diagnostics.debug(node, node.diagnostics, "imap-queue-nack.ok", msg.imapNack);
           send([msg, null]);
           if (done) {
             done();
@@ -149,7 +154,8 @@ module.exports = function registerImapQueueNack(RED) {
           error: err.message
         };
         node.status({ fill: "red", shape: "ring", text: err.message });
-        node.error(err, msg);
+        node.warn(`IMAP NACK failed: ${err.message}`);
+        diagnostics.debug(node, node.diagnostics, "imap-queue-nack.error", msg.imapNack);
         send([null, msg]);
         if (done) {
           done();

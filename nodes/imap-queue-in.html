@@ -15,7 +15,8 @@
       expungeDeletedFront: { value: true },
       expungeDeletedFrontLimit: { value: 200, required: true, validate: RED.validators.number() },
       includeAttachments: { value: false },
-      emitRaw: { value: false }
+      emitRaw: { value: false },
+      diagnostics: { value: 'stats' }
     },
     inputs: 1,
     outputs: 3,
@@ -85,6 +86,15 @@
     <input type="checkbox" id="node-input-emitRaw" style="display:inline-block; width:auto; vertical-align:top;">
     <span>Include raw source in msg.raw</span>
   </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-diagnostics">Diagnostics</label>
+    <select id="node-input-diagnostics">
+      <option value="off">off - status and errors only</option>
+      <option value="stats">stats - emit output 3</option>
+      <option value="debug">debug - stats plus redacted node.debug</option>
+    </select>
+  </div>
 </script>
 
 <script type="text/html" data-help-name="imap-queue-in">
@@ -93,5 +103,5 @@
   <p>The node only scans a bounded front window such as <code>1:500</code>, emits at most <code>batchSize</code> messages per trigger, and never deletes messages itself.</p>
   <p>If another trigger arrives while a fetch cycle is still running, the node skips that trigger and emits a stats message on output 3.</p>
   <p>Output 1 emits parsed mails with <code>msg.imap.ackToken</code>. Wire successful processing to an <b>imap queue ack</b> node.</p>
-  <p>Output 2 emits errors and parse errors. Output 3 emits stats.</p>
+  <p>Output 2 emits errors and parse errors. Output 3 emits structured stats when Diagnostics is set to <code>stats</code> or <code>debug</code>.</p>
 </script>

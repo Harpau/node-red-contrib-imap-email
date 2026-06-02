@@ -1,7 +1,7 @@
 {
   "name": "@compeso/node-red-contrib-imap-queue",
-  "version": "0.3.2",
-  "description": "Node-RED IMAP queue nodes with externally triggered bounded front-window fetch, at-least-once ACK deletion, clean parsed email output, race-safe deleted-message handling, and CI smoke tests.",
+  "version": "0.4.0",
+  "description": "Node-RED IMAP queue nodes with externally triggered bounded front-window fetch, at-least-once ACK deletion, diagnostics, timings, and CI tests.",
   "license": "MIT",
   "author": "compeso",
   "homepage": "https://github.com/compeso/node-red-contrib-imap-queue#readme",

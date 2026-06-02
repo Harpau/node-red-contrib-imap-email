@@ -4,6 +4,7 @@ const { extractAckToken } = require("../lib/ack-token");
 const registry = require("../lib/runtime-registry");
 const { chunkUidRanges } = require("../lib/uid-range");
 const { parseNumber } = require("../lib/imap-utils");
+const diagnostics = require("../lib/diagnostics");
 
 module.exports = function registerImapQueueAck(RED) {
   function ImapQueueAckNode(config) {
@@ -17,6 +18,7 @@ module.exports = function registerImapQueueAck(RED) {
     node.flushMs = parseNumber(config.flushMs, 500, 1, 60000);
     node.maxUidPerCommand = parseNumber(config.maxUidPerCommand, 500, 1, 5000);
     node.maxBatchesPerFlush = parseNumber(config.maxBatchesPerFlush, 20, 1, 1000);
+    node.diagnostics = diagnostics.normalizeDiagnostics(config.diagnostics, "stats");
 
     node.pending = [];
     node.timer = null;
@@ -39,6 +41,18 @@ module.exports = function registerImapQueueAck(RED) {
         user: node.account.getUsername(),
         mailbox: node.mailbox || "INBOX"
       };
+    }
+
+    function addTiming(timings, name, startedAt) {
+      const ms = Math.max(0, Date.now() - startedAt);
+      timings[name] = Math.max(0, Number(timings[name] || 0) + ms);
+    }
+
+    function emitFlushStats(stats) {
+      if (diagnostics.wantsStats(node.diagnostics)) {
+        node.send([null, null, { payload: stats }]);
+      }
+      diagnostics.debug(node, node.diagnostics, "imap-queue-ack.flush", stats);
     }
 
     node.scheduleFlush = function scheduleFlush(delayMs) {
@@ -89,11 +103,25 @@ module.exports = function registerImapQueueAck(RED) {
 
       node.running = true;
 
+      const startedAt = Date.now();
       const maxItems = node.batchSize * node.maxBatchesPerFlush;
       const items = node.pending.splice(0, maxItems);
       const groups = node.groupItems(items);
-      let okCount = 0;
-      let errorCount = 0;
+      const stats = {
+        ok: true,
+        type: "imap-queue-ack-stats",
+        diagnostics: node.diagnostics,
+        startedAt: new Date(startedAt).toISOString(),
+        finishedAt: null,
+        requested: items.length,
+        groups: groups.length,
+        okCount: 0,
+        errorCount: 0,
+        pendingAfter: 0,
+        ranges: [],
+        errors: [],
+        timings: {}
+      };
 
       node.status({ fill: "blue", shape: "dot", text: `ACK batch ${items.length}` });
 
@@ -103,11 +131,23 @@ module.exports = function registerImapQueueAck(RED) {
           let lock;
           const token = group.token;
           const mailbox = token.mailbox || node.mailbox || "INBOX";
+          const groupStats = {
+            mailbox,
+            uidValidity: token.uidValidity,
+            count: group.items.length,
+            ranges: []
+          };
 
           try {
             client = node.account.createClient();
+
+            let t = Date.now();
             await client.connect();
+            addTiming(stats.timings, "connectMs", t);
+
+            t = Date.now();
             lock = await client.getMailboxLock(mailbox);
+            addTiming(stats.timings, "lockMs", t);
 
             const currentUidValidity = String(client.mailbox && client.mailbox.uidValidity || "");
             if (token.uidValidity && currentUidValidity !== String(token.uidValidity)) {
@@ -115,9 +155,14 @@ module.exports = function registerImapQueueAck(RED) {
             }
 
             const uidRanges = chunkUidRanges(group.uids, node.maxUidPerCommand);
+            groupStats.ranges = uidRanges;
+            stats.ranges.push({ mailbox, uidValidity: token.uidValidity, ranges: uidRanges, count: group.items.length });
+
+            t = Date.now();
             for (const range of uidRanges) {
               await client.messageDelete(range, { uid: true });
             }
+            addTiming(stats.timings, "deleteMs", t);
 
             for (const item of group.items) {
               const ackToken = item.token;
@@ -135,14 +180,22 @@ module.exports = function registerImapQueueAck(RED) {
                 ranges: uidRanges
               };
 
-              item.send([item.msg, null]);
+              item.send([item.msg, null, null]);
               if (item.done) {
                 item.done();
               }
-              okCount += 1;
+              stats.okCount += 1;
             }
           } catch (err) {
-            errorCount += group.items.length;
+            stats.ok = false;
+            stats.errorCount += group.items.length;
+            stats.errors.push({
+              mailbox,
+              uidValidity: token.uidValidity,
+              count: group.items.length,
+              error: err.message
+            });
+
             for (const item of group.items) {
               item.msg.imapAck = {
                 ok: false,
@@ -151,12 +204,12 @@ module.exports = function registerImapQueueAck(RED) {
                 uidValidity: item.token.uidValidity,
                 error: err.message
               };
-              item.send([null, item.msg]);
+              item.send([null, item.msg, null]);
               if (item.done) {
                 item.done();
               }
             }
-            node.error(err);
+            node.warn(`IMAP ACK failed for ${mailbox}: ${err.message}`);
           } finally {
             try {
               if (lock) {
@@ -167,7 +220,9 @@ module.exports = function registerImapQueueAck(RED) {
             }
             try {
               if (client) {
+                const t = Date.now();
                 await client.logout();
+                addTiming(stats.timings, "logoutMs", t);
               }
             } catch (err) {
               // ignore
@@ -176,10 +231,15 @@ module.exports = function registerImapQueueAck(RED) {
         }
       } finally {
         node.running = false;
+        stats.pendingAfter = node.pending.length;
+        stats.finishedAt = new Date().toISOString();
+        stats.timings.totalMs = Math.max(0, Date.now() - startedAt);
+        emitFlushStats(stats);
+
         node.status({
-          fill: errorCount > 0 ? "red" : "green",
-          shape: errorCount > 0 ? "ring" : "dot",
-          text: `ACK ok ${okCount}, err ${errorCount}, pending ${node.pending.length}`
+          fill: stats.errorCount > 0 ? "red" : "green",
+          shape: stats.errorCount > 0 ? "ring" : "dot",
+          text: `ACK ok ${stats.okCount}, err ${stats.errorCount}, pending ${node.pending.length}`
         });
 
         if (node.pending.length > 0 && !node.closed) {
@@ -205,7 +265,7 @@ module.exports = function registerImapQueueAck(RED) {
           ok: false,
           error: err.message
         };
-        send([null, msg]);
+        send([null, msg, null]);
         if (done) {
           done();
         }
@@ -221,6 +281,12 @@ module.exports = function registerImapQueueAck(RED) {
       });
 
       node.status({ fill: "yellow", shape: "ring", text: `ACK pending ${node.pending.length}` });
+      diagnostics.debug(node, node.diagnostics, "imap-queue-ack.queued", {
+        pending: node.pending.length,
+        mailbox: token.mailbox || node.mailbox || "INBOX",
+        uid: token.uid,
+        uidValidity: token.uidValidity
+      });
 
       if (node.pending.length >= node.batchSize) {
         if (node.timer) {

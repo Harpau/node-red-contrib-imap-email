@@ -7,7 +7,8 @@
       account: { value: '', type: 'imap-queue-account', required: true },
       mailbox: { value: 'INBOX' },
       action: { value: 'retry' },
-      failedMailbox: { value: '.NodeRED.failed' }
+      failedMailbox: { value: '.NodeRED.failed' },
+      diagnostics: { value: 'off' }
     },
     inputs: 1,
     outputs: 2,
@@ -57,6 +58,14 @@
     <label for="node-input-failedMailbox">Failed mailbox</label>
     <input type="text" id="node-input-failedMailbox" placeholder=".NodeRED.failed">
   </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-diagnostics">Diagnostics</label>
+    <select id="node-input-diagnostics">
+      <option value="off">off</option>
+      <option value="debug">debug - redacted node.debug</option>
+    </select>
+  </div>
 </script>
 
 <script type="text/html" data-help-name="imap-queue-nack">
@@ -67,4 +76,5 @@
     <li><b>move</b>: move the message to a failed mailbox.</li>
     <li><b>delete</b>: delete the message.</li>
   </ul>
+  <p>When Diagnostics is set to <code>debug</code>, the node writes redacted debug summaries to the Node-RED runtime log.</p>
 </script>

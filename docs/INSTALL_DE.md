@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.3.1.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.4.0.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -144,3 +144,17 @@ In der Stats-Ausgabe können zusätzlich diese Werte erscheinen:
 deletedSkippedDuringFetch
 missingSource
 ```
+
+## 12. Hinweis ab Version 0.4.0
+
+Die Nodes `imap queue in` und `imap queue ack` haben jetzt eine Diagnostics-Einstellung:
+
+```text
+off    nur Status und normale Ausgänge
+stats  strukturierte Statistikmeldungen auf dem Stats-Ausgang
+debug  zusätzlich redigierte Debugmeldungen im Node-RED-Log
+```
+
+`imap queue in` liefert in der Stats-Ausgabe zusätzlich Timing-Werte, zum Beispiel `connectMs`, `frontFetchMs`, `fullFetchMs`, `parseMs`, `expungeMs` und `totalMs`.
+
+`imap queue ack` hat ab 0.4.0 einen dritten Ausgang für Batch-Statistiken. Die ersten beiden Ausgänge bleiben unverändert: ACK-Erfolg und ACK-Fehler.

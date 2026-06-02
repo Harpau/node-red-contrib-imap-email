@@ -9,11 +9,12 @@
       batchSize: { value: 100, required: true, validate: RED.validators.number() },
       flushMs: { value: 500, required: true, validate: RED.validators.number() },
       maxUidPerCommand: { value: 500, required: true, validate: RED.validators.number() },
-      maxBatchesPerFlush: { value: 20, required: true, validate: RED.validators.number() }
+      maxBatchesPerFlush: { value: 20, required: true, validate: RED.validators.number() },
+      diagnostics: { value: 'stats' }
     },
     inputs: 1,
-    outputs: 2,
-    outputLabels: ['ack ok', 'ack error'],
+    outputs: 3,
+    outputLabels: ['ack ok', 'ack error', 'stats'],
     icon: 'font-awesome/fa-check',
     label: function () {
       return this.name || 'imap queue ack';
@@ -51,10 +52,20 @@
     <label for="node-input-maxBatchesPerFlush">Batches/flush</label>
     <input type="number" id="node-input-maxBatchesPerFlush">
   </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-diagnostics">Diagnostics</label>
+    <select id="node-input-diagnostics">
+      <option value="off">off - no stats output</option>
+      <option value="stats">stats - emit output 3</option>
+      <option value="debug">debug - stats plus redacted node.debug</option>
+    </select>
+  </div>
 </script>
 
 <script type="text/html" data-help-name="imap-queue-ack">
   <p>ACK node for IMAP Queue messages.</p>
   <p>Wire this node only after successful processing. It batches incoming ACKs and deletes the corresponding messages by UID from the mailbox in <code>msg.imap.ackToken</code>.</p>
   <p>No Inject node is required. The node uses an internal flush timer.</p>
+  <p>Output 3 emits one structured batch-statistics message per flush when Diagnostics is set to <code>stats</code> or <code>debug</code>.</p>
 </script>

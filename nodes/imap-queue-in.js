@@ -11,6 +11,7 @@ const {
   flagsToArray,
   headersToObject
 } = require("../lib/imap-utils");
+const diagnostics = require("../lib/diagnostics");
 
 module.exports = function registerImapQueueIn(RED) {
   function ImapQueueInNode(config) {
@@ -30,6 +31,7 @@ module.exports = function registerImapQueueIn(RED) {
     node.expungeDeletedFrontLimit = parseNumber(config.expungeDeletedFrontLimit, 200, 0, 10000);
     node.includeAttachments = parseBoolean(config.includeAttachments, false);
     node.emitRaw = parseBoolean(config.emitRaw, false);
+    node.diagnostics = diagnostics.normalizeDiagnostics(config.diagnostics, "stats");
 
     node.closed = false;
     node.running = false;
@@ -53,6 +55,7 @@ module.exports = function registerImapQueueIn(RED) {
         ok: true,
         type: "imap-queue-in-stats",
         triggerMode: "external",
+        diagnostics: node.diagnostics,
         trigger: triggerMsg ? {
           _msgid: triggerMsg._msgid,
           topic: triggerMsg.topic
@@ -63,16 +66,53 @@ module.exports = function registerImapQueueIn(RED) {
         frontWindowSize: node.frontWindowSize,
         frontWindowRead: 0,
         activeInflight: 0,
+        activeInflightAfter: 0,
+        inflightTotal: 0,
         maxInflight: node.maxInflight,
         capacity: 0,
         candidates: 0,
+        fetched: 0,
         emitted: 0,
         parseErrors: 0,
         deletedFlagged: 0,
         deletedExpunged: 0,
         deletedSkippedDuringFetch: 0,
         missingSource: 0,
-        queueKey: node.queueKey
+        skipped: false,
+        reason: undefined,
+        queueKey: node.queueKey,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        timings: {}
+      };
+    }
+
+    function emitStats(send, stats) {
+      stats.finishedAt = new Date().toISOString();
+      if (diagnostics.wantsStats(node.diagnostics)) {
+        send([null, null, { payload: stats }]);
+      }
+      diagnostics.debug(node, node.diagnostics, "imap-queue-in.stats", stats);
+    }
+
+    function addTiming(timing, name, startedAt) {
+      const ms = Math.max(0, Date.now() - startedAt);
+      timing.marks[name] = Math.max(0, Number(timing.marks[name] || 0) + ms);
+    }
+
+    function buildImapMeta(uid, uidValidity, imapMessage, ackToken) {
+      return {
+        accountId: node.account.id,
+        mailbox: node.mailbox,
+        uid,
+        uidValidity,
+        size: imapMessage && imapMessage.size,
+        flags: flagsToArray(imapMessage && imapMessage.flags),
+        ackToken,
+        delivery: {
+          mode: "at-least-once",
+          duplicatePossible: true
+        }
       };
     }
 
@@ -84,26 +124,37 @@ module.exports = function registerImapQueueIn(RED) {
       const fallbackSend = function fallbackSend(output) { node.send(output); };
       send = send || fallbackSend;
 
+      const timing = diagnostics.createTimings();
+      const stats = buildBaseStats(triggerMsg);
+
+      function finishStats() {
+        stats.activeInflightAfter = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
+        stats.inflightTotal = registry.countAllInflight(node.queueKey);
+        stats.timings = timing.finish();
+        return stats;
+      }
+
       if (node.running) {
-        const stats = buildBaseStats(triggerMsg);
         stats.skipped = true;
         stats.reason = "already running";
         stats.activeInflight = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
-        stats.activeInflightAfter = stats.activeInflight;
-        stats.inflightTotal = registry.countAllInflight(node.queueKey);
+        finishStats();
 
         node.status({ fill: "yellow", shape: "ring", text: "trigger skipped: running" });
-        send([null, null, { payload: stats }]);
+        emitStats(send, stats);
         return;
       }
 
       node.running = true;
       node.status({ fill: "blue", shape: "dot", text: "triggered" });
+      diagnostics.debug(node, node.diagnostics, "imap-queue-in.triggered", {
+        mailbox: node.mailbox,
+        queueKey: node.queueKey,
+        trigger: stats.trigger
+      });
 
       const activeInflight = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
       const capacity = Math.max(0, node.maxInflight - activeInflight);
-
-      const stats = buildBaseStats(triggerMsg);
       stats.activeInflight = activeInflight;
       stats.capacity = capacity;
 
@@ -114,17 +165,22 @@ module.exports = function registerImapQueueIn(RED) {
         if (capacity <= 0) {
           stats.skipped = true;
           stats.reason = "max inflight reached";
-          stats.activeInflightAfter = activeInflight;
-          stats.inflightTotal = registry.countAllInflight(node.queueKey);
+          finishStats();
 
           node.status({ fill: "yellow", shape: "ring", text: `inflight ${activeInflight}/${node.maxInflight}` });
-          send([null, null, { payload: stats }]);
+          emitStats(send, stats);
           return;
         }
 
         client = node.account.createClient();
+
+        let started = Date.now();
         await client.connect();
+        addTiming(timing, "connectMs", started);
+
+        started = Date.now();
         lock = await client.getMailboxLock(node.mailbox);
+        addTiming(timing, "lockMs", started);
 
         const mailboxInfo = client.mailbox || {};
         const exists = Number(mailboxInfo.exists || 0);
@@ -133,17 +189,16 @@ module.exports = function registerImapQueueIn(RED) {
         stats.uidValidity = uidValidity;
 
         if (exists < 1) {
-          stats.activeInflightAfter = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
-          stats.inflightTotal = registry.countAllInflight(node.queueKey);
-
+          finishStats();
           node.status({ fill: "green", shape: "ring", text: "empty" });
-          send([null, null, { payload: stats }]);
+          emitStats(send, stats);
           return;
         }
 
         const frontEnd = Math.min(exists, node.frontWindowSize);
         stats.frontWindowRead = frontEnd;
 
+        started = Date.now();
         const front = await client.fetchAll(`1:${frontEnd}`, {
           uid: true,
           flags: true,
@@ -151,6 +206,7 @@ module.exports = function registerImapQueueIn(RED) {
           size: true,
           envelope: true
         });
+        addTiming(timing, "frontFetchMs", started);
 
         const deletedUids = [];
         const candidates = [];
@@ -181,13 +237,13 @@ module.exports = function registerImapQueueIn(RED) {
 
         if (node.expungeDeletedFront && deletedUids.length > 0 && node.expungeDeletedFrontLimit > 0) {
           const toExpunge = deletedUids.slice(0, node.expungeDeletedFrontLimit);
+          started = Date.now();
           for (const range of chunkUidRanges(toExpunge, node.maxUidPerCommand)) {
             await client.messageDelete(range, { uid: true });
           }
+          addTiming(timing, "expungeMs", started);
           stats.deletedExpunged = toExpunge.length;
 
-          // These messages are already removed or marked for removal. They must not
-          // continue to occupy transient inflight capacity.
           for (const uid of toExpunge) {
             registry.removeInflight(node.queueKey, uidValidity, uid);
           }
@@ -198,6 +254,7 @@ module.exports = function registerImapQueueIn(RED) {
         const deletedSeenDuringFetch = new Set();
 
         for (const range of chunkUidRanges(uidsToFetch, node.maxUidPerCommand)) {
+          started = Date.now();
           const messages = await client.fetchAll(range, {
             uid: true,
             source: true,
@@ -206,6 +263,7 @@ module.exports = function registerImapQueueIn(RED) {
             internalDate: true,
             size: true
           }, { uid: true });
+          addTiming(timing, "fullFetchMs", started);
 
           for (const imapMessage of messages) {
             const uid = Number(imapMessage.uid);
@@ -213,6 +271,7 @@ module.exports = function registerImapQueueIn(RED) {
               continue;
             }
 
+            stats.fetched += 1;
             const messageDeleted = isDeleted(imapMessage.flags);
             const ackToken = buildAckToken({
               accountId: node.account.id,
@@ -226,11 +285,6 @@ module.exports = function registerImapQueueIn(RED) {
               uidValidity
             });
 
-            // Race-safe guard: while this node is between the lightweight front-window
-            // scan and the full source fetch, another ACK/cleanup operation may mark
-            // the same UID as \Deleted. Some servers then return metadata but no
-            // BODY[] source. Such messages are no longer queue items and must not be
-            // sent to mailparser.
             if (messageDeleted && node.skipDeleted) {
               stats.deletedSkippedDuringFetch += 1;
               deletedSeenDuringFetch.add(uid);
@@ -241,18 +295,35 @@ module.exports = function registerImapQueueIn(RED) {
             if (imapMessage.source === undefined || imapMessage.source === null) {
               stats.missingSource += 1;
 
-              // If the server reports a deleted message without source, treat it as a
-              // cleanup case instead of a parse error. A non-deleted message without
-              // source is still reported on output 2 below.
               if (messageDeleted) {
                 deletedSeenDuringFetch.add(uid);
                 registry.removeInflight(node.queueKey, uidValidity, uid);
                 continue;
               }
+
+              registry.markInflight(node.queueKey, ackToken, {
+                subject: imapMessage.envelope && imapMessage.envelope.subject
+              });
+              stats.parseErrors += 1;
+              send([
+                null,
+                {
+                  error: {
+                    message: "IMAP message source is missing",
+                    code: "IMAP_QUEUE_MISSING_SOURCE"
+                  },
+                  imap: buildImapMeta(uid, uidValidity, imapMessage, ackToken)
+                },
+                null
+              ]);
+              continue;
             }
 
             try {
+              started = Date.now();
               const parsed = await simpleParser(imapMessage.source);
+              addTiming(timing, "parseMs", started);
+
               registry.markInflight(node.queueKey, ackToken, {
                 messageId: parsed.messageId,
                 subject: parsed.subject
@@ -309,23 +380,8 @@ module.exports = function registerImapQueueIn(RED) {
                 null,
                 {
                   payload: imapMessage.source,
-                  error: {
-                    message: err.message,
-                    stack: err.stack
-                  },
-                  imap: {
-                    accountId: node.account.id,
-                    mailbox: node.mailbox,
-                    uid,
-                    uidValidity,
-                    size: imapMessage.size,
-                    flags: flagsToArray(imapMessage.flags),
-                    ackToken,
-                    delivery: {
-                      mode: "at-least-once",
-                      duplicatePossible: true
-                    }
-                  }
+                  error: diagnostics.errorToObject(err),
+                  imap: buildImapMeta(uid, uidValidity, imapMessage, ackToken)
                 },
                 null
               ]);
@@ -336,37 +392,41 @@ module.exports = function registerImapQueueIn(RED) {
         if (node.expungeDeletedFront && deletedSeenDuringFetch.size > 0 && node.expungeDeletedFrontLimit > 0) {
           const remainingLimit = Math.max(0, node.expungeDeletedFrontLimit - stats.deletedExpunged);
           const toExpunge = Array.from(deletedSeenDuringFetch).slice(0, remainingLimit);
-          for (const range of chunkUidRanges(toExpunge, node.maxUidPerCommand)) {
-            await client.messageDelete(range, { uid: true });
+          if (toExpunge.length > 0) {
+            started = Date.now();
+            for (const range of chunkUidRanges(toExpunge, node.maxUidPerCommand)) {
+              await client.messageDelete(range, { uid: true });
+            }
+            addTiming(timing, "expungeMs", started);
+            stats.deletedExpunged += toExpunge.length;
           }
-          stats.deletedExpunged += toExpunge.length;
         }
 
-        stats.activeInflightAfter = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
-        stats.inflightTotal = registry.countAllInflight(node.queueKey);
-
-        send([null, null, { payload: stats }]);
+        finishStats();
+        emitStats(send, stats);
         node.status({
           fill: stats.emitted > 0 ? "green" : "grey",
           shape: "dot",
           text: `sent ${stats.emitted}, inflight ${stats.activeInflightAfter}/${node.maxInflight}`
         });
       } catch (err) {
+        stats.ok = false;
+        stats.error = err.message;
+        finishStats();
+
         node.status({ fill: "red", shape: "ring", text: err.message });
         send([
           null,
           {
-            error: {
-              message: err.message,
-              stack: err.stack
-            },
+            error: diagnostics.errorToObject(err),
             imap: {
               mailbox: node.mailbox,
               queueKey: node.queueKey
             }
           },
-          { payload: { ...stats, ok: false, error: err.message } }
+          null
         ]);
+        emitStats(send, stats);
         node.error(err, triggerMsg);
       } finally {
         try {
@@ -378,7 +438,9 @@ module.exports = function registerImapQueueIn(RED) {
         }
         try {
           if (client) {
+            const started = Date.now();
             await client.logout();
+            addTiming(timing, "logoutMs", started);
           }
         } catch (err) {
           // ignore

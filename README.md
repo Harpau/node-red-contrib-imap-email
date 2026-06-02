@@ -22,7 +22,7 @@ Outputs:
 
 1. Parsed mail message
 2. Error / parse error message
-3. Stats message
+3. Stats message, when Diagnostics is set to `stats` or `debug`
 
 Important fields on output 1:
 
@@ -43,6 +43,12 @@ The node intentionally does not emit `msg.html` or `msg.attachments`. HTML and a
 ### `imap-queue-ack`
 
 Input node. Wire this node only after successful processing. It batches ACKs internally and deletes messages by UID from the queue mailbox. No additional ACK flush Inject node is required.
+
+Outputs:
+
+1. ACK success message
+2. ACK error message
+3. Batch stats message, when Diagnostics is set to `stats` or `debug`
 
 ### `imap-queue-nack`
 
@@ -85,9 +91,62 @@ UIDs per command:         500
 Skip deleted:             true
 Expunge deleted front:    true
 Expunge deleted limit:    200
+Diagnostics:              stats
 ```
 
 If the external trigger fires faster than one fetch cycle can finish, the node does not start a second parallel IMAP fetch. It emits a skipped stats message instead.
+
+
+## Diagnostics and timings
+
+Version `0.4.0` adds a Diagnostics option to the runtime nodes.
+
+```text
+off
+  Keep only node status and normal error/success outputs.
+
+stats
+  Emit structured statistics on the stats output. This is the recommended default while tuning.
+
+debug
+  Emit stats and write redacted debug summaries to the Node-RED runtime log. Passwords, tokens, raw message source and attachments are redacted.
+```
+
+`imap-queue-in` stats include counters and timings such as:
+
+```js
+msg.payload.exists
+msg.payload.frontWindowRead
+msg.payload.candidates
+msg.payload.fetched
+msg.payload.emitted
+msg.payload.deletedFlagged
+msg.payload.deletedExpunged
+msg.payload.missingSource
+msg.payload.timings.connectMs
+msg.payload.timings.lockMs
+msg.payload.timings.frontFetchMs
+msg.payload.timings.fullFetchMs
+msg.payload.timings.parseMs
+msg.payload.timings.expungeMs
+msg.payload.timings.totalMs
+```
+
+`imap-queue-ack` stats include one message per flush with values such as:
+
+```js
+msg.payload.requested
+msg.payload.groups
+msg.payload.okCount
+msg.payload.errorCount
+msg.payload.pendingAfter
+msg.payload.ranges
+msg.payload.timings.connectMs
+msg.payload.timings.deleteMs
+msg.payload.timings.totalMs
+```
+
+Operationally expected ACK/NACK errors are emitted on the nodes' error outputs and logged as warnings rather than flooding the runtime with hard errors. Unexpected node failures still use `node.error`.
 
 ## Minimal flow
 
@@ -193,4 +252,16 @@ The stats message may include:
 ```text
 deletedSkippedDuringFetch
 missingSource
+```
+
+## Upgrade note from 0.3.x to 0.4.x
+
+Version `0.4.0` adds Diagnostics settings and timing counters. `imap-queue-ack` now has a third output for batch stats. Existing output 1 and output 2 wires keep their meaning.
+
+Set Diagnostics to:
+
+```text
+stats  recommended during tuning
+off    quieter production operation
+debug  temporary troubleshooting with redacted runtime debug logs
 ```
