@@ -265,3 +265,9 @@ stats  recommended during tuning
 off    quieter production operation
 debug  temporary troubleshooting with redacted runtime debug logs
 ```
+
+## Version notes
+
+### Version 0.4.1
+
+Version `0.4.1` removes the obsolete `triggerMode` and `trigger` properties from `imap-queue-in` stats messages. The node is externally triggered only, so these fields did not add useful information.

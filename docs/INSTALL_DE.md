@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.4.0.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.4.1.tgz
 ```
 
 Danach Node-RED neu starten.

@@ -50,16 +50,11 @@ module.exports = function registerImapQueueIn(RED) {
       mailbox: node.mailbox
     });
 
-    function buildBaseStats(triggerMsg) {
+    function buildBaseStats() {
       return {
         ok: true,
         type: "imap-queue-in-stats",
-        triggerMode: "external",
         diagnostics: node.diagnostics,
-        trigger: triggerMsg ? {
-          _msgid: triggerMsg._msgid,
-          topic: triggerMsg.topic
-        } : undefined,
         mailbox: node.mailbox,
         exists: 0,
         uidValidity: null,
@@ -125,7 +120,7 @@ module.exports = function registerImapQueueIn(RED) {
       send = send || fallbackSend;
 
       const timing = diagnostics.createTimings();
-      const stats = buildBaseStats(triggerMsg);
+      const stats = buildBaseStats();
 
       function finishStats() {
         stats.activeInflightAfter = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
@@ -149,8 +144,7 @@ module.exports = function registerImapQueueIn(RED) {
       node.status({ fill: "blue", shape: "dot", text: "triggered" });
       diagnostics.debug(node, node.diagnostics, "imap-queue-in.triggered", {
         mailbox: node.mailbox,
-        queueKey: node.queueKey,
-        trigger: stats.trigger
+        queueKey: node.queueKey
       });
 
       const activeInflight = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
