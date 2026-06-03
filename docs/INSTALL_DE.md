@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.5.2.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.9.0.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -175,3 +175,24 @@ Doppelte Verarbeitung ist möglich, insbesondere nach Neustarts oder ACK-Fehlern
 ## 13. Änderung in Version 0.5.2
 
 Der Default fuer die Failed Mailbox im Node `imap queue nack` ist `NodeRED.failed`. Ein fuehrender Punkt wurde entfernt, weil einzelne IMAP-Server Mailboxnamen wie `.NodeRED.failed` ablehnen koennen.
+
+
+## 14. Release-Kandidat 0.9.0
+
+Version `0.9.0` ist der Release-Kandidat vor der ersten stabilen `1.0.0`. Gegenueber `0.5.2` sind keine absichtlichen Aenderungen am Runtime-Verhalten vorgesehen; er buendelt den stabilisierten Stand mit Changelog, Release-Hinweisen und finalen Paketmetadaten.
+
+Empfohlene Release-Pruefung:
+
+```bash
+npm install --no-audit --no-fund
+npm test
+npm pack --dry-run
+npm pack
+```
+
+Git-Tag:
+
+```bash
+git tag v0.9.0
+git push --tags
+```

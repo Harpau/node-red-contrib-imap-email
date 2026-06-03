@@ -1,5 +1,13 @@
 # @compeso/node-red-contrib-imap-queue
 
+Release candidate: `0.9.0`
+
+Additional project documents:
+
+- [Changelog](CHANGELOG.md)
+- [German installation guide](docs/INSTALL_DE.md)
+- [German release checklist](docs/RELEASE_DE.md)
+
 Node-RED nodes for using an IMAP mailbox as an **at-least-once queue**.
 
 The package is built for queue mailboxes that may temporarily contain many messages. It does not run an unbounded `SEARCH UNDELETED` over the whole mailbox. Instead, `imap queue in` reads only a bounded front window such as `1:500`, emits a limited batch, and waits for `imap queue ack` to delete messages only after successful downstream processing.
@@ -602,7 +610,7 @@ For a local tarball:
 
 ```bash
 cd ~/.node-red
-npm install /path/to/compeso-node-red-contrib-imap-queue-0.5.2.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-0.9.0.tgz
 ```
 
 ## Local development
@@ -651,6 +659,10 @@ After import, open the `imap queue account` config node and enter username and p
 - If processing fails, do not ACK. The message stays in the mailbox and will be delivered again.
 
 ## Upgrade notes
+
+### From 0.5.2 to 0.9.0
+
+Version `0.9.0` is the release-candidate line before the first stable `1.0.0` release. It does not intentionally change the runtime message contract from `0.5.2`; it adds release documentation, changelog metadata, package publishing metadata, and final packaging checks.
 
 ### From 0.5.1 to 0.5.2
 
