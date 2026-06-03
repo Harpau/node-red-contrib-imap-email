@@ -602,7 +602,7 @@ For a local tarball:
 
 ```bash
 cd ~/.node-red
-npm install /path/to/compeso-node-red-contrib-imap-queue-0.5.0.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-0.5.1.tgz
 ```
 
 ## Local development
@@ -651,6 +651,11 @@ After import, open the `imap queue account` config node and enter username and p
 - If processing fails, do not ACK. The message stays in the mailbox and will be delivered again.
 
 ## Upgrade notes
+
+
+### From 0.5.0 to 0.5.1
+
+Version `0.5.1` fixes the GitHub Actions test workflow for clean runners by installing runtime dependencies from `package.json` before the module-load smoke test. It also avoids relying on a repository lockfile generated against a private or local npm registry.
 
 ### From 0.4.x to 0.5.0
 

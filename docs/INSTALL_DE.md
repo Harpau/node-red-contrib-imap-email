@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.5.0.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.5.1.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -107,6 +107,12 @@ Inject / Scheduler / HTTP-Trigger
 ```
 
 Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node führen. Wenn die Verarbeitung fehlschlägt, bleibt die Mail in der Mailbox und wird später erneut geliefert.
+
+## 9. GitHub Actions / CI
+
+Ab Version `0.5.1` installiert der CI-Workflow die Laufzeit-Abhängigkeiten explizit aus `package.json`, bevor `npm test` ausgeführt wird. Dadurch funktionieren die Smoke-Tests auch in frischen GitHub-Actions-Runnern, in denen `imapflow` und `mailparser` vorher nicht vorhanden sind.
+
+Für die Repository-Version wird kein lokal erzeugtes `package-lock.json` vorausgesetzt. Falls ein altes Lockfile mit privaten Registry-URLs im Repository liegt, sollte es entfernt oder in einer öffentlichen Umgebung neu erzeugt werden.
 
 ## 9. Node-Namen ab Version 0.5.0
 

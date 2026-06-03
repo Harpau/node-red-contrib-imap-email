@@ -35,11 +35,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+          # This package is a Node-RED library package. The repository should not
+          # depend on a lockfile generated against a private or local registry.
+          # Install from package.json so runtime dependencies such as imapflow and
+          # mailparser are always present in the clean GitHub Actions runner.
+          rm -f package-lock.json npm-shrinkwrap.json
+          npm install --no-audit --no-fund
+
+      - name: Verify runtime dependencies
+        run: |
+          node -e "console.log('imapflow:', require.resolve('imapflow'))"
+          node -e "console.log('mailparser:', require.resolve('mailparser'))"
 
       - name: Run unit and smoke tests
         run: npm test
