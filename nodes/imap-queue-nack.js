@@ -14,7 +14,7 @@ module.exports = function registerImapQueueNack(RED) {
     node.name = config.name || "";
     node.mailbox = config.mailbox || "INBOX";
     node.action = config.action || "retry";
-    node.failedMailbox = config.failedMailbox || ".NodeRED.failed";
+    node.failedMailbox = config.failedMailbox || "NodeRED.failed";
     node.diagnostics = diagnostics.normalizeDiagnostics(config.diagnostics, "off");
 
     if (!node.account) {

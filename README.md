@@ -366,7 +366,7 @@ Output 2: NACK error
 | Account | Required `imap queue account` config node. |
 | Mailbox fallback | Mailbox used if the incoming ACK token does not contain a mailbox. Usually `INBOX`. |
 | Action | One of `retry`, `retry-now`, `move`, or `delete`. |
-| Failed mailbox | Destination mailbox used when Action is `move`, for example `.NodeRED.failed`. |
+| Failed mailbox | Destination mailbox used when Action is `move`, for example `NodeRED.failed`. |
 | Diagnostics | `off` or `debug`. |
 
 ### Actions
@@ -602,7 +602,7 @@ For a local tarball:
 
 ```bash
 cd ~/.node-red
-npm install /path/to/compeso-node-red-contrib-imap-queue-0.5.1.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-0.5.2.tgz
 ```
 
 ## Local development
@@ -652,6 +652,9 @@ After import, open the `imap queue account` config node and enter username and p
 
 ## Upgrade notes
 
+### From 0.5.1 to 0.5.2
+
+Version `0.5.2` changes the default failed mailbox for `imap queue nack` from `.NodeRED.failed` to `NodeRED.failed` because some IMAP servers reject mailbox names that start with a dot. The bundled example flow was also replaced with the current externally-triggered queue example.
 
 ### From 0.5.0 to 0.5.1
 

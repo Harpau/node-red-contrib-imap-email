@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.5.1.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-0.5.2.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -114,7 +114,7 @@ Ab Version `0.5.1` installiert der CI-Workflow die Laufzeit-Abhängigkeiten expl
 
 Für die Repository-Version wird kein lokal erzeugtes `package-lock.json` vorausgesetzt. Falls ein altes Lockfile mit privaten Registry-URLs im Repository liegt, sollte es entfernt oder in einer öffentlichen Umgebung neu erzeugt werden.
 
-## 9. Node-Namen ab Version 0.5.0
+## 10. Node-Namen ab Version 0.5.0
 
 Ab Version `0.5.0` heißen die Node-RED-Typen ohne Bindestriche:
 
@@ -134,7 +134,7 @@ imap-queue-ack     -> imap queue ack
 imap-queue-nack    -> imap queue nack
 ```
 
-## 10. Wichtige Einstellungen
+## 11. Wichtige Einstellungen
 
 Für ein STRATO-Queue-Postfach ist ein sinnvoller Start:
 
@@ -161,7 +161,7 @@ imap queue ack:
   Diagnostics:      stats
 ```
 
-## 11. Hinweise zur Zustellgarantie
+## 12. Hinweise zur Zustellgarantie
 
 Das Paket ist auf `at least once` ausgelegt:
 
@@ -171,3 +171,7 @@ Mail wurde gelöscht           = erfolgreich verarbeitet und geACKt
 ```
 
 Doppelte Verarbeitung ist möglich, insbesondere nach Neustarts oder ACK-Fehlern. Dafür gehen Mails nicht still verloren, solange sie erst nach erfolgreicher Verarbeitung an `imap queue ack` übergeben werden.
+
+## 13. Änderung in Version 0.5.2
+
+Der Default fuer die Failed Mailbox im Node `imap queue nack` ist `NodeRED.failed`. Ein fuehrender Punkt wurde entfernt, weil einzelne IMAP-Server Mailboxnamen wie `.NodeRED.failed` ablehnen koennen.

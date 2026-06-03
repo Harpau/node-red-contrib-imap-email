@@ -1,6 +1,6 @@
 {
   "name": "@compeso/node-red-contrib-imap-queue",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Node-RED IMAP queue nodes with externally triggered bounded front-window fetch, at-least-once ACK deletion, diagnostics, timings, and comprehensive help documentation.",
   "license": "MIT",
   "author": "compeso",

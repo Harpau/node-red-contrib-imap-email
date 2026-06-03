@@ -7,7 +7,7 @@
       account: { value: '', type: 'imap queue account', required: true },
       mailbox: { value: 'INBOX' },
       action: { value: 'retry' },
-      failedMailbox: { value: '.NodeRED.failed' },
+      failedMailbox: { value: 'NodeRED.failed' },
       diagnostics: { value: 'off' }
     },
     inputs: 1,
@@ -57,7 +57,7 @@
   </div>
   <div class="form-row form-row-failed-mailbox">
     <label for="node-input-failedMailbox">Failed mailbox</label>
-    <input type="text" id="node-input-failedMailbox" placeholder=".NodeRED.failed">
+    <input type="text" id="node-input-failedMailbox" placeholder="NodeRED.failed">
   </div>
   <hr>
   <div class="form-row">
