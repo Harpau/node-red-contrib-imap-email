@@ -5,12 +5,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-test("release-candidate package metadata is complete", () => {
+test("stable package metadata is complete", () => {
   const root = path.resolve(__dirname, "..");
   const pkg = require(path.join(root, "package.json"));
 
   assert.equal(pkg.name, "@compeso/node-red-contrib-imap-queue");
-  assert.equal(pkg.version, "0.9.0");
+  assert.equal(pkg.version, "1.0.0");
   assert.equal(pkg.license, "MIT");
   assert.equal(pkg.publishConfig && pkg.publishConfig.access, "public");
   assert.ok(pkg.keywords.includes("node-red"));

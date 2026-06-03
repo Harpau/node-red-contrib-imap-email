@@ -4,6 +4,15 @@ All notable changes to `@compeso/node-red-contrib-imap-queue` are documented her
 
 The package is developed for Node-RED flows that use an IMAP mailbox as a durable at-least-once queue. The mailbox remains the source of truth; messages are deleted only after successful downstream processing and ACK.
 
+## 1.0.0 - Stable release
+
+First stable public release.
+
+### Changed
+
+- Promotes the successfully tested `0.9.0` release candidate to the stable `1.0.0` line.
+- No intentional runtime behavior change from `0.9.0`.
+
 ## 0.9.0 - Release candidate
 
 Release-candidate package before the first stable `1.0.0` line.

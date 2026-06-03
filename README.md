@@ -1,6 +1,6 @@
 # @compeso/node-red-contrib-imap-queue
 
-Release candidate: `0.9.0`
+Stable release: `1.0.0`
 
 Additional project documents:
 
@@ -610,7 +610,7 @@ For a local tarball:
 
 ```bash
 cd ~/.node-red
-npm install /path/to/compeso-node-red-contrib-imap-queue-0.9.0.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.0.tgz
 ```
 
 ## Local development
@@ -660,9 +660,13 @@ After import, open the `imap queue account` config node and enter username and p
 
 ## Upgrade notes
 
+### From 0.9.0 to 1.0.0
+
+Version `1.0.0` is the first stable public release. It does not intentionally change the runtime message contract from `0.9.0`; it promotes the successfully tested release candidate to the stable line.
+
 ### From 0.5.2 to 0.9.0
 
-Version `0.9.0` is the release-candidate line before the first stable `1.0.0` release. It does not intentionally change the runtime message contract from `0.5.2`; it adds release documentation, changelog metadata, package publishing metadata, and final packaging checks.
+Version `0.9.0` was the release-candidate line before the first stable `1.0.0` release. It did not intentionally change the runtime message contract from `0.5.2`; it added release documentation, changelog metadata, package publishing metadata, and final packaging checks.
 
 ### From 0.5.1 to 0.5.2
 
