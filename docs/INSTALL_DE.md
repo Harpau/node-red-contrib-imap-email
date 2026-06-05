@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-1.0.0.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-1.0.1.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -193,6 +193,11 @@ npm pack
 Git-Tag:
 
 ```bash
-git tag v1.0.0
+git tag v1.0.1
 git push --tags
 ```
+
+## 15. Patch-Version 1.0.1
+
+Version `1.0.1` haertet die Behandlung von IMAP-Verbindungsfehlern. Asynchrone ImapFlow-`error`-Events wie `read ECONNRESET` werden jetzt als Warnung am jeweiligen Node protokolliert, statt als unbehandeltes EventEmitter-Error den Node-RED-Prozess beenden zu koennen. Am Message-Format und an der Queue-Semantik aendert sich nichts.
+

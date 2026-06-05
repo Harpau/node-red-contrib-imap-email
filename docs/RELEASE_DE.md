@@ -43,8 +43,8 @@ Fuer die stabile Version:
 
 ```bash
 git add .
-git commit -m "Release 1.0.0"
-git tag v1.0.0
+git commit -m "Release 1.0.1"
+git tag v1.0.1
 git push
 git push --tags
 ```
@@ -58,7 +58,7 @@ In einem Node-RED-User-Verzeichnis:
 ```bash
 cd ~/.node-red
 npm uninstall @compeso/node-red-contrib-imap-queue
-npm install github:compeso/node-red-contrib-imap-queue#v1.0.0
+npm install github:compeso/node-red-contrib-imap-queue#v1.0.1
 ```
 
 Danach Node-RED neu starten und den Beispiel-Flow importieren.
@@ -68,7 +68,7 @@ Danach Node-RED neu starten und den Beispiel-Flow importieren.
 ```bash
 cd ~/.node-red
 npm uninstall @compeso/node-red-contrib-imap-queue
-npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.0.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.1.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -93,12 +93,12 @@ Da das Paket scoped ist, muss es oeffentlich veroeffentlicht werden. `package.js
 
 ## 7. GitHub Release
 
-Erstelle auf GitHub einen Release fuer den Tag `v1.0.0`.
+Erstelle auf GitHub einen Release fuer den Tag `v1.0.1`.
 
 Empfohlene Assets:
 
 ```text
-compeso-node-red-contrib-imap-queue-1.0.0.tgz
+compeso-node-red-contrib-imap-queue-1.0.1.tgz
 ```
 
 Empfohlene Release Notes:
