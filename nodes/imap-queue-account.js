@@ -3,6 +3,15 @@
 const { ImapFlow } = require("imapflow");
 const { parseNumber, parseBoolean } = require("../lib/imap-utils");
 
+function errorMessage(err) {
+  if (!err) {
+    return "Unknown IMAP client error";
+  }
+
+  const message = err.message || String(err);
+  return err.code ? `${message} (${err.code})` : message;
+}
+
 module.exports = function registerImapQueueAccount(RED) {
   function ImapQueueAccountNode(config) {
     RED.nodes.createNode(this, config);
@@ -38,7 +47,7 @@ module.exports = function registerImapQueueAccount(RED) {
       throw new Error("IMAP password/access token is missing in imap queue account credentials");
     }
 
-    return new ImapFlow({
+    const client = new ImapFlow({
       host: options.host || this.host,
       port: options.port || this.port,
       secure: options.secure !== undefined ? options.secure : this.secure,
@@ -51,6 +60,48 @@ module.exports = function registerImapQueueAccount(RED) {
         rejectUnauthorized: this.tlsRejectUnauthorized
       }
     });
+
+    const ownerNode = options.node || this;
+    const context = options.context || "imap queue client";
+
+    // ImapFlow is an EventEmitter and may emit an asynchronous 'error' event
+    // after the awaited API call has already returned or while another promise is
+    // pending. Without an 'error' listener Node.js treats this as an uncaught
+    // exception and the Node-RED runtime can exit. Keep this handler deliberately
+    // small and non-throwing.
+    client.on("error", (err) => {
+      const message = `${context} IMAP connection error: ${errorMessage(err)}`;
+
+      try {
+        if (typeof options.onError === "function") {
+          options.onError(err);
+        } else if (ownerNode && typeof ownerNode.warn === "function") {
+          ownerNode.warn(message);
+        }
+      } catch (handlerErr) {
+        // Never throw from an EventEmitter error handler.
+        try {
+          if (ownerNode && typeof ownerNode.warn === "function") {
+            ownerNode.warn(`${context} IMAP error handler failed: ${errorMessage(handlerErr)}`);
+          }
+        } catch (ignored) {
+          // ignore
+        }
+      }
+
+      // A reset IMAP/TLS connection is no longer useful for the current command.
+      // closeAfter() is designed for use from error handlers and lets the current
+      // tick finish before the socket is torn down.
+      try {
+        if (typeof client.closeAfter === "function") {
+          client.closeAfter();
+        }
+      } catch (ignored) {
+        // ignore
+      }
+    });
+
+    return client;
   };
 
   RED.nodes.registerType("imap queue account", ImapQueueAccountNode, {

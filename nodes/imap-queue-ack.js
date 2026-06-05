@@ -139,7 +139,7 @@ module.exports = function registerImapQueueAck(RED) {
           };
 
           try {
-            client = node.account.createClient();
+            client = node.account.createClient({ node, context: "imap queue ack" });
 
             let t = Date.now();
             await client.connect();

@@ -1,6 +1,6 @@
 # @compeso/node-red-contrib-imap-queue
 
-Stable release: `1.0.0`
+Stable release: `1.0.1`
 
 Additional project documents:
 
@@ -610,7 +610,7 @@ For a local tarball:
 
 ```bash
 cd ~/.node-red
-npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.0.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.1.tgz
 ```
 
 ## Local development
@@ -659,6 +659,10 @@ After import, open the `imap queue account` config node and enter username and p
 - If processing fails, do not ACK. The message stays in the mailbox and will be delivered again.
 
 ## Upgrade notes
+
+### From 1.0.0 to 1.0.1
+
+Version `1.0.1` hardens IMAP connection error handling. It adds non-throwing ImapFlow `error` event handlers so transient socket resets such as `read ECONNRESET` are reported as node warnings instead of uncaught EventEmitter errors. There is no intentional message-shape or flow behavior change.
 
 ### From 0.9.0 to 1.0.0
 

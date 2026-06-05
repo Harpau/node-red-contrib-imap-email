@@ -4,6 +4,13 @@ All notable changes to `@compeso/node-red-contrib-imap-queue` are documented her
 
 The package is developed for Node-RED flows that use an IMAP mailbox as a durable at-least-once queue. The mailbox remains the source of truth; messages are deleted only after successful downstream processing and ACK.
 
+## 1.0.1 - IMAP connection error hardening
+
+### Fixed
+
+- Added non-throwing `error` handlers to every ImapFlow client created by the account node. This prevents asynchronous IMAP/TLS errors such as `read ECONNRESET` from becoming uncaught EventEmitter errors that can terminate the Node-RED runtime.
+- `imap queue in`, `imap queue ack`, and `imap queue nack` now pass their node context to the account node when creating an IMAP client, so connection-level errors are reported as warnings on the operational node that triggered the connection.
+
 ## 1.0.0 - Stable release
 
 First stable public release.

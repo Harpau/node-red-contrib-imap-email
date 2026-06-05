@@ -166,7 +166,7 @@ module.exports = function registerImapQueueIn(RED) {
           return;
         }
 
-        client = node.account.createClient();
+        client = node.account.createClient({ node, context: "imap queue in" });
 
         let started = Date.now();
         await client.connect();

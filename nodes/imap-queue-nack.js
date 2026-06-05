@@ -93,7 +93,7 @@ module.exports = function registerImapQueueNack(RED) {
         let lock;
 
         try {
-          client = node.account.createClient();
+          client = node.account.createClient({ node, context: "imap queue nack" });
           await client.connect();
           lock = await client.getMailboxLock(mailbox);
 
