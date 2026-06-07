@@ -25,7 +25,7 @@ npm test
 Erstelle auf GitHub ein neues Repository:
 
 ```text
-Owner: compeso
+Owner: Harpau
 Repository name: node-red-contrib-imap-queue
 ```
 
@@ -36,14 +36,14 @@ git init
 git add .
 git commit -m "Initial IMAP queue Node-RED nodes"
 git branch -M main
-git remote add origin https://github.com/compeso/node-red-contrib-imap-queue.git
+git remote add origin https://github.com/Harpau/node-red-contrib-imap-queue.git
 git push -u origin main
 ```
 
 Falls du SSH verwendest:
 
 ```powershell
-git remote add origin git@github.com:compeso/node-red-contrib-imap-queue.git
+git remote add origin git@github.com:Harpau/node-red-contrib-imap-queue.git
 ```
 
 ## 4. In Node-RED direkt von GitHub installieren
@@ -52,7 +52,7 @@ Im Node-RED User-Verzeichnis:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install github:compeso/node-red-contrib-imap-queue
+npm install github:Harpau/node-red-contrib-imap-queue
 ```
 
 Danach Node-RED neu starten.
@@ -82,7 +82,7 @@ Alternativ kann die erzeugte Tarball-Datei installiert werden:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-1.0.1.tgz
+npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-1.0.2.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -193,7 +193,7 @@ npm pack
 Git-Tag:
 
 ```bash
-git tag v1.0.1
+git tag v1.0.2
 git push --tags
 ```
 
@@ -201,3 +201,7 @@ git push --tags
 
 Version `1.0.1` haertet die Behandlung von IMAP-Verbindungsfehlern. Asynchrone ImapFlow-`error`-Events wie `read ECONNRESET` werden jetzt als Warnung am jeweiligen Node protokolliert, statt als unbehandeltes EventEmitter-Error den Node-RED-Prozess beenden zu koennen. Am Message-Format und an der Queue-Semantik aendert sich nichts.
 
+
+## 16. Patch-Version 1.0.2
+
+Version `1.0.2` korrigiert die Repository-Metadaten und GitHub-Links auf `https://github.com/Harpau/node-red-contrib-imap-queue`. Der npm-Paketname bleibt `@compeso/node-red-contrib-imap-queue`. Am Runtime-Verhalten der Nodes aendert sich nichts.

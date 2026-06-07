@@ -1,16 +1,16 @@
 {
   "name": "@compeso/node-red-contrib-imap-queue",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Stable Node-RED IMAP queue nodes with externally triggered bounded front-window fetch, at-least-once ACK deletion, diagnostics, timings, and comprehensive help documentation.",
   "license": "MIT",
   "author": "compeso",
-  "homepage": "https://github.com/compeso/node-red-contrib-imap-queue#readme",
+  "homepage": "https://github.com/Harpau/node-red-contrib-imap-queue#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/compeso/node-red-contrib-imap-queue.git"
+    "url": "git+https://github.com/Harpau/node-red-contrib-imap-queue.git"
   },
   "bugs": {
-    "url": "https://github.com/compeso/node-red-contrib-imap-queue/issues"
+    "url": "https://github.com/Harpau/node-red-contrib-imap-queue/issues"
   },
   "keywords": [
     "node-red",

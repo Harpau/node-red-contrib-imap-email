@@ -43,13 +43,13 @@ Fuer die stabile Version:
 
 ```bash
 git add .
-git commit -m "Release 1.0.1"
-git tag v1.0.1
+git commit -m "Release 1.0.2"
+git tag v1.0.2
 git push
 git push --tags
 ```
 
-Fuer spaetere Patch-Releases entsprechend die Version erhoehen, zum Beispiel `1.0.1`, testen, committen und taggen.
+Fuer spaetere Patch-Releases entsprechend die Version erhoehen, testen, committen und taggen.
 
 ## 4. Installation aus GitHub testen
 
@@ -58,7 +58,7 @@ In einem Node-RED-User-Verzeichnis:
 ```bash
 cd ~/.node-red
 npm uninstall @compeso/node-red-contrib-imap-queue
-npm install github:compeso/node-red-contrib-imap-queue#v1.0.1
+npm install github:Harpau/node-red-contrib-imap-queue#v1.0.2
 ```
 
 Danach Node-RED neu starten und den Beispiel-Flow importieren.
@@ -68,7 +68,7 @@ Danach Node-RED neu starten und den Beispiel-Flow importieren.
 ```bash
 cd ~/.node-red
 npm uninstall @compeso/node-red-contrib-imap-queue
-npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.1.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.2.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -93,20 +93,23 @@ Da das Paket scoped ist, muss es oeffentlich veroeffentlicht werden. `package.js
 
 ## 7. GitHub Release
 
-Erstelle auf GitHub einen Release fuer den Tag `v1.0.1`.
+Erstelle auf GitHub einen Release fuer den Tag `v1.0.2`.
 
 Empfohlene Assets:
 
 ```text
-compeso-node-red-contrib-imap-queue-1.0.1.tgz
+compeso-node-red-contrib-imap-queue-1.0.2.tgz
 ```
 
-Empfohlene Release Notes:
+Empfohlene Release Notes fuer `1.0.2`:
 
 ```text
-First stable public release.
-No intentional runtime behavior change from 0.9.0.
-Includes externally triggered IMAP front-window queue fetch, at-least-once ACK deletion, optional NACK handling, diagnostics, docs, and examples.
+Patch release for repository metadata and documentation links.
+
+- Corrects package.json homepage, repository, and issues URLs to point to https://github.com/Harpau/node-red-contrib-imap-queue.
+- Updates GitHub installation examples and release documentation to use Harpau/node-red-contrib-imap-queue.
+- Keeps the npm package name unchanged: @compeso/node-red-contrib-imap-queue.
+- No runtime behavior change.
 ```
 
 ## 8. Nach dem Release
@@ -119,4 +122,4 @@ Beobachte mindestens:
 - ACK/NACK-Verhalten gegen ein STRATO-Testpostfach.
 - Stats-Ausgaenge bei Rueckstand und Normalbetrieb.
 
-Wenn keine Aenderungen mehr noetig sind, bleibt `1.0.0` die stabile Linie. Korrekturen koennen als Patch-Releases, zum Beispiel `1.0.1`, veroeffentlicht werden.
+Wenn keine Aenderungen mehr noetig sind, bleibt `1.0.0` die stabile Linie. Korrekturen koennen als Patch-Releases, zum Beispiel `1.0.2`, veroeffentlicht werden.

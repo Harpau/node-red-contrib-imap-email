@@ -1,6 +1,6 @@
 # @compeso/node-red-contrib-imap-queue
 
-Stable release: `1.0.1`
+Stable release: `1.0.2`
 
 Additional project documents:
 
@@ -601,7 +601,7 @@ The server did not return message source for a candidate message. If the message
 From the Node-RED user directory, usually `~/.node-red`:
 
 ```bash
-npm install github:compeso/node-red-contrib-imap-queue
+npm install github:Harpau/node-red-contrib-imap-queue
 ```
 
 Then restart Node-RED.
@@ -610,7 +610,7 @@ For a local tarball:
 
 ```bash
 cd ~/.node-red
-npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.1.tgz
+npm install /path/to/compeso-node-red-contrib-imap-queue-1.0.2.tgz
 ```
 
 ## Local development
@@ -659,6 +659,10 @@ After import, open the `imap queue account` config node and enter username and p
 - If processing fails, do not ACK. The message stays in the mailbox and will be delivered again.
 
 ## Upgrade notes
+
+### From 1.0.1 to 1.0.2
+
+Version `1.0.2` corrects GitHub repository metadata and documentation links. The npm package name remains `@compeso/node-red-contrib-imap-queue`, while the source repository is `Harpau/node-red-contrib-imap-queue`. There is no runtime behavior change.
 
 ### From 1.0.0 to 1.0.1
 

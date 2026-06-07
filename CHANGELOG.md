@@ -4,6 +4,13 @@ All notable changes to `@compeso/node-red-contrib-imap-queue` are documented her
 
 The package is developed for Node-RED flows that use an IMAP mailbox as a durable at-least-once queue. The mailbox remains the source of truth; messages are deleted only after successful downstream processing and ACK.
 
+## 1.0.2 - Repository metadata correction
+
+- Corrects `package.json` repository, homepage, and issue tracker metadata to point to `https://github.com/Harpau/node-red-contrib-imap-queue`.
+- Updates GitHub installation examples and release documentation to use the `Harpau/node-red-contrib-imap-queue` repository.
+- Keeps the npm package name unchanged: `@compeso/node-red-contrib-imap-queue`.
+- No runtime behavior change.
+
 ## 1.0.1 - IMAP connection error hardening
 
 ### Fixed
