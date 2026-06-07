@@ -1,8 +1,8 @@
 # Maintainer-Briefing: @compeso/node-red-contrib-imap-queue
 
-Stand: Release 1.0.0
+Stand: Release 1.0.1
 
-Dieses Dokument ist ein kompaktes Briefing für spätere Wartung, Bugfixes und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-queue`. Es kann zusammen mit dem ZIP-Quellpaket `compeso-node-red-contrib-imap-queue-1.0.0.zip` in einem neuen Chat, in Codex oder in einer lokalen Entwicklungsumgebung verwendet werden.
+Dieses Dokument ist ein kompaktes Briefing für spätere Wartung, Bugfixes und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-queue`. Es kann zusammen mit dem ZIP-Quellpaket `compeso-node-red-contrib-imap-queue-x.y.z.zip` in einem neuen Chat, in Codex oder in einer lokalen Entwicklungsumgebung verwendet werden.
 
 ## 1. Projektziel
 
@@ -341,6 +341,138 @@ Nach dem Publish prüfen:
 npm view @compeso/node-red-contrib-imap-queue version
 npm view @compeso/node-red-contrib-imap-queue dist-tags
 ```
+
+### 9.1 GitHub Release anlegen
+
+Nach `git push --tags` und erfolgreichem GitHub-Actions-Lauf sollte zusätzlich ein GitHub Release zum Tag angelegt werden. GitHub Releases basieren auf Git-Tags und bündeln die sichtbaren Release Notes sowie optionale Download-Artefakte wie den npm-Tarball und Prüfsummen.
+
+Vorbereitung:
+
+```bash
+git fetch --tags
+git tag --list "v*"
+npm view @compeso/node-red-contrib-imap-queue version
+npm test
+npm pack --dry-run
+npm pack
+```
+
+Die erzeugte Tarball-Datei und, falls vorhanden, die SHA256-Datei können als Release Assets hochgeladen werden, zum Beispiel:
+
+```text
+compeso-node-red-contrib-imap-queue-x.y.z.tgz
+compeso-node-red-contrib-imap-queue-x.y.z.sha256
+```
+
+Empfohlener Ablauf über die GitHub-Weboberfläche:
+
+```text
+Repository auf GitHub öffnen
+-> Releases
+-> Draft a new release / Neues Release entwerfen
+-> Tag vx.y.z auswählen
+-> Release title setzen, z. B. vx.y.z - Kurzer Änderungstitel
+-> Release Notes aus CHANGELOG.md oder release-notes-vx.y.z.md einfügen
+-> Assets anhängen, insbesondere .tgz und optional .sha256
+-> Bei Release-Kandidaten "Set as a pre-release" aktivieren
+-> Bei stabilen Versionen "Set as latest release" aktivieren oder GitHub automatisch nach SemVer entscheiden lassen
+-> Publish release
+```
+
+Für normale stabile Versionen:
+
+```text
+Pre-release: nicht aktivieren
+Set as latest release: aktivieren oder GitHub automatisch nach SemVer entscheiden lassen
+npm publish ohne speziellen Dist-Tag, also als latest
+```
+
+Für Release-Kandidaten:
+
+```text
+Pre-release: aktivieren
+Title z. B.: v0.9.0 release candidate
+npm publish möglichst mit --tag rc statt latest
+```
+
+Alternative mit GitHub CLI:
+
+```bash
+gh release create vx.y.z \
+  compeso-node-red-contrib-imap-queue-x.y.z.tgz \
+  compeso-node-red-contrib-imap-queue-x.y.z.sha256 \
+  --title "vx.y.z" \
+  --notes-file release-notes-vx.y.z.md \
+  --verify-tag
+```
+
+Wenn keine SHA256-Datei vorhanden ist:
+
+```bash
+gh release create vx.y.z \
+  compeso-node-red-contrib-imap-queue-x.y.z.tgz \
+  --title "vx.y.z" \
+  --notes-file release-notes-vx.y.z.md \
+  --verify-tag
+```
+
+Für Release-Kandidaten zusätzlich:
+
+```bash
+gh release create vx.y.z \
+  compeso-node-red-contrib-imap-queue-x.y.z.tgz \
+  compeso-node-red-contrib-imap-queue-x.y.z.sha256 \
+  --title "vx.y.z release candidate" \
+  --notes-file release-notes-vx.y.z.md \
+  --verify-tag \
+  --prerelease
+```
+
+Wenn GitHub Releases im Repository als unveränderlich geschützt sind, den Release zuerst als Draft erstellen, Assets anhängen und erst danach veröffentlichen. Dadurch sind alle Artefakte vorhanden, bevor der veröffentlichte Release nicht mehr geändert werden kann.
+
+Prüfliste nach dem GitHub Release:
+
+```text
+GitHub Release-Seite zeigt die richtige Version
+Tag verweist auf den erwarteten Commit
+Release Notes sind vollständig und enthalten Upgrade-Hinweise
+.tgz und .sha256 sind angehängt, falls sie erzeugt wurden
+Assets lassen sich herunterladen
+GitHub Actions für main und vx.y.z sind grün
+npm view zeigt dieselbe Version wie das GitHub Release
+```
+
+### 9.2 Node-RED Flow Library nach npm-Publish aktualisieren
+
+Nach einem npm-Publish ist die neue Version nicht zwingend sofort im Node-RED Palette Manager sichtbar. Die Flow Library muss ggf. aktualisiert werden.
+
+Vorgehen:
+
+```text
+flows.nodered.org öffnen
+einloggen
+Paket-Seite von @compeso/node-red-contrib-imap-queue öffnen
+request refresh anklicken
+warten und Paket-Seite neu laden
+prüfen, ob die neue Version angezeigt wird
+Node-RED Palette Manager erneut öffnen
+```
+
+Falls kein `request refresh` sichtbar ist oder der Refresh nicht greift:
+
+```text
+https://flows.nodered.org/add/node öffnen
+@compeso/node-red-contrib-imap-queue erneut einreichen
+```
+
+Für sofortige Installationen unabhängig von der Palette:
+
+```bash
+cd ~/.node-red
+npm install @compeso/node-red-contrib-imap-queue@latest
+```
+
+Danach Node-RED neu starten.
 
 ## 10. Sinnvolle nächste Verbesserungen
 
