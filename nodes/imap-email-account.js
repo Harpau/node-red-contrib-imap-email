@@ -12,8 +12,8 @@ function errorMessage(err) {
   return err.code ? `${message} (${err.code})` : message;
 }
 
-module.exports = function registerImapQueueAccount(RED) {
-  function ImapQueueAccountNode(config) {
+module.exports = function registerImapEmailAccount(RED) {
+  function ImapEmailAccountNode(config) {
     RED.nodes.createNode(this, config);
 
     this.name = config.name || "";
@@ -26,17 +26,17 @@ module.exports = function registerImapQueueAccount(RED) {
     this.socketTimeout = parseNumber(config.socketTimeout, 300000, 1000, 3600000);
   }
 
-  ImapQueueAccountNode.prototype.getUsername = function getUsername() {
+  ImapEmailAccountNode.prototype.getUsername = function getUsername() {
     return this.credentials && this.credentials.username || "";
   };
 
-  ImapQueueAccountNode.prototype.createClient = function createClient(options = {}) {
+  ImapEmailAccountNode.prototype.createClient = function createClient(options = {}) {
     const user = options.user || this.getUsername();
     const accessToken = options.accessToken || this.credentials && this.credentials.accessToken;
     const password = options.password || this.credentials && this.credentials.password;
 
     if (!user) {
-      throw new Error("IMAP username is missing in imap queue account credentials");
+      throw new Error("IMAP username is missing in imap email account credentials");
     }
 
     const auth = accessToken
@@ -44,7 +44,7 @@ module.exports = function registerImapQueueAccount(RED) {
       : { user, pass: password || "" };
 
     if (!accessToken && !auth.pass) {
-      throw new Error("IMAP password/access token is missing in imap queue account credentials");
+      throw new Error("IMAP password/access token is missing in imap email account credentials");
     }
 
     const client = new ImapFlow({
@@ -62,7 +62,7 @@ module.exports = function registerImapQueueAccount(RED) {
     });
 
     const ownerNode = options.node || this;
-    const context = options.context || "imap queue client";
+    const context = options.context || "imap email client";
 
     // ImapFlow is an EventEmitter and may emit an asynchronous 'error' event
     // after the awaited API call has already returned or while another promise is
@@ -104,7 +104,7 @@ module.exports = function registerImapQueueAccount(RED) {
     return client;
   };
 
-  RED.nodes.registerType("imap queue account", ImapQueueAccountNode, {
+  RED.nodes.registerType("imap email account", ImapEmailAccountNode, {
     credentials: {
       username: { type: "text" },
       password: { type: "password" },

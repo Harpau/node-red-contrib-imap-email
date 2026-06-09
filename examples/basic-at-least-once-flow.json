@@ -2,15 +2,15 @@
   {
     "id": "b2f6e3681c7c4801",
     "type": "tab",
-    "label": "IMAP queue example",
+    "label": "IMAP email example",
     "disabled": false,
-    "info": "Example flow for @compeso/node-red-contrib-imap-queue. The IMAP fetch is externally triggered."
+    "info": "Example flow for @compeso/node-red-contrib-imap-email. The IMAP fetch is externally triggered."
   },
   {
     "id": "348271c99c0cf7ae",
     "type": "inject",
     "z": "b2f6e3681c7c4801",
-    "name": "trigger imap queue in",
+    "name": "trigger imap email in",
     "props": [
       {
         "p": "payload"
@@ -37,9 +37,9 @@
   },
   {
     "id": "52c74eb9f1841ec0",
-    "type": "imap queue in",
+    "type": "imap email in",
     "z": "b2f6e3681c7c4801",
-    "name": "INBOX queue in",
+    "name": "INBOX email in",
     "account": "2b40b931e3ce3d1a",
     "mailbox": "INBOX",
     "batchSize": "50",
@@ -72,8 +72,8 @@
     "type": "function",
     "z": "b2f6e3681c7c4801",
     "name": "DEMO Verarbeitung",
-    "func": "// Hier kommt deine echte Verarbeitung hin.\n// Nur erfolgreiche Nachrichten duerfen weiter zum ACK-Node laufen.\nmsg.processedAt = new Date().toISOString();\n// Jede 100. Mail zum NACK-Node schicken\nif (msg.imap.uid % 100 == 0) return [null, msg]; \n// Alle übrigen gehen zum ACK-Node\nreturn [msg, null];",
-    "outputs": 2,
+    "func": "// Hier kommt deine echte Verarbeitung hin.\n// Nur erfolgreiche Nachrichten duerfen weiter zum ACK-Node laufen.\nmsg.processedAt = new Date().toISOString();\nreturn msg;",
+    "outputs": 1,
     "timeout": 0,
     "noerr": 0,
     "initialize": "",
@@ -84,15 +84,12 @@
     "wires": [
       [
         "b0edbceee5d5e7f8"
-      ],
-      [
-        "c716f16ee50b8bba"
       ]
     ]
   },
   {
     "id": "b0edbceee5d5e7f8",
-    "type": "imap queue ack",
+    "type": "imap email ack",
     "z": "b2f6e3681c7c4801",
     "name": "ACK delete",
     "account": "2b40b931e3ce3d1a",
@@ -120,7 +117,7 @@
     "id": "79f4700514258841",
     "type": "debug",
     "z": "b2f6e3681c7c4801",
-    "name": "queue errors",
+    "name": "email errors",
     "active": true,
     "tosidebar": true,
     "console": false,
@@ -137,7 +134,7 @@
     "id": "7c0a8048075b778b",
     "type": "debug",
     "z": "b2f6e3681c7c4801",
-    "name": "queue stats",
+    "name": "email stats",
     "active": true,
     "tosidebar": true,
     "console": false,
@@ -202,63 +199,8 @@
     "wires": []
   },
   {
-    "id": "c716f16ee50b8bba",
-    "type": "imap queue nack",
-    "z": "b2f6e3681c7c4801",
-    "name": "NACK move",
-    "account": "2b40b931e3ce3d1a",
-    "mailbox": "INBOX",
-    "action": "move",
-    "failedMailbox": "NodeRED.failed",
-    "diagnostics": "debug",
-    "x": 770,
-    "y": 220,
-    "wires": [
-      [
-        "5e297b471fc5d02a"
-      ],
-      [
-        "0fead238efbee1d3"
-      ]
-    ]
-  },
-  {
-    "id": "5e297b471fc5d02a",
-    "type": "debug",
-    "z": "b2f6e3681c7c4801",
-    "name": "nack ok",
-    "active": false,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "imapNack",
-    "targetType": "msg",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 960,
-    "y": 200,
-    "wires": []
-  },
-  {
-    "id": "0fead238efbee1d3",
-    "type": "debug",
-    "z": "b2f6e3681c7c4801",
-    "name": "nack error",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "true",
-    "targetType": "full",
-    "statusVal": "",
-    "statusType": "auto",
-    "x": 960,
-    "y": 240,
-    "wires": []
-  },
-  {
     "id": "2b40b931e3ce3d1a",
-    "type": "imap queue account",
+    "type": "imap email account",
     "name": "STRATO test",
     "host": "imap.strato.de",
     "port": "993",

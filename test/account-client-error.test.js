@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const registerAccount = require("../nodes/imap-queue-account");
+const registerAccount = require("../nodes/imap-email-account");
 
 test("account-created IMAP clients handle asynchronous error events", () => {
   let AccountCtor;
@@ -18,7 +18,7 @@ test("account-created IMAP clients handle asynchronous error events", () => {
         node.status = () => {};
       },
       registerType(type, ctor) {
-        if (type === "imap queue account") {
+        if (type === "imap email account") {
           AccountCtor = ctor;
         }
       }

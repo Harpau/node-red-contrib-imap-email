@@ -1,58 +1,45 @@
-# Installation und GitHub-Veröffentlichung
+# Installation und lokaler Test
 
-Diese Anleitung beschreibt den Weg von der lokalen Paketversion zu einem GitHub-Repository und zur Installation in Node-RED.
+Diese Anleitung gilt fuer das neue eigenstaendige Paket `@compeso/node-red-contrib-imap-email`.
 
-## 1. Lokalen Paketordner entpacken
+## 1. Paketordner
 
-Lade das ZIP-Paket herunter und entpacke es an einen Arbeitsort, z. B.:
+Arbeite im neuen Repository:
 
 ```powershell
-C:\Users\<dein-user>\src\node-red-contrib-imap-queue
+C:\Users\<dein-user>\src\node-red-contrib-imap-email
 ```
 
-Im entpackten Ordner muss `package.json` direkt auf oberster Ebene liegen.
+Das alte Repository `node-red-contrib-imap-queue` bleibt unveraendert.
 
-## 2. Abhängigkeiten installieren und Tests ausführen
+## 2. Abhaengigkeiten und Tests
+
+Im Paketordner:
 
 ```powershell
-cd C:\Users\<dein-user>\src\node-red-contrib-imap-queue
+cd C:\Users\<dein-user>\src\node-red-contrib-imap-email
 npm install
 npm test
+npm run pack:check
 ```
 
-## 3. GitHub-Repository erstellen
+## 3. GitHub-Repository
 
-Erstelle auf GitHub ein neues Repository:
+Das neue Repository ist:
 
 ```text
 Owner: Harpau
-Repository name: node-red-contrib-imap-queue
+Repository name: node-red-contrib-imap-email
+URL: https://github.com/Harpau/node-red-contrib-imap-email
 ```
 
-Danach lokal initialisieren und pushen:
-
-```powershell
-git init
-git add .
-git commit -m "Initial IMAP queue Node-RED nodes"
-git branch -M main
-git remote add origin https://github.com/Harpau/node-red-contrib-imap-queue.git
-git push -u origin main
-```
-
-Falls du SSH verwendest:
-
-```powershell
-git remote add origin git@github.com:Harpau/node-red-contrib-imap-queue.git
-```
-
-## 4. In Node-RED direkt von GitHub installieren
+## 4. Installation in Node-RED aus GitHub
 
 Im Node-RED User-Verzeichnis:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm install github:Harpau/node-red-contrib-imap-queue
+npm install github:Harpau/node-red-contrib-imap-email
 ```
 
 Danach Node-RED neu starten.
@@ -62,7 +49,7 @@ Danach Node-RED neu starten.
 Im Paketordner:
 
 ```powershell
-cd C:\Users\<dein-user>\src\node-red-contrib-imap-queue
+cd C:\Users\<dein-user>\src\node-red-contrib-imap-email
 npm install
 npm link
 ```
@@ -71,23 +58,12 @@ Im Node-RED User-Verzeichnis:
 
 ```powershell
 cd $env:USERPROFILE\.node-red
-npm link @compeso/node-red-contrib-imap-queue
+npm link @compeso/node-red-contrib-imap-email
 ```
 
 Danach Node-RED neu starten.
 
-## 6. Lokales TGZ-Paket installieren
-
-Alternativ kann die erzeugte Tarball-Datei installiert werden:
-
-```powershell
-cd $env:USERPROFILE\.node-red
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-1.0.2.tgz
-```
-
-Danach Node-RED neu starten.
-
-## 7. Beispiel-Flow importieren
+## 6. Beispiel-Flow
 
 In Node-RED:
 
@@ -95,28 +71,30 @@ In Node-RED:
 Menu -> Import -> examples/basic-at-least-once-flow.json
 ```
 
-Danach den Config-Node `STRATO test` öffnen und Benutzername/Passwort eintragen.
+Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen.
 
-## 8. Produktiver Minimal-Flow
+## 7. Produktiver Minimal-Flow
 
 ```text
 Inject / Scheduler / HTTP-Trigger
-  -> imap queue in
-      -> deine erfolgreiche Verarbeitung
-          -> imap queue ack
+  -> imap email in
+      -> erfolgreiche Verarbeitung
+          -> imap email ack
 ```
 
-Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node führen. Wenn die Verarbeitung fehlschlägt, bleibt die Mail in der Mailbox und wird später erneut geliefert.
+Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node fuehren. Wenn die Verarbeitung fehlschlaegt und kein ACK erfolgt, bleibt die Mail in der Mailbox und kann spaeter erneut geliefert werden.
 
-## 9. GitHub Actions / CI
+## 8. Node-RED-Typen
 
-Ab Version `0.5.1` installiert der CI-Workflow die Laufzeit-Abhängigkeiten explizit aus `package.json`, bevor `npm test` ausgeführt wird. Dadurch funktionieren die Smoke-Tests auch in frischen GitHub-Actions-Runnern, in denen `imapflow` und `mailparser` vorher nicht vorhanden sind.
+Dieses Paket registriert nur die neuen Typen:
 
-Für die Repository-Version wird kein lokal erzeugtes `package-lock.json` vorausgesetzt. Falls ein altes Lockfile mit privaten Registry-URLs im Repository liegt, sollte es entfernt oder in einer öffentlichen Umgebung neu erzeugt werden.
+```text
+imap email account
+imap email in
+imap email ack
+```
 
-## 10. Node-Namen ab Version 0.5.0
-
-Ab Version `0.5.0` heißen die Node-RED-Typen ohne Bindestriche:
+Die alten Typen aus `@compeso/node-red-contrib-imap-queue` werden hier nicht registriert:
 
 ```text
 imap queue account
@@ -125,83 +103,18 @@ imap queue ack
 imap queue nack
 ```
 
-Falls vorhandene Flow-JSONs noch alte Typnamen enthalten, müssen diese ersetzt werden:
+## 9. Migration
+
+Bestehende Flow-JSONs aus dem alten Paket muessen mindestens diese Typen umstellen:
 
 ```text
-imap-queue-account -> imap queue account
-imap-queue-in      -> imap queue in
-imap-queue-ack     -> imap queue ack
-imap-queue-nack    -> imap queue nack
+imap queue account -> imap email account
+imap queue in      -> imap email in
+imap queue ack     -> imap email ack
 ```
 
-## 11. Wichtige Einstellungen
+Flows mit `imap queue nack` benoetigen eine spaetere fachliche Migration auf die geplanten Abschlussaktionen von `imap email ack`.
 
-Für ein STRATO-Queue-Postfach ist ein sinnvoller Start:
+## 10. Keine Veroeffentlichung ohne Freigabe
 
-```text
-imap queue in:
-  Mailbox:          INBOX
-  Batch size:       50
-  Front window:     500
-  Max inflight:     500
-  Retry after ms:   1800000
-  UIDs/command:     500
-  Skip deleted:     true
-  Expunge front:    true
-  Expunge limit:    200
-  Attachments:      false
-  Raw source:       false
-  Diagnostics:      stats
-
-imap queue ack:
-  Batch size:       100
-  Flush ms:         500
-  UIDs/command:     500
-  Batches/flush:    20
-  Diagnostics:      stats
-```
-
-## 12. Hinweise zur Zustellgarantie
-
-Das Paket ist auf `at least once` ausgelegt:
-
-```text
-Mail liegt noch in der Mailbox = noch nicht erfolgreich geACKt
-Mail wurde gelöscht           = erfolgreich verarbeitet und geACKt
-```
-
-Doppelte Verarbeitung ist möglich, insbesondere nach Neustarts oder ACK-Fehlern. Dafür gehen Mails nicht still verloren, solange sie erst nach erfolgreicher Verarbeitung an `imap queue ack` übergeben werden.
-
-## 13. Änderung in Version 0.5.2
-
-Der Default fuer die Failed Mailbox im Node `imap queue nack` ist `NodeRED.failed`. Ein fuehrender Punkt wurde entfernt, weil einzelne IMAP-Server Mailboxnamen wie `.NodeRED.failed` ablehnen koennen.
-
-
-## 14. Stabile Version 1.0.0
-
-Version `1.0.0` ist die erste stabile oeffentliche Version. Gegenueber dem erfolgreich getesteten Release-Kandidaten `0.9.0` sind keine absichtlichen Aenderungen am Runtime-Verhalten vorgesehen.
-
-Empfohlene Release-Pruefung:
-
-```bash
-npm install --no-audit --no-fund
-npm test
-npm pack --dry-run
-npm pack
-```
-
-Git-Tag:
-
-```bash
-git tag v1.0.2
-git push --tags
-```
-
-## 15. Patch-Version 1.0.1
-
-Version `1.0.1` haertet die Behandlung von IMAP-Verbindungsfehlern. Asynchrone ImapFlow-`error`-Events wie `read ECONNRESET` werden jetzt als Warnung am jeweiligen Node protokolliert, statt als unbehandeltes EventEmitter-Error den Node-RED-Prozess beenden zu koennen. Am Message-Format und an der Queue-Semantik aendert sich nichts.
-
-
-## 16. Patch-Version 1.0.2
-
-Version `1.0.2` korrigiert die Repository-Metadaten und GitHub-Links auf `https://github.com/Harpau/node-red-contrib-imap-queue`. Der npm-Paketname bleibt `@compeso/node-red-contrib-imap-queue`. Am Runtime-Verhalten der Nodes aendert sich nichts.
+Dieses Paket darf nicht auf npm oder flows.nodered.org veroeffentlicht werden, solange keine ausdrueckliche menschliche Freigabe vorliegt.

@@ -6,8 +6,8 @@ const { chunkUidRanges } = require("../lib/uid-range");
 const { parseNumber } = require("../lib/imap-utils");
 const diagnostics = require("../lib/diagnostics");
 
-module.exports = function registerImapQueueAck(RED) {
-  function ImapQueueAckNode(config) {
+module.exports = function registerImapEmailAck(RED) {
+  function ImapEmailAckNode(config) {
     RED.nodes.createNode(this, config);
 
     const node = this;
@@ -28,7 +28,7 @@ module.exports = function registerImapQueueAck(RED) {
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
-      node.error("Missing imap queue account configuration");
+      node.error("Missing imap email account configuration");
       return;
     }
 
@@ -52,7 +52,7 @@ module.exports = function registerImapQueueAck(RED) {
       if (diagnostics.wantsStats(node.diagnostics)) {
         node.send([null, null, { payload: stats }]);
       }
-      diagnostics.debug(node, node.diagnostics, "imap queue ack.flush", stats);
+      diagnostics.debug(node, node.diagnostics, "imap email ack.flush", stats);
     }
 
     node.scheduleFlush = function scheduleFlush(delayMs) {
@@ -109,7 +109,7 @@ module.exports = function registerImapQueueAck(RED) {
       const groups = node.groupItems(items);
       const stats = {
         ok: true,
-        type: "imap queue ack stats",
+        type: "imap email ack stats",
         diagnostics: node.diagnostics,
         startedAt: new Date(startedAt).toISOString(),
         finishedAt: null,
@@ -139,7 +139,7 @@ module.exports = function registerImapQueueAck(RED) {
           };
 
           try {
-            client = node.account.createClient({ node, context: "imap queue ack" });
+            client = node.account.createClient({ node, context: "imap email ack" });
 
             let t = Date.now();
             await client.connect();
@@ -281,7 +281,7 @@ module.exports = function registerImapQueueAck(RED) {
       });
 
       node.status({ fill: "yellow", shape: "ring", text: `ACK pending ${node.pending.length}` });
-      diagnostics.debug(node, node.diagnostics, "imap queue ack.queued", {
+      diagnostics.debug(node, node.diagnostics, "imap email ack.queued", {
         pending: node.pending.length,
         mailbox: token.mailbox || node.mailbox || "INBOX",
         uid: token.uid,
@@ -325,5 +325,5 @@ module.exports = function registerImapQueueAck(RED) {
     });
   }
 
-  RED.nodes.registerType("imap queue ack", ImapQueueAckNode);
+  RED.nodes.registerType("imap email ack", ImapEmailAckNode);
 };

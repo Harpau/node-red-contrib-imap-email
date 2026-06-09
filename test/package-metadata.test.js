@@ -9,20 +9,27 @@ test("stable package metadata is complete", () => {
   const root = path.resolve(__dirname, "..");
   const pkg = require(path.join(root, "package.json"));
 
-  assert.equal(pkg.name, "@compeso/node-red-contrib-imap-queue");
-  assert.equal(pkg.version, "1.0.2");
+  assert.equal(pkg.name, "@compeso/node-red-contrib-imap-email");
+  assert.equal(pkg.version, "0.1.0");
   assert.equal(pkg.license, "MIT");
   assert.equal(pkg.publishConfig && pkg.publishConfig.access, "public");
   assert.ok(pkg.keywords.includes("node-red"));
+  assert.ok(pkg.keywords.includes("imap-email"));
   assert.ok(pkg.dependencies.imapflow);
   assert.ok(pkg.dependencies.mailparser);
   assert.ok(pkg.files.includes("CHANGELOG.md"));
-  assert.equal(pkg.homepage, "https://github.com/Harpau/node-red-contrib-imap-queue#readme");
-  assert.equal(pkg.repository.url, "git+https://github.com/Harpau/node-red-contrib-imap-queue.git");
-  assert.equal(pkg.bugs.url, "https://github.com/Harpau/node-red-contrib-imap-queue/issues");
+  assert.equal(pkg.homepage, "https://github.com/Harpau/node-red-contrib-imap-email#readme");
+  assert.equal(pkg.repository.url, "git+https://github.com/Harpau/node-red-contrib-imap-email.git");
+  assert.equal(pkg.bugs.url, "https://github.com/Harpau/node-red-contrib-imap-email/issues");
+
+  assert.deepEqual(Object.keys(pkg["node-red"].nodes), [
+    "imap email account",
+    "imap email in",
+    "imap email ack"
+  ]);
 });
 
-test("project documentation does not contain stale GitHub repository URLs", () => {
+test("project documentation does not contain stale GitHub repository URLs for this package", () => {
   const root = path.resolve(__dirname, "..");
   const checkedFiles = [
     "README.md",
@@ -34,8 +41,8 @@ test("project documentation does not contain stale GitHub repository URLs", () =
 
   for (const file of checkedFiles) {
     const content = fs.readFileSync(path.join(root, file), "utf8");
-    assert.equal(content.includes("github.com/compeso/node-red-contrib-imap-queue"), false, `${file} contains stale GitHub HTTPS URL`);
-    assert.equal(content.includes("github:compeso/node-red-contrib-imap-queue"), false, `${file} contains stale GitHub shorthand URL`);
+    assert.equal(content.includes("github.com/compeso/node-red-contrib-imap-email"), false, `${file} contains stale GitHub HTTPS URL`);
+    assert.equal(content.includes("github:compeso/node-red-contrib-imap-email"), false, `${file} contains stale GitHub shorthand URL`);
   }
 });
 

@@ -1,23 +1,23 @@
 {
-  "name": "@compeso/node-red-contrib-imap-queue",
-  "version": "1.0.2",
-  "description": "Stable Node-RED IMAP queue nodes with externally triggered bounded front-window fetch, at-least-once ACK deletion, diagnostics, timings, and comprehensive help documentation.",
+  "name": "@compeso/node-red-contrib-imap-email",
+  "version": "0.1.0",
+  "description": "Node-RED IMAP email nodes with externally triggered bounded front-window fetch, at-least-once ACK deletion, diagnostics, timings, and comprehensive help documentation.",
   "license": "MIT",
   "author": "compeso",
-  "homepage": "https://github.com/Harpau/node-red-contrib-imap-queue#readme",
+  "homepage": "https://github.com/Harpau/node-red-contrib-imap-email#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Harpau/node-red-contrib-imap-queue.git"
+    "url": "git+https://github.com/Harpau/node-red-contrib-imap-email.git"
   },
   "bugs": {
-    "url": "https://github.com/Harpau/node-red-contrib-imap-queue/issues"
+    "url": "https://github.com/Harpau/node-red-contrib-imap-email/issues"
   },
   "keywords": [
     "node-red",
     "imap",
     "email",
     "mail",
-    "queue",
+    "imap-email",
     "at-least-once",
     "ack"
   ],
@@ -45,10 +45,9 @@
   "node-red": {
     "version": ">=3.0.0",
     "nodes": {
-      "imap queue account": "nodes/imap-queue-account.js",
-      "imap queue in": "nodes/imap-queue-in.js",
-      "imap queue ack": "nodes/imap-queue-ack.js",
-      "imap queue nack": "nodes/imap-queue-nack.js"
+      "imap email account": "nodes/imap-email-account.js",
+      "imap email in": "nodes/imap-email-in.js",
+      "imap email ack": "nodes/imap-email-ack.js"
     }
   },
   "publishConfig": {

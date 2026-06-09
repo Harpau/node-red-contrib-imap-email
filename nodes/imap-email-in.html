@@ -1,10 +1,10 @@
 <script type="text/javascript">
-  RED.nodes.registerType('imap queue in', {
-    category: 'imap queue',
+  RED.nodes.registerType('imap email in', {
+    category: 'imap email',
     color: '#D8BFD8',
     defaults: {
       name: { value: '' },
-      account: { value: '', type: 'imap queue account', required: true },
+      account: { value: '', type: 'imap email account', required: true },
       mailbox: { value: 'INBOX', required: true },
       batchSize: { value: 50, required: true, validate: RED.validators.number() },
       frontWindowSize: { value: 500, required: true, validate: RED.validators.number() },
@@ -21,18 +21,18 @@
     inputs: 1,
     outputs: 3,
     outputLabels: ['mail', 'error / parse error', 'stats'],
-    paletteLabel: 'imap queue in',
+    paletteLabel: 'imap email in',
     icon: 'font-awesome/fa-envelope-o',
     label: function () {
-      return this.name || ('imap queue ' + (this.mailbox || 'INBOX'));
+      return this.name || ('imap email ' + (this.mailbox || 'INBOX'));
     }
   });
 </script>
 
-<script type="text/html" data-template-name="imap queue in">
+<script type="text/html" data-template-name="imap email in">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input type="text" id="node-input-name" placeholder="imap queue in">
+    <input type="text" id="node-input-name" placeholder="imap email in">
   </div>
   <div class="form-row">
     <label for="node-input-account"><i class="fa fa-user"></i> Account</label>
@@ -98,12 +98,12 @@
   </div>
 </script>
 
-<script type="text/html" data-help-name="imap queue in">
-  <p>Externally triggered IMAP input node for using a mailbox as an at-least-once queue.</p>
+<script type="text/html" data-help-name="imap email in">
+  <p>Externally triggered IMAP input node for using a mailbox as an at-least-once email source.</p>
 
   <h3>Behavior</h3>
   <p>Each input message starts one bounded fetch cycle. The node does not poll automatically and does not delete successfully processed messages itself.</p>
-  <p>The node scans only a bounded front window such as <code>1:500</code>, emits at most the configured batch size, and attaches <code>msg.imap.ackToken</code> to every emitted mail. Wire the successful processing path to <b>imap queue ack</b>.</p>
+  <p>The node scans only a bounded front window such as <code>1:500</code>, emits at most the configured batch size, and attaches <code>msg.imap.ackToken</code> to every emitted mail. Wire the successful processing path to <b>imap email ack</b>.</p>
   <p>If another trigger arrives while a fetch cycle is already running, no parallel IMAP fetch is started. A skipped stats message is emitted on output 3 when Diagnostics is <code>stats</code> or <code>debug</code>.</p>
 
   <h3>Inputs</h3>
@@ -122,7 +122,7 @@
   <h3>Settings</h3>
   <dl class="message-properties">
     <dt>Account <span class="property-type">config</span></dt>
-    <dd>Required <b>imap queue account</b> configuration.</dd>
+    <dd>Required <b>imap email account</b> configuration.</dd>
     <dt>Mailbox <span class="property-type">string</span></dt>
     <dd>Queue mailbox to read from, usually <code>INBOX</code>.</dd>
     <dt>Batch size <span class="property-type">number</span></dt>
@@ -164,12 +164,12 @@
     <dt>msg.email.attachments <span class="property-type">array</span></dt>
     <dd>Only present when Attachments is enabled.</dd>
     <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
-    <dd>Token required by <b>imap queue ack</b> or <b>imap queue nack</b>.</dd>
+    <dd>Token required by <b>imap email ack</b>.</dd>
   </dl>
 
   <h3>Stats</h3>
   <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>missingSource</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
 
   <h3>Delivery guarantee</h3>
-  <p>The node provides at-least-once delivery when combined with <b>imap queue ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until ACK deletion succeeds.</p>
+  <p>The node provides at-least-once delivery when combined with <b>imap email ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until ACK deletion succeeds.</p>
 </script>

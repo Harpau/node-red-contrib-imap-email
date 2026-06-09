@@ -1,10 +1,10 @@
 <script type="text/javascript">
-  RED.nodes.registerType('imap queue ack', {
-    category: 'imap queue',
+  RED.nodes.registerType('imap email ack', {
+    category: 'imap email',
     color: '#D8BFD8',
     defaults: {
       name: { value: '' },
-      account: { value: '', type: 'imap queue account', required: true },
+      account: { value: '', type: 'imap email account', required: true },
       mailbox: { value: 'INBOX' },
       batchSize: { value: 100, required: true, validate: RED.validators.number() },
       flushMs: { value: 500, required: true, validate: RED.validators.number() },
@@ -15,18 +15,18 @@
     inputs: 1,
     outputs: 3,
     outputLabels: ['ack ok', 'ack error', 'stats'],
-    paletteLabel: 'imap queue ack',
+    paletteLabel: 'imap email ack',
     icon: 'font-awesome/fa-check',
     label: function () {
-      return this.name || 'imap queue ack';
+      return this.name || 'imap email ack';
     }
   });
 </script>
 
-<script type="text/html" data-template-name="imap queue ack">
+<script type="text/html" data-template-name="imap email ack">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input type="text" id="node-input-name" placeholder="imap queue ack">
+    <input type="text" id="node-input-name" placeholder="imap email ack">
   </div>
   <div class="form-row">
     <label for="node-input-account"><i class="fa fa-user"></i> Account</label>
@@ -64,8 +64,8 @@
   </div>
 </script>
 
-<script type="text/html" data-help-name="imap queue ack">
-  <p>Positive acknowledgement node for messages emitted by <b>imap queue in</b>.</p>
+<script type="text/html" data-help-name="imap email ack">
+  <p>Positive acknowledgement node for messages emitted by <b>imap email in</b>.</p>
 
   <h3>Behavior</h3>
   <p>Wire this node only after all required processing has succeeded. The node batches incoming ACKs internally and deletes the corresponding messages by UID from the mailbox described by <code>msg.imap.ackToken</code>.</p>
@@ -74,7 +74,7 @@
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
-    <dd>ACK token emitted by <b>imap queue in</b>.</dd>
+    <dd>ACK token emitted by <b>imap email in</b>.</dd>
   </dl>
 
   <h3>Outputs</h3>
@@ -87,7 +87,7 @@
   <h3>Settings</h3>
   <dl class="message-properties">
     <dt>Account <span class="property-type">config</span></dt>
-    <dd>Required <b>imap queue account</b> configuration.</dd>
+    <dd>Required <b>imap email account</b> configuration.</dd>
     <dt>Mailbox fallback <span class="property-type">string</span></dt>
     <dd>Mailbox used if the incoming ACK token does not include a mailbox. Usually <code>INBOX</code>.</dd>
     <dt>Batch size <span class="property-type">number</span></dt>
