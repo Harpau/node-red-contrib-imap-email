@@ -63,15 +63,14 @@ Only wire messages to `imap email ack` after all processing that must succeed ha
 `imap email ack` can be configured multiple times in one flow. Typical modes:
 
 ```text
-delete              delete the mail by UID and complete it
-keep/requeue later  keep the mail and retry after the inflight timeout
-keep/requeue now    keep the mail and make it immediately eligible again
-move to folder      move the mail to a configured IMAP folder
-set by msg.<xxx>    read action, target folder and flags from the message
+delete       delete the mail by UID and complete it
+move         create the target folder if needed, move the mail and complete it
+flag         set or clear flags, keep the mail and complete it
+set by msg.  read action, target folder and flags from the message
 ```
 
-The ack node can set or clear `\Seen`, `\Answered` and `\Flagged` for keep and
-move actions. Delete is intentionally not combined with flag changes.
+The ack node can set or clear `\Seen`, `\Answered` and `\Flagged` in `flag`
+mode. `delete` and `move` are intentionally not combined with flag changes.
 
 ## Large Mailboxes
 
@@ -114,27 +113,25 @@ msg.imap.flags // for example ["\\Seen", "\\Flagged"]
 The package provides at-least-once delivery.
 
 ```text
-Message still in mailbox = not successfully ACKed
-Message deleted          = successfully processed and ACKed
-Duplicate delivery       = possible
-Exactly once             = not guaranteed
+ACK action succeeded = successfully processed and ACKed
+ACK action failed    = not successfully ACKed
+Duplicate delivery   = possible
+Exactly once         = not guaranteed
 ```
 
 The inflight registry is volatile process memory. If Node-RED restarts after a message was emitted but before it was ACKed, the message remains in the mailbox and may be emitted again.
 
 No message is reported as successfully completed if the configured IMAP action
 fails. In that case output 2 receives the original message with
-`msg.imapAck.ok = false`.
+`msg.imapAck.ok = false`, and the inflight entry remains available for a later
+retry.
 
-For dynamic decisions, configure `imap email ack` to `set by msg.<xxx>` and set
+For dynamic decisions, configure `imap email ack` to `set by msg.` and set
 `msg.imap.ackAction`:
 
 ```js
 msg.imap.ackAction = {
-  disposition: "move",          // keep, delete, move
-  targetMailbox: "Archive",
-  createTargetMailbox: true,
-  requeue: "complete",          // complete, later, now
+  action: "flag",               // delete, move, flag
   flags: {
     seen: "set",                // ignore, set, clear
     answered: "ignore",
@@ -143,9 +140,9 @@ msg.imap.ackAction = {
 };
 ```
 
-Successful completions add `msg.imapAck` with fields such as `mode`,
+Successful completions add `msg.imapAck` with fields such as `action`,
 `disposition`, `mailbox`, `targetMailbox`, `uid`, `uidValidity`, `flags`,
-`ranges`, `requeue` and `inflightRemoved`.
+`range` and `completed`.
 
 ## Current Limits
 

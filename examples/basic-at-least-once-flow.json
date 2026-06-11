@@ -99,7 +99,6 @@
     "mailbox": "INBOX",
     "actionMode": "delete",
     "targetMailbox": "",
-    "createTargetMailbox": true,
     "actionProperty": "imap.ackAction",
     "seenAction": "ignore",
     "answeredAction": "ignore",

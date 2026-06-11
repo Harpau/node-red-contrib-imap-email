@@ -2,14 +2,14 @@
 
 const { extractAckToken } = require("../lib/ack-token");
 const registry = require("../lib/runtime-registry");
-const { chunkUidRanges } = require("../lib/uid-range");
-const { parseNumber, parseBoolean } = require("../lib/imap-utils");
+const { chunkUids, compressUids } = require("../lib/uid-range");
+const { parseNumber } = require("../lib/imap-utils");
 const {
   normalizeAckAction,
   normalizeAckActionFromMessage,
   buildImapAckResult,
   buildImapAckError,
-  executeAckActionBatch,
+  executeAckActionRange,
   actionPlanKey
 } = require("../lib/imap-ack-actions");
 const diagnostics = require("../lib/diagnostics");
@@ -26,9 +26,8 @@ module.exports = function registerImapEmailAck(RED) {
     node.flushMs = parseNumber(config.flushMs, 500, 1, 60000);
     node.maxUidPerCommand = parseNumber(config.maxUidPerCommand, 500, 1, 5000);
     node.maxBatchesPerFlush = parseNumber(config.maxBatchesPerFlush, 20, 1, 1000);
-    node.actionMode = config.actionMode || config.mode || "delete";
+    node.actionMode = config.actionMode || config.action || "delete";
     node.targetMailbox = config.targetMailbox || "";
-    node.createTargetMailbox = parseBoolean(config.createTargetMailbox, true);
     node.actionProperty = config.actionProperty || "imap.ackAction";
     node.seenAction = config.seenAction || "ignore";
     node.answeredAction = config.answeredAction || "ignore";
@@ -51,14 +50,15 @@ module.exports = function registerImapEmailAck(RED) {
 
     if (node.actionMode !== "message") {
       try {
-        node.actionPlan = normalizeAckAction({
-          mode: node.actionMode,
-          targetMailbox: node.targetMailbox,
-          createTargetMailbox: node.createTargetMailbox,
-          seenAction: node.seenAction,
-          answeredAction: node.answeredAction,
-          flaggedAction: node.flaggedAction
-        });
+        const actionConfig = { action: node.actionMode };
+        if (node.actionMode === "move") {
+          actionConfig.targetMailbox = node.targetMailbox;
+        } else if (node.actionMode === "flag") {
+          actionConfig.seenAction = node.seenAction;
+          actionConfig.answeredAction = node.answeredAction;
+          actionConfig.flaggedAction = node.flaggedAction;
+        }
+        node.actionPlan = normalizeAckAction(actionConfig);
       } catch (err) {
         node.configError = err;
         node.status({ fill: "red", shape: "ring", text: err.message });
@@ -155,6 +155,7 @@ module.exports = function registerImapEmailAck(RED) {
         errorCount: 0,
         pendingAfter: 0,
         actions: {},
+        chunks: [],
         ranges: [],
         errors: [],
         timings: {}
@@ -169,35 +170,71 @@ module.exports = function registerImapEmailAck(RED) {
           const token = group.token;
           const plan = group.plan;
           const mailbox = token.mailbox || node.mailbox || "INBOX";
-          const groupStats = {
-            mailbox,
-            action: plan.mode,
-            disposition: plan.disposition,
-            targetMailbox: plan.targetMailbox || undefined,
-            uidValidity: token.uidValidity,
-            count: group.items.length,
-            ranges: []
-          };
+          const actionCounter = stats.actions[plan.action] || { requested: 0, ok: 0, error: 0 };
+          actionCounter.requested += group.items.length;
+          stats.actions[plan.action] = actionCounter;
 
-          try {
-            const uidRanges = chunkUidRanges(group.uids, node.maxUidPerCommand);
-            groupStats.ranges = uidRanges;
-            stats.ranges.push({
+          function itemsForChunk(uidChunk) {
+            const wanted = new Set(uidChunk.map((uid) => Number(uid)));
+            return group.items.filter((item) => wanted.has(Number(item.token.uid)));
+          }
+
+          function completeItems(chunkItems, range) {
+            for (const item of chunkItems) {
+              const ackToken = item.token;
+              if (ackToken.queueKey) {
+                registry.removeInflight(ackToken.queueKey, ackToken.uidValidity, ackToken.uid);
+              }
+
+              item.msg.imapAck = buildImapAckResult({
+                token: ackToken,
+                plan,
+                mailbox,
+                range
+              });
+
+              item.send([item.msg, null, null]);
+              if (item.done) {
+                item.done();
+              }
+              stats.okCount += 1;
+              actionCounter.ok += 1;
+            }
+          }
+
+          function failItems(chunkItems, range, err) {
+            stats.ok = false;
+            stats.errorCount += chunkItems.length;
+            actionCounter.error += chunkItems.length;
+            stats.errors.push({
               mailbox,
-              uidValidity: token.uidValidity,
-              action: plan.mode,
+              action: plan.action,
               disposition: plan.disposition,
               targetMailbox: plan.targetMailbox || undefined,
-              flags: plan.flags,
-              ranges: uidRanges,
-              count: group.items.length
+              uidValidity: token.uidValidity,
+              range: range || undefined,
+              count: chunkItems.length,
+              error: err.message
             });
 
-            const actionCounter = stats.actions[plan.mode] || { requested: 0, ok: 0, error: 0 };
-            actionCounter.requested += group.items.length;
-            stats.actions[plan.mode] = actionCounter;
+            for (const item of chunkItems) {
+              item.msg.imapAck = buildImapAckError({
+                token: item.token,
+                plan,
+                mailbox,
+                range,
+                error: err
+              });
+              item.send([null, item.msg, null]);
+              if (item.done) {
+                item.done();
+              }
+            }
+          }
 
-            const needsImap = plan.disposition !== "keep"
+          try {
+            const uidChunks = chunkUids(group.uids, node.maxUidPerCommand);
+            const needsImap = plan.action !== "flag"
               || plan.flags.add.length > 0
               || plan.flags.remove.length > 0;
 
@@ -216,64 +253,69 @@ module.exports = function registerImapEmailAck(RED) {
               if (token.uidValidity && currentUidValidity !== String(token.uidValidity)) {
                 throw new Error(`UIDVALIDITY mismatch for ${mailbox}: token=${token.uidValidity}, current=${currentUidValidity}`);
               }
-
-              t = Date.now();
-              await executeAckActionBatch({ client, plan, uidRanges, mailbox });
-              addTiming(stats.timings, `${plan.disposition}Ms`, t);
             }
 
-            for (const item of group.items) {
-              const ackToken = item.token;
-              const queueKey = ackToken.queueKey;
-              const inflightRemoved = plan.requeue !== "later";
-              if (queueKey && inflightRemoved) {
-                registry.removeInflight(queueKey, ackToken.uidValidity, ackToken.uid);
-              }
+            let targetMailboxEnsured = false;
+            for (const uidChunk of uidChunks) {
+              const range = compressUids(uidChunk);
+              const chunkItems = itemsForChunk(uidChunk);
 
-              item.msg.imapAck = buildImapAckResult({
-                token: ackToken,
-                plan,
+              stats.ranges.push({
                 mailbox,
-                ranges: uidRanges,
-                batchSize: group.items.length,
-                inflightRemoved
+                uidValidity: token.uidValidity,
+                action: plan.action,
+                disposition: plan.disposition,
+                targetMailbox: plan.targetMailbox || undefined,
+                flags: plan.flags,
+                range,
+                count: chunkItems.length
               });
 
-              item.send([item.msg, null, null]);
-              if (item.done) {
-                item.done();
+              try {
+                if (needsImap) {
+                  const t = Date.now();
+                  await executeAckActionRange({
+                    client,
+                    plan,
+                    range,
+                    mailbox,
+                    ensureTargetMailbox: plan.action !== "move" || !targetMailboxEnsured
+                  });
+                  if (plan.action === "move") {
+                    targetMailboxEnsured = true;
+                  }
+                  addTiming(stats.timings, `${plan.action}Ms`, t);
+                }
+
+                stats.chunks.push({
+                  ok: true,
+                  mailbox,
+                  uidValidity: token.uidValidity,
+                  action: plan.action,
+                  disposition: plan.disposition,
+                  targetMailbox: plan.targetMailbox || undefined,
+                  range,
+                  count: chunkItems.length
+                });
+                completeItems(chunkItems, range);
+              } catch (err) {
+                stats.chunks.push({
+                  ok: false,
+                  mailbox,
+                  uidValidity: token.uidValidity,
+                  action: plan.action,
+                  disposition: plan.disposition,
+                  targetMailbox: plan.targetMailbox || undefined,
+                  range,
+                  count: chunkItems.length,
+                  error: err.message
+                });
+                failItems(chunkItems, range, err);
+                node.warn(`IMAP ACK failed for ${mailbox} ${range}: ${err.message}`);
               }
-              stats.okCount += 1;
-              actionCounter.ok += 1;
             }
           } catch (err) {
-            stats.ok = false;
-            stats.errorCount += group.items.length;
-            const actionCounter = stats.actions[plan.mode] || { requested: 0, ok: 0, error: 0 };
-            actionCounter.error += group.items.length;
-            stats.actions[plan.mode] = actionCounter;
-            stats.errors.push({
-              mailbox,
-              action: plan.mode,
-              disposition: plan.disposition,
-              targetMailbox: plan.targetMailbox || undefined,
-              uidValidity: token.uidValidity,
-              count: group.items.length,
-              error: err.message
-            });
-
-            for (const item of group.items) {
-              item.msg.imapAck = buildImapAckError({
-                token: item.token,
-                plan,
-                mailbox,
-                error: err
-              });
-              item.send([null, item.msg, null]);
-              if (item.done) {
-                item.done();
-              }
-            }
+            failItems(group.items, "", err);
             node.warn(`IMAP ACK failed for ${mailbox}: ${err.message}`);
           } finally {
             try {
@@ -327,7 +369,7 @@ module.exports = function registerImapEmailAck(RED) {
         token = extractAckToken(msg, defaultTokenValues());
       } catch (err) {
         msg.imapAck = buildImapAckError({
-          plan: node.actionPlan || normalizeAckAction({ mode: "delete" }),
+          plan: node.actionPlan || normalizeAckAction({ action: "delete" }),
           mailbox: node.mailbox || "INBOX",
           error: err
         });
@@ -350,10 +392,9 @@ module.exports = function registerImapEmailAck(RED) {
         msg.imapAck = buildImapAckError({
           token,
           plan: node.actionPlan || {
-            mode: node.actionMode,
+            action: node.actionMode,
             disposition: "keep",
             targetMailbox: "",
-            requeue: "later",
             flags: { add: [], remove: [] }
           },
           mailbox: token.mailbox || node.mailbox || "INBOX",
@@ -379,7 +420,7 @@ module.exports = function registerImapEmailAck(RED) {
       diagnostics.debug(node, node.diagnostics, "imap email ack.queued", {
         pending: node.pending.length,
         mailbox: token.mailbox || node.mailbox || "INBOX",
-        action: plan.mode,
+        action: plan.action,
         uid: token.uid,
         uidValidity: token.uidValidity
       });

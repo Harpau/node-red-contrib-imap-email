@@ -211,20 +211,18 @@ Die Modi werden neutral und aktionsorientiert benannt:
 
 ```text
 delete
-keep/requeue later
-keep/requeue now
-move to folder
-set by msg
+move
+flag
+set by msg.
 ```
 
 Empfohlene interne Werte:
 
 ```text
-delete             delete
-keep/requeue later keep-requeue-later
-keep/requeue now   keep-requeue-now
-move to folder     move
-set by msg         message
+delete      delete
+move        move
+flag        flag
+set by msg. message
 ```
 
 ### 4.3 Semantik der Modi
@@ -235,30 +233,26 @@ set by msg         message
 - Entspricht der bisherigen positiven ACK-Semantik.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
 
-`keep/requeue later`
-
-- Fuehrt keine IMAP-Aktion aus.
-- Laesst den Inflight-Eintrag aktiv.
-- Die Mail kann nach Ablauf von `retryAfterMs` erneut ausgegeben werden.
-- Entspricht der alten NACK-Semantik `retry`.
-
-`keep/requeue now`
-
-- Fuehrt keine IMAP-Aktion aus.
-- Entfernt den Inflight-Eintrag sofort.
-- Die Mail kann beim naechsten Fetch-Zyklus wieder Kandidat werden.
-- Entspricht der alten NACK-Semantik `retry-now`.
-
-`move to folder`
+`move`
 
 - Verschiebt die Mail per UID in einen Zielordner.
-- Der Zielordner kann optional angelegt werden.
+- Der Zielordner wird automatisch angelegt, falls der Server ihn als fehlend
+  meldet.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
+- Darf nicht mit Flag-Aenderungen kombiniert werden.
 
-`set by msg
+`flag`
 
-- Aktion, Zielordner, Requeue-Verhalten und Flag-Aenderungen werden aus einer
-  Message-Property gelesen.
+- Setzt oder entfernt IMAP-Flags per UID.
+- Behaelt die Mail im Postfach.
+- Entfernt den Inflight-Eintrag erst nach erfolgreicher Flag-Aktion.
+- Wenn keine Flag-Aenderung konfiguriert ist, wird die Mail unveraendert im
+  Postfach behalten und trotzdem als erfolgreich abgeschlossen behandelt.
+
+`set by msg.`
+
+- Aktion, Zielordner und Flag-Aenderungen werden aus einer Message-Property
+  gelesen.
 - Default-Pfad:
 
 ```text
@@ -269,10 +263,7 @@ Beispiel:
 
 ```js
 msg.imap.ackAction = {
-  disposition: "move",
-  targetMailbox: "Archive/Processed",
-  createTargetMailbox: true,
-  requeue: "complete",
+  action: "flag",
   flags: {
     seen: "set",
     answered: "ignore",
@@ -281,21 +272,19 @@ msg.imap.ackAction = {
 };
 ```
 
-### 4.4 Custom Action Model
+### 4.4 Action Model
 
-Der statische Custom-Plan und der Message-basierte Plan sollen in dieselbe
-interne Struktur normalisiert werden:
+Der statische Plan und der Message-basierte Plan werden in dieselbe interne
+Struktur normalisiert:
 
 ```js
 {
-  disposition: "delete" | "keep" | "move",
-  targetMailbox: "NodeRED.failed",
-  createTargetMailbox: true,
-  requeue: "complete" | "later" | "now",
+  action: "delete" | "move" | "flag",
+  disposition: "delete" | "move" | "keep",
+  targetMailbox: "Archive",
   flags: {
-    seen: "ignore" | "set" | "clear",
-    answered: "ignore" | "set" | "clear",
-    flagged: "ignore" | "set" | "clear"
+    add: ["\\Seen"],
+    remove: ["\\Flagged"]
   }
 }
 ```
@@ -304,36 +293,37 @@ interne Struktur normalisiert werden:
 
 Erlaubt:
 
-- `keep` ohne Flag-Aenderungen.
-- `keep` mit Flag-Aenderungen.
+- `flag` ohne Flag-Aenderungen.
+- `flag` mit Flag-Aenderungen.
 - `move` ohne Flag-Aenderungen.
-- `move` mit Flag-Aenderungen.
 - `delete` ohne Flag-Aenderungen.
 
 Nicht erlaubt:
 
-- `delete` und `move` gleichzeitig.
-- `delete` mit Flag-Aenderungen in Version 0.1.
+- `delete` mit Flag-Aenderungen.
+- `move` mit Flag-Aenderungen.
 - `set` und `clear` fuer dasselbe Flag gleichzeitig.
 - `move` ohne gueltigen Zielordner.
 - `message`-Modus ohne gueltiges Action-Objekt.
 
-`keep` ohne Flag-Aenderung ist technisch erlaubt, muss aber dokumentiert
-werden: Die Mail bleibt im Postfach und kann erneut erscheinen.
+`flag` ohne Flag-Aenderung ist technisch erlaubt, muss aber dokumentiert
+werden: Die Mail bleibt im Postfach und kann erneut erscheinen, falls
+`imap email in` sie weiter selektiert.
 
 ### 4.6 Reihenfolge der IMAP-Aktionen
 
 Bei erfolgreicher Tokenvalidierung und Mailbox-Sperre:
 
 1. UIDVALIDITY pruefen.
-2. Flags auf der Quellmailbox setzen oder entfernen.
-3. Danach `move` ausfuehren, falls konfiguriert.
-4. Oder `delete` ausfuehren, falls konfiguriert.
-5. Inflight gemaess Plan behandeln.
-6. Erfolg ausgeben.
+2. UID-Mengen in handhabbare Chunks aufteilen.
+3. Bei `flag`: Flags fuer den Chunk setzen oder entfernen.
+4. Bei `move`: Zielordner bei Bedarf anlegen und den Chunk verschieben.
+5. Bei `delete`: den Chunk loeschen.
+6. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
+7. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
 
-Flags werden vor `move` ausgefuehrt, weil der ACK-Token auf die UID in der
-Quellmailbox zeigt und Ziel-UIDs nach einem Move serverabhaengig sein koennen.
+Chunks bleiben die Performance-Grenze. Innerhalb eines fehlgeschlagenen Chunks
+wird nicht auf einzelne UIDs heruntergebrochen.
 
 ## 5. Message Contracts
 
@@ -374,17 +364,16 @@ eingefuehrt.
 
 ### 5.3 `msg.imap.ackAction`
 
-Im Modus `set by msg` wird standardmaessig
+Im Modus `set by msg.` wird standardmaessig
 `msg.imap.ackAction` gelesen.
 
-Das Objekt beschreibt nicht nur die Hauptaktion, sondern auch Flags:
+Das Objekt beschreibt die Aktion, den Zielordner fuer `move` und Flags fuer
+`flag`:
 
 ```js
 {
-  disposition: "keep" | "delete" | "move",
+  action: "delete" | "move" | "flag",
   targetMailbox: "Archive",
-  createTargetMailbox: true,
-  requeue: "complete" | "later" | "now",
   flags: {
     seen: "ignore" | "set" | "clear",
     answered: "ignore" | "set" | "clear",
@@ -400,21 +389,18 @@ Erfolg:
 ```js
 msg.imapAck = {
   ok: true,
-  mode: "delete",
+  action: "delete",
   disposition: "delete",
   mailbox: "INBOX",
-  targetMailbox: undefined,
+  targetMailbox: "",
   uid: 123,
   uidValidity: "456",
   flags: {
     add: [],
     remove: []
   },
-  ranges: ["123"],
-  batchSize: 1,
-  requeue: "complete",
-  completed: true,
-  inflightRemoved: true
+  range: "123",
+  completed: true
 };
 ```
 
@@ -423,15 +409,19 @@ Fehler:
 ```js
 msg.imapAck = {
   ok: false,
-  mode: "move",
+  action: "move",
   disposition: "move",
   mailbox: "INBOX",
   targetMailbox: "NodeRED.failed",
   uid: 123,
   uidValidity: "456",
+  flags: {
+    add: [],
+    remove: []
+  },
+  range: "123",
   error: "UIDVALIDITY mismatch",
-  completed: false,
-  inflightRemoved: false
+  completed: false
 };
 ```
 
@@ -479,24 +469,22 @@ Optionen:
 
 ```text
 delete
-keep/requeue later
-keep/requeue now
-move to folder
-set by msg
+move
+flag
+set by msg.
 ```
 
 Zusaetzliche Felder:
 
 ```text
 Target folder              sichtbar bei move
-Create target folder       sichtbar bei move
-Message action property    sichtbar bei set by msg
-Seen action                ignore | set | clear
-Answered action            ignore | set | clear
-Flagged action             ignore | set | clear
+Message action property    sichtbar bei set by msg.
+Seen action                sichtbar bei flag, ignore | set | clear
+Answered action            sichtbar bei flag, ignore | set | clear
+Flagged action             sichtbar bei flag, ignore | set | clear
 ```
 
-Bei `set by msg` ersetzt die Message-Aktion die statische Aktion
+Bei `set by msg.` ersetzt die Message-Aktion die statische Aktion
 einschliesslich Flags und Zielordner.
 
 ## 7. Runtime-Verhalten
@@ -515,10 +503,10 @@ einschliesslich Flags und Zielordner.
 - Eingehende Nachrichten werden wie bisher gebatcht.
 - Token werden aus `msg.imap.ackToken` extrahiert.
 - Nachrichten werden nach Mailbox, UIDVALIDITY und Action-Plan gruppiert.
-- Grosse UID-Mengen werden mit `chunkUidRanges` in handhabbare IMAP-Kommandos
+- Grosse UID-Mengen werden in handhabbare IMAP-Kommandos
   aufgeteilt.
-- Inflight wird erst nach erfolgreichem Abschluss der konfigurierten Aktion
-  entfernt, ausser der Modus ist explizit `keep/requeue later`.
+- Erfolgreiche Chunks entfernen Inflight fuer die enthaltenen Mails.
+- Fehlgeschlagene Chunks behalten Inflight fuer die enthaltenen Mails.
 
 ## 8. Fehlerverhalten
 
@@ -551,9 +539,9 @@ Bei Fehlern:
 
 - Output 2.
 - `msg.imapAck.ok = false`.
-- Inflight bleibt erhalten, sofern nicht eine explizit erfolgreiche
-  `keep/requeue now`-Aktion ausgefuehrt wurde.
-- Stats enthalten Fehlerzaehler und Fehlermeldung.
+- Inflight bleibt fuer die betroffenen Mails erhalten. Dadurch kann
+  `imap email in` die Mail nach Ablauf von `retryAfterMs` erneut ausgeben.
+- Stats enthalten Fehlerzaehler, Chunk-Informationen und Fehlermeldung.
 
 ## 9. Skalierbarkeitsregeln fuer grosse Postfaecher
 
@@ -578,6 +566,8 @@ Bei Fehlern:
 - `maxUidPerCommand` begrenzt UID-Mengen pro IMAP-Kommando.
 - Gruppierung nach Action-Plan verhindert gemischte Aktionen in einem
   unklaren IMAP-Kommando.
+- Chunk-Erfolge und Chunk-Fehler werden getrennt behandelt. Innerhalb eines
+  fehlgeschlagenen Chunks wird nicht weiter auf einzelne UIDs heruntergebrochen.
 
 Empfohlene Defaults bleiben:
 
@@ -619,21 +609,22 @@ imap email ack:
 ### 10.2 `imap email ack`
 
 - Default-Modus `delete` verhaelt sich wie bisheriges ACK.
-- `keep/requeue later` behaelt Inflight.
-- `keep/requeue now` entfernt Inflight ohne IMAP-Aktion.
-- `move to folder` ruft Zielordner-Erstellung und `messageMove`.
-- Flag-Aenderungen rufen `messageFlagsAdd` und `messageFlagsRemove`.
-- Flags werden vor Move ausgefuehrt.
+- `move` ruft Zielordner-Erstellung und `messageMove`.
+- `flag` ruft `messageFlagsAdd` und `messageFlagsRemove`.
+- `delete` und `move` koennen nicht mit Flag-Aenderungen kombiniert werden.
 - Ungueltige Kombinationen werden abgelehnt.
-- `set by msg` liest Aktion und Flags aus der konfigurierten
+- `set by msg.` liest Aktion und Flags aus der konfigurierten
   Message-Property.
 - Ungueltiges Message-Action-Objekt geht auf Output 2.
 - UIDVALIDITY mismatch geht auf Output 2.
 - IMAP-Fehler bei Flags, Move oder Delete entfernt Inflight nicht.
 - Grosse UID-Mengen werden gechunkt.
+- Erfolgreiche Chunks entfernen Inflight und gehen auf Output 1.
+- Fehlgeschlagene Chunks behalten Inflight und gehen auf Output 2.
 - Mehrere unterschiedlich konfigurierte `imap email ack` Nodes koennen gleiche
   Tokenformen verarbeiten.
-- Stats enthalten Action-Plan, Erfolgszaehler, Fehlerzaehler und Timings.
+- Stats enthalten Action-Plan, Chunk-Details, Erfolgszaehler, Fehlerzaehler
+  und Timings.
 
 ### 10.3 Dokumentation und Packaging
 
@@ -645,8 +636,6 @@ imap email ack:
 
 ## 11. Offene Fragen
 
-- Soll `delete` mit Flag-Aenderungen dauerhaft verboten bleiben oder spaeter
-  als Advanced-Kombination erlaubt werden?
 - Soll der volatile Scan-Cursor spaeter optional persistent werden, damit ein
   Node-RED-Neustart nicht wieder bei Sequenz `1` beginnt?
 - Soll `msg.imap.flags` spaeter zusaetzlich ein Boolean-Objekt erhalten, etwa
@@ -655,7 +644,5 @@ imap email ack:
   fest bei `msg.imap.ackAction` bleiben?
 - Wie soll die UI mit `Expunge front` umgehen, wenn `deletedSelection=require`
   gesetzt wird?
-- Soll `move to folder` bei fehlendem Zielordner standardmaessig Ordner
-  anlegen oder nur bei aktivierter Option?
 - Soll es fuer dynamische Message-Actions eine strikte JSON-Schema-Validierung
   geben?
