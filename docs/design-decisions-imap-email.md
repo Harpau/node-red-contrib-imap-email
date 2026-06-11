@@ -150,6 +150,10 @@ der Mailbox erreicht ist, wrappt der Cursor auf `1`. Bei leerer Mailbox,
 ungueltigem Cursor oder geaenderter UIDVALIDITY wird er ebenfalls auf `1`
 zurueckgesetzt.
 
+Der Cursor bleibt in Version 0.1 bewusst volatil. Nach einem Node-RED-Neustart
+beginnt der Scan-Cursor wieder bei Sequenz `1`. Eine Persistenz ueber
+Node-RED Context ist kein Ziel fuer Version 0.1.
+
 Nicht erlaubt:
 
 - IMAP `SEARCH` ueber das gesamte Postfach.
@@ -359,13 +363,25 @@ Der bestehende Fallback auf `msg.imap.uid`, `msg.imap.mailbox` und
 msg.imap.flags = ["\\Seen", "\\Flagged"];
 ```
 
-Ein zusaetzliches Boolean-Objekt wie `msg.imap.flagState` wird vorerst nicht
-eingefuehrt.
+Zusaetzlich soll `msg.imap.flagState` als Convenience-Objekt ausgegeben
+werden:
+
+```js
+msg.imap.flagState = {
+  deleted: false,
+  seen: true,
+  answered: false,
+  flagged: true
+};
+```
+
+`msg.imap.flags` bleibt dabei die vollstaendige Server-Flag-Liste. Das
+Boolean-Objekt bildet nur die vom Node unterstuetzten Standardflags ab.
 
 ### 5.3 `msg.imap.ackAction`
 
-Im Modus `set by msg.` wird standardmaessig
-`msg.imap.ackAction` gelesen.
+Im Modus `set by msg.` wird fest `msg.imap.ackAction` gelesen. Der
+Property-Pfad ist nicht konfigurierbar.
 
 Das Objekt beschreibt die Aktion, den Zielordner fuer `move` und Flags fuer
 `flag`:
@@ -381,6 +397,9 @@ Das Objekt beschreibt die Aktion, den Zielordner fuer `move` und Flags fuer
   }
 }
 ```
+
+Das Objekt wird durch den internen Normalizer validiert. Eine externe
+JSON-Schema-Validierung ist in Version 0.1 nicht vorgesehen.
 
 ### 5.4 `msg.imapAck`
 
@@ -457,6 +476,10 @@ Answered  Any
 Flagged   Any
 ```
 
+`Expunge window` und `Expunge limit` werden nur angezeigt, wenn `Deleted =
+Only without flag` gesetzt ist. Runtime-seitig bleibt Expunge ebenfalls auf
+`deletedSelection=exclude` beschraenkt.
+
 ### 6.2 `imap email ack`
 
 Hauptfeld:
@@ -478,14 +501,14 @@ Zusaetzliche Felder:
 
 ```text
 Target folder              sichtbar bei move
-Message action property    sichtbar bei set by msg.
 Seen action                sichtbar bei flag, ignore | set | clear
 Answered action            sichtbar bei flag, ignore | set | clear
 Flagged action             sichtbar bei flag, ignore | set | clear
 ```
 
 Bei `set by msg.` ersetzt die Message-Aktion die statische Aktion
-einschliesslich Flags und Zielordner.
+einschliesslich Flags und Zielordner. Der Node liest dabei fest
+`msg.imap.ackAction`.
 
 ## 7. Runtime-Verhalten
 
@@ -634,15 +657,18 @@ imap email ack:
 - Beispiel-Flows enthalten keine Credentials.
 - `npm test` und `npm run pack:check` muessen erfolgreich sein.
 
-## 11. Offene Fragen
+## 11. Entschiedene Folgefragen
 
-- Soll der volatile Scan-Cursor spaeter optional persistent werden, damit ein
-  Node-RED-Neustart nicht wieder bei Sequenz `1` beginnt?
-- Soll `msg.imap.flags` spaeter zusaetzlich ein Boolean-Objekt erhalten, etwa
-  `msg.imap.flagState`?
-- Soll der Property-Pfad fuer `set by msg` frei konfigurierbar sein oder
-  fest bei `msg.imap.ackAction` bleiben?
-- Wie soll die UI mit `Expunge front` umgehen, wenn `deletedSelection=require`
-  gesetzt wird?
-- Soll es fuer dynamische Message-Actions eine strikte JSON-Schema-Validierung
-  geben?
+- Der Scan-Cursor bleibt volatil. Nach einem Node-RED-Neustart beginnt der
+  Cursor wieder bei Sequenz `1`.
+- `msg.imap.flags` bleibt als vollstaendiges Array der IMAP-Flags erhalten.
+  Zusaetzlich wird `msg.imap.flagState` als Convenience-Objekt mit `deleted`,
+  `seen`, `answered` und `flagged` vorgesehen.
+- `set by msg.` liest fest `msg.imap.ackAction`. Der Property-Pfad wird nicht
+  konfigurierbar gemacht.
+- `Expunge window` und `Expunge limit` werden in der UI nur angezeigt, wenn
+  `Deleted = Only without flag` gesetzt ist. Runtime-seitig bleibt Expunge auf
+  `deletedSelection=exclude` beschraenkt.
+- Es gibt keine externe JSON-Schema-Validierung fuer dynamische
+  Message-Actions in Version 0.1. `msg.imap.ackAction` wird durch den internen
+  Normalizer validiert.
