@@ -1,7 +1,7 @@
 {
   "name": "@compeso/node-red-contrib-imap-email",
   "version": "0.1.0",
-  "description": "Node-RED IMAP email nodes with externally triggered bounded front-window fetch, at-least-once ACK deletion, diagnostics, timings, and comprehensive help documentation.",
+  "description": "Node-RED IMAP email nodes with externally triggered bounded cursor-window fetch, at-least-once ACK actions, diagnostics, timings, and comprehensive help documentation.",
   "license": "MIT",
   "author": "compeso",
   "homepage": "https://github.com/Harpau/node-red-contrib-imap-email#readme",

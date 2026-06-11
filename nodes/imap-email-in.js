@@ -48,6 +48,8 @@ module.exports = function registerImapEmailIn(RED) {
     node.closed = false;
     node.running = false;
     node.closeDone = null;
+    node.scanCursor = 1;
+    node.scanUidValidity = null;
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
@@ -72,6 +74,11 @@ module.exports = function registerImapEmailIn(RED) {
         uidValidity: null,
         frontWindowSize: node.frontWindowSize,
         frontWindowRead: 0,
+        scanCursorStart: null,
+        scanCursorEnd: null,
+        scanCursorNext: node.scanCursor,
+        scanCursorReset: false,
+        scanWrapped: false,
         activeInflight: 0,
         activeInflightAfter: 0,
         inflightTotal: 0,
@@ -123,6 +130,37 @@ module.exports = function registerImapEmailIn(RED) {
           mode: "at-least-once",
           duplicatePossible: true
         }
+      };
+    }
+
+    function prepareScanWindow(exists, uidValidity) {
+      let reset = false;
+
+      if (node.scanUidValidity === null) {
+        node.scanUidValidity = uidValidity;
+      } else if (node.scanUidValidity !== uidValidity) {
+        node.scanUidValidity = uidValidity;
+        node.scanCursor = 1;
+        reset = true;
+      }
+
+      if (!Number.isSafeInteger(node.scanCursor) || node.scanCursor < 1 || node.scanCursor > exists) {
+        node.scanCursor = 1;
+        reset = true;
+      }
+
+      const windowStart = node.scanCursor;
+      const windowEnd = Math.min(exists, windowStart + node.frontWindowSize - 1);
+      const windowSize = Math.max(0, windowEnd - windowStart + 1);
+      const nextCursor = windowEnd >= exists ? 1 : windowEnd + 1;
+
+      return {
+        windowStart,
+        windowEnd,
+        windowSize,
+        nextCursor,
+        reset,
+        wrapped: nextCursor === 1
       };
     }
 
@@ -198,17 +236,28 @@ module.exports = function registerImapEmailIn(RED) {
         stats.uidValidity = uidValidity;
 
         if (exists < 1) {
+          node.scanCursor = 1;
+          node.scanUidValidity = uidValidity || null;
+          stats.scanCursorStart = 1;
+          stats.scanCursorEnd = 0;
+          stats.scanCursorNext = 1;
           finishStats();
           node.status({ fill: "green", shape: "ring", text: "empty" });
           emitStats(send, stats);
           return;
         }
 
-        const frontEnd = Math.min(exists, node.frontWindowSize);
-        stats.frontWindowRead = frontEnd;
+        const scanWindow = prepareScanWindow(exists, uidValidity);
+        const { windowStart, windowEnd } = scanWindow;
+        stats.frontWindowRead = scanWindow.windowSize;
+        stats.scanCursorStart = windowStart;
+        stats.scanCursorEnd = windowEnd;
+        stats.scanCursorNext = scanWindow.nextCursor;
+        stats.scanCursorReset = scanWindow.reset;
+        stats.scanWrapped = scanWindow.wrapped;
 
         started = Date.now();
-        const front = await client.fetchAll(`1:${frontEnd}`, {
+        const front = await client.fetchAll(`${windowStart}:${windowEnd}`, {
           uid: true,
           flags: true,
           internalDate: true,
@@ -412,6 +461,9 @@ module.exports = function registerImapEmailIn(RED) {
             stats.deletedExpunged += toExpunge.length;
           }
         }
+
+        node.scanCursor = scanWindow.nextCursor;
+        node.scanUidValidity = uidValidity;
 
         finishStats();
         emitStats(send, stats);

@@ -25,8 +25,7 @@ imap email ack
 
 Das Paket soll weiterhin fuer grosse Postfaecher geeignet sein. Der
 Eingangsnode darf keine unbeschraenkten Mailbox-Scans ausfuehren. Die
-bestehende bounded-front-window-Strategie bleibt ein zentrales
-Architekturprinzip.
+bestehende bounded-window-Strategie bleibt ein zentrales Architekturprinzip.
 
 Der Node `imap email ack` soll die bisher getrennten positiven und negativen
 Abschlussaktionen in einem Node zusammenfuehren. Nutzer sollen mehrere
@@ -58,8 +57,9 @@ Nicht Teil dieser Spezifikation:
 `imap email in` ist ein extern getriggerter Eingangsnode. Jede eingehende
 Nachricht startet hoechstens einen Fetch-Zyklus.
 
-Der Node liest nur ein begrenztes Frontfenster des Postfachs, zum Beispiel
-`1:500`. Innerhalb dieses Fensters werden Kandidaten anhand von IMAP-Flags,
+Der Node liest pro Trigger nur ein begrenztes Cursor-Fenster des Postfachs,
+zum Beispiel `1:500` im ersten Zyklus und `501:1000` im naechsten Zyklus.
+Innerhalb dieses Fensters werden Kandidaten anhand von IMAP-Flags,
 Inflight-Zustand, Batchgroesse und Kapazitaet gefiltert.
 
 Der Node darf nicht so lange weitere Bereiche lesen, bis ein Batch voll ist.
@@ -131,32 +131,40 @@ skipDeleted=false  -> deletedSelection=ignore
 Wenn sowohl `deletedSelection` als auch `skipDeleted` vorhanden sind, hat
 `deletedSelection` Vorrang.
 
-### 3.5 Front-Window-Regel
+### 3.5 Cursor-Window-Regel
 
-Pro Fetch-Zyklus wird in Version 0.1 genau ein Frontfenster gelesen:
+Pro Fetch-Zyklus wird genau ein begrenztes Cursor-Fenster gelesen:
 
 ```text
-frontEnd = min(mailbox.exists, frontWindowSize)
-range    = 1:frontEnd
+windowStart = scanCursor
+windowEnd   = min(mailbox.exists, scanCursor + frontWindowSize - 1)
+range       = windowStart:windowEnd
 ```
 
 Erlaubt ist ein Fetch dieses Fensters mit `flags: true`, `uid: true` und den
 bereits benoetigten leichten Metadaten.
+
+Der Cursor ist ein fluechtiger Runtime-Zustand pro Node. Nach einem
+erfolgreichen Fetch-Zyklus wird er auf `windowEnd + 1` gesetzt. Wenn das Ende
+der Mailbox erreicht ist, wrappt der Cursor auf `1`. Bei leerer Mailbox,
+ungueltigem Cursor oder geaenderter UIDVALIDITY wird er ebenfalls auf `1`
+zurueckgesetzt.
 
 Nicht erlaubt:
 
 - IMAP `SEARCH` ueber das gesamte Postfach.
 - Wiederholtes Lesen weiterer Fenster, bis `batchSize` erreicht ist.
 - Dynamische Erhoehung von `frontWindowSize` durch Message-Input.
+- Ein zweiter Limit-Parameter wie `maxWindowsPerCycle`.
 
 ### 3.6 Kandidatenfilterung
 
 Die Kandidatenbildung soll in dieser Reihenfolge erfolgen:
 
-1. Frontfenster lesen.
+1. Cursor-Fenster lesen.
 2. Ungueltige UIDs verwerfen.
 3. Deleted-Tracking und optionale Expunge-Logik beibehalten.
-4. Flag-Selection auf die im Frontfenster gelesenen Flags anwenden.
+4. Flag-Selection auf die im Cursor-Fenster gelesenen Flags anwenden.
 5. Aktive Inflight-Nachrichten verwerfen.
 6. Kandidaten auf `batchSize` und verfuegbare `capacity` begrenzen.
 7. Full-Fetch fuer die ausgewaehlten UIDs ausfuehren.
@@ -171,6 +179,11 @@ Die bestehenden Stats bleiben erhalten. Sinnvolle Erweiterungen:
 selection
 filteredByFlags
 filteredByInflight
+scanCursorStart
+scanCursorEnd
+scanCursorNext
+scanCursorReset
+scanWrapped
 ```
 
 `selection` sollte keine Zugangsdaten oder privaten Werte enthalten.
@@ -492,8 +505,8 @@ einschliesslich Flags und Zielordner.
 
 - Ein Trigger startet hoechstens einen Fetch-Zyklus.
 - Wenn bereits ein Fetch-Zyklus laeuft, wird kein paralleler Fetch gestartet.
-- Es wird nur das konfigurierte Frontfenster gelesen.
-- Flag-Selektion wird auf die im Frontfenster gelesenen Flags angewendet.
+- Es wird nur ein begrenztes Cursor-Fenster gelesen.
+- Flag-Selektion wird auf die im Cursor-Fenster gelesenen Flags angewendet.
 - Full-Fetch-Flags werden erneut validiert.
 - Ausgegebene Nachrichten werden im volatile Inflight-Registry markiert.
 
@@ -548,8 +561,11 @@ Bei Fehlern:
 
 - Kein unbounded Mailbox-Scan.
 - Kein mailboxweites IMAP `SEARCH`.
-- Pro Trigger in Version 0.1 nur ein bounded front-window.
-- `frontWindowSize` bleibt die harte Obergrenze fuer gelesene Front-Nachrichten.
+- Pro Trigger nur ein bounded Cursor-Fenster.
+- `frontWindowSize` bleibt die harte Obergrenze fuer pro Trigger gelesene
+  Nachrichten.
+- Der interne Scan-Cursor wrappt am Mailbox-Ende auf `1` und wird bei
+  UIDVALIDITY-Wechsel zurueckgesetzt.
 - `batchSize` begrenzt die Ausgabe.
 - `maxInflight` begrenzt die Anzahl aktiver nicht abgeschlossener Nachrichten.
 - Selektive Filter koennen dazu fuehren, dass weniger Nachrichten als
@@ -590,11 +606,14 @@ imap email ack:
 - `deleted`, `seen`, `answered`, `flagged` jeweils mit `ignore`, `require`,
   `exclude`.
 - Kombination mehrerer Flag-Filter.
-- Filterung erfolgt nach Front-Fetch und vor Full-Fetch.
+- Filterung erfolgt nach Cursor-Fetch und vor Full-Fetch.
 - Full-Fetch prueft Flags erneut.
-- Selektive Filter loesen kein weiteres Fenster aus.
+- Selektive Filter loesen kein weiteres Fenster im selben Trigger aus.
+- Der interne Cursor liest pro Trigger hoechstens `frontWindowSize` Nachrichten.
+- Der interne Cursor wrappt am Mailbox-Ende.
+- Der interne Cursor resetet bei UIDVALIDITY-Wechsel.
 - Mock-Client stellt sicher, dass kein `SEARCH` ausgefuehrt wird.
-- Stats enthalten `selection` und `filteredByFlags`.
+- Stats enthalten `selection`, `filteredByFlags` und Cursor-Felder.
 - HTML defaults, labels und help text sind konsistent.
 
 ### 10.2 `imap email ack`
@@ -628,9 +647,8 @@ imap email ack:
 
 - Soll `delete` mit Flag-Aenderungen dauerhaft verboten bleiben oder spaeter
   als Advanced-Kombination erlaubt werden?
-- Soll `imap email in` spaeter optional mehrere bounded windows pro Trigger
-  erlauben, zum Beispiel mit `maxWindowsPerCycle`, oder bleibt Version 0.1
-  bewusst bei genau einem Fenster?
+- Soll der volatile Scan-Cursor spaeter optional persistent werden, damit ein
+  Node-RED-Neustart nicht wieder bei Sequenz `1` beginnt?
 - Soll `msg.imap.flags` spaeter zusaetzlich ein Boolean-Objekt erhalten, etwa
   `msg.imap.flagState`?
 - Soll der Property-Pfad fuer `set by msg` frei konfigurierbar sein oder

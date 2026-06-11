@@ -29,14 +29,15 @@ function readExampleFlow() {
   return JSON.parse(readProjectFile(path.join("examples", "basic-at-least-once-flow.json")));
 }
 
-function createInputNode(config = {}) {
+function createInputNode(config = {}, options = {}) {
   let InputCtor;
   const account = {
     id: "account-1",
     host: "imap.example.test",
     getUsername() {
       return "user@example.test";
-    }
+    },
+    ...options.account
   };
   const RED = {
     nodes: {
@@ -60,6 +61,68 @@ function createInputNode(config = {}) {
   registerImapEmailIn(RED);
   assert.equal(typeof InputCtor, "function");
   return new InputCtor({ account: "account-1", ...config });
+}
+
+function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValidity: "uidv-1" }]) {
+  const fetchCalls = [];
+  const releasedLocks = [];
+  const loggedOutClients = [];
+  let mailboxIndex = 0;
+  let currentMailbox = mailboxes[0];
+
+  const account = {
+    id: "account-1",
+    host: "imap.example.test",
+    port: 993,
+    secure: true,
+    getUsername() {
+      return "user@example.test";
+    },
+    createClient() {
+      currentMailbox = mailboxes[Math.min(mailboxIndex, mailboxes.length - 1)];
+      mailboxIndex += 1;
+
+      return {
+        mailbox: {
+          exists: currentMailbox.exists,
+          uidValidity: currentMailbox.uidValidity
+        },
+        async connect() {},
+        async getMailboxLock(mailbox) {
+          return {
+            release() {
+              releasedLocks.push(mailbox);
+            }
+          };
+        },
+        async fetchAll(range, query, options) {
+          fetchCalls.push({ range, query, options });
+          return currentMailbox.front || [];
+        },
+        async logout() {
+          loggedOutClients.push(currentMailbox.uidValidity);
+        }
+      };
+    }
+  };
+
+  return {
+    node: createInputNode({
+      diagnostics: "stats",
+      includeAttachments: false,
+      emitRaw: false,
+      ...config
+    }, { account }),
+    fetchCalls,
+    releasedLocks,
+    loggedOutClients
+  };
+}
+
+function collectStats(outputs) {
+  return outputs
+    .filter((output) => output && output[2] && output[2].payload)
+    .map((output) => output[2].payload);
 }
 
 function findHtmlDefault(html, field) {
@@ -154,6 +217,60 @@ test("imap email in UI exposes tri-state flag selection values", () => {
   }
 });
 
+test("imap email in advances one bounded cursor window per trigger", async () => {
+  const { node, fetchCalls } = createCursorTestNode({ frontWindowSize: 500 }, [
+    { exists: 1200, uidValidity: "uidv-1" },
+    { exists: 1200, uidValidity: "uidv-1" },
+    { exists: 1200, uidValidity: "uidv-1" }
+  ]);
+  const outputs = [];
+  const send = (output) => outputs.push(output);
+
+  await node.runFetchCycle({}, send);
+  await node.runFetchCycle({}, send);
+  await node.runFetchCycle({}, send);
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), [
+    "1:500",
+    "501:1000",
+    "1001:1200"
+  ]);
+  assert.equal(fetchCalls.every((call) => call.options === undefined), true, "cursor windows must use sequence ranges");
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs);
+  assert.deepEqual(stats.map((item) => item.scanCursorStart), [1, 501, 1001]);
+  assert.deepEqual(stats.map((item) => item.scanCursorEnd), [500, 1000, 1200]);
+  assert.deepEqual(stats.map((item) => item.scanCursorNext), [501, 1001, 1]);
+  assert.deepEqual(stats.map((item) => item.frontWindowRead), [500, 500, 200]);
+  assert.deepEqual(stats.map((item) => item.scanWrapped), [false, false, true]);
+});
+
+test("imap email in resets the scan cursor on UIDVALIDITY changes", async () => {
+  const { node, fetchCalls } = createCursorTestNode({ frontWindowSize: 500 }, [
+    { exists: 1200, uidValidity: "uidv-1" },
+    { exists: 1200, uidValidity: "uidv-2" }
+  ]);
+  const outputs = [];
+  const send = (output) => outputs.push(output);
+
+  await node.runFetchCycle({}, send);
+  assert.equal(node.scanCursor, 501);
+
+  await node.runFetchCycle({}, send);
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), [
+    "1:500",
+    "1:500"
+  ]);
+  assert.equal(node.scanCursor, 501);
+
+  const stats = collectStats(outputs);
+  assert.equal(stats[1].scanCursorReset, true);
+  assert.equal(stats[1].scanCursorStart, 1);
+  assert.equal(stats[1].uidValidity, "uidv-2");
+});
+
 test("imap email in runtime contract is not limited to legacy skipDeleted", () => {
   const source = readProjectFile(path.join("nodes", "imap-email-in.js"));
   const html = readProjectFile(path.join("nodes", "imap-email-in.html"));
@@ -193,15 +310,15 @@ test("imap email in flag filters must not require unbounded mailbox scans", () =
 
   assert.match(
     source,
-    /Math\.min\(exists,\s*node\.frontWindowSize\)/,
-    "front window must remain bounded by frontWindowSize"
+    /\bnode\.scanCursor\b/,
+    "runtime must keep an internal bounded scan cursor"
   );
   assert.match(
     source,
-    /fetchAll\(`1:\$\{frontEnd\}`/,
-    "front fetch must read only the bounded 1:frontEnd range"
+    /fetchAll\(`\$\{windowStart\}:\$\{windowEnd\}`/,
+    "front fetch must read one bounded cursor window"
   );
   assert.equal(/\bsearch\s*\(/i.test(source), false, "flag filtering must not introduce IMAP SEARCH");
   assert.equal(source.includes("1:*"), false, "flag filtering must not fetch the whole mailbox");
-  assert.equal(source.includes("maxWindowsPerCycle"), false, "v0.1 must not scan multiple windows per cycle");
+  assert.equal(source.includes("maxWindowsPerCycle"), false, "cursor scan must not add a second scan limit");
 });

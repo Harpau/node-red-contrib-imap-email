@@ -2,7 +2,7 @@
 
 Development version: `0.1.0`
 
-Node-RED nodes for externally triggered IMAP email processing with bounded front-window fetch and at-least-once ACK deletion.
+Node-RED nodes for externally triggered IMAP email processing with bounded cursor-window fetch and at-least-once ACK handling.
 
 This package is independent from `@compeso/node-red-contrib-imap-queue`. It uses new Node-RED type names so both packages can be installed side by side without registering the same public node types.
 
@@ -10,8 +10,8 @@ This package is independent from `@compeso/node-red-contrib-imap-queue`. It uses
 
 ```text
 imap email account  shared IMAP account configuration
-imap email in       externally triggered bounded front-window fetch
-imap email ack      batched acknowledgement and UID delete
+imap email in       externally triggered bounded cursor-window fetch
+imap email ack      batched acknowledgement and UID actions
 ```
 
 The previous public node types from the predecessor package are not registered by this package:
@@ -75,13 +75,13 @@ move actions. Delete is intentionally not combined with flag changes.
 
 ## Large Mailboxes
 
-`imap email in` is designed for mailboxes that may contain many messages. It does not run an unbounded mailbox-wide search. Instead, each trigger reads only a bounded front window such as `1:500`, emits at most the configured batch size, and waits for ACK deletion through `imap email ack`.
+`imap email in` is designed for mailboxes that may contain many messages. It does not run an unbounded mailbox-wide search. Instead, each trigger reads one bounded cursor window, emits at most the configured batch size, and advances an internal scan cursor after a successful fetch cycle.
 
 Important settings:
 
 ```text
 Batch size       maximum messages emitted per trigger
-Front window     maximum number of front messages inspected per trigger
+Front window     maximum messages inspected per trigger from the current cursor
 Max inflight     maximum emitted but not-yet-ACKed messages tracked in memory
 Retry after ms   time after which an un-ACKed message may be emitted again
 UIDs/command     maximum UID count per IMAP command chunk
@@ -97,9 +97,11 @@ Flagged   Any | Only with flag | Only without flag
 ```
 
 The defaults are `Deleted = Only without flag` and all other flags set to
-`Any`. These filters are applied only inside the bounded front window. A
+`Any`. These filters are applied only inside the bounded cursor window. A
 selective filter may emit fewer messages than `Batch size`; it never causes a
-full-mailbox scan to fill the batch.
+full-mailbox scan to fill the batch. When the cursor reaches the end of the
+mailbox, it wraps back to the first sequence number. The cursor is volatile and
+resets when Node-RED restarts or when IMAP UIDVALIDITY changes.
 
 Output messages include the server flags as an array:
 

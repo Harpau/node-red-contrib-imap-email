@@ -100,7 +100,7 @@
     </select>
   </div>
   <div class="form-row">
-    <label for="node-input-expungeDeletedFront">Expunge front</label>
+    <label for="node-input-expungeDeletedFront">Expunge window</label>
     <input type="checkbox" id="node-input-expungeDeletedFront" style="display:inline-block; width:auto; vertical-align:top;">
   </div>
   <div class="form-row">
@@ -134,7 +134,7 @@
 
   <h3>Behavior</h3>
   <p>Each input message starts one bounded fetch cycle. The node does not poll automatically and does not delete successfully processed messages itself.</p>
-  <p>The node scans only a bounded front window such as <code>1:500</code>, emits at most the configured batch size, and attaches <code>msg.imap.ackToken</code> to every emitted mail. Wire the successful processing path to <b>imap email ack</b>.</p>
+  <p>The node scans one bounded cursor window per trigger, emits at most the configured batch size, and attaches <code>msg.imap.ackToken</code> to every emitted mail. The internal scan cursor advances after successful fetch cycles and wraps at the end of the mailbox. Wire the successful processing path to <b>imap email ack</b>.</p>
   <p>If another trigger arrives while a fetch cycle is already running, no parallel IMAP fetch is started. A skipped stats message is emitted on output 3 when Diagnostics is <code>stats</code> or <code>debug</code>.</p>
 
   <h3>Inputs</h3>
@@ -159,7 +159,7 @@
     <dt>Batch size <span class="property-type">number</span></dt>
     <dd>Maximum number of mails emitted per trigger.</dd>
     <dt>Front window <span class="property-type">number</span></dt>
-    <dd>Number of messages at the front of the mailbox to inspect. The node does not scan the whole mailbox.</dd>
+    <dd>Maximum number of messages to inspect per trigger from the current scan cursor. The node does not scan the whole mailbox.</dd>
     <dt>Max inflight <span class="property-type">number</span></dt>
     <dd>Maximum number of emitted but not-yet-ACKed messages kept active in memory.</dd>
     <dt>Retry after ms <span class="property-type">number</span></dt>
@@ -167,9 +167,9 @@
     <dt>UIDs/command <span class="property-type">number</span></dt>
     <dd>Maximum number of UIDs per IMAP command/range chunk.</dd>
     <dt>Deleted / Seen / Answered / Flagged <span class="property-type">selection</span></dt>
-    <dd>Select <code>Any</code>, <code>Only with flag</code>, or <code>Only without flag</code> for each IMAP flag. The filters are applied only inside the bounded front window; the node does not scan the whole mailbox to fill a batch.</dd>
-    <dt>Expunge front <span class="property-type">boolean</span></dt>
-    <dd>Permanently remove already-<code>\Deleted</code> messages skipped by the default Deleted selection in the front window.</dd>
+    <dd>Select <code>Any</code>, <code>Only with flag</code>, or <code>Only without flag</code> for each IMAP flag. The filters are applied only inside the bounded cursor window; the node does not scan the whole mailbox to fill a batch.</dd>
+    <dt>Expunge window <span class="property-type">boolean</span></dt>
+    <dd>Permanently remove already-<code>\Deleted</code> messages skipped by the default Deleted selection in the current cursor window.</dd>
     <dt>Expunge limit <span class="property-type">number</span></dt>
     <dd>Maximum number of already-<code>\Deleted</code> messages expunged per fetch cycle.</dd>
     <dt>Attachments <span class="property-type">boolean</span></dt>
@@ -201,8 +201,8 @@
   </dl>
 
   <h3>Stats</h3>
-  <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>filteredByFlags</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>missingSource</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
+  <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>scanCursorStart</code>, <code>scanCursorEnd</code>, <code>scanCursorNext</code>, <code>scanWrapped</code>, <code>filteredByFlags</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>missingSource</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
 
   <h3>Delivery guarantee</h3>
-  <p>The node provides at-least-once delivery when combined with <b>imap email ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until ACK deletion succeeds.</p>
+  <p>The node provides at-least-once delivery when combined with <b>imap email ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until the configured ACK action succeeds.</p>
 </script>
