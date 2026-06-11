@@ -11,7 +11,10 @@
       maxInflight: { value: 500, required: true, validate: RED.validators.number() },
       retryAfterMs: { value: 1800000, required: true, validate: RED.validators.number() },
       maxUidPerCommand: { value: 500, required: true, validate: RED.validators.number() },
-      skipDeleted: { value: true },
+      deletedSelection: { value: 'exclude' },
+      seenSelection: { value: 'ignore' },
+      answeredSelection: { value: 'ignore' },
+      flaggedSelection: { value: 'ignore' },
       expungeDeletedFront: { value: true },
       expungeDeletedFrontLimit: { value: 200, required: true, validate: RED.validators.number() },
       includeAttachments: { value: false },
@@ -65,8 +68,36 @@
   </div>
   <hr>
   <div class="form-row">
-    <label for="node-input-skipDeleted">Skip deleted</label>
-    <input type="checkbox" id="node-input-skipDeleted" style="display:inline-block; width:auto; vertical-align:top;">
+    <label for="node-input-deletedSelection">Deleted</label>
+    <select id="node-input-deletedSelection">
+      <option value="ignore">Any</option>
+      <option value="require">Only with flag</option>
+      <option value="exclude">Only without flag</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-seenSelection">Seen</label>
+    <select id="node-input-seenSelection">
+      <option value="ignore">Any</option>
+      <option value="require">Only with flag</option>
+      <option value="exclude">Only without flag</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-answeredSelection">Answered</label>
+    <select id="node-input-answeredSelection">
+      <option value="ignore">Any</option>
+      <option value="require">Only with flag</option>
+      <option value="exclude">Only without flag</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-flaggedSelection">Flagged</label>
+    <select id="node-input-flaggedSelection">
+      <option value="ignore">Any</option>
+      <option value="require">Only with flag</option>
+      <option value="exclude">Only without flag</option>
+    </select>
   </div>
   <div class="form-row">
     <label for="node-input-expungeDeletedFront">Expunge front</label>
@@ -135,10 +166,10 @@
     <dd>Time after which an un-ACKed inflight message may be emitted again.</dd>
     <dt>UIDs/command <span class="property-type">number</span></dt>
     <dd>Maximum number of UIDs per IMAP command/range chunk.</dd>
-    <dt>Skip deleted <span class="property-type">boolean</span></dt>
-    <dd>Skip messages that already have the IMAP <code>\Deleted</code> flag.</dd>
+    <dt>Deleted / Seen / Answered / Flagged <span class="property-type">selection</span></dt>
+    <dd>Select <code>Any</code>, <code>Only with flag</code>, or <code>Only without flag</code> for each IMAP flag. The filters are applied only inside the bounded front window; the node does not scan the whole mailbox to fill a batch.</dd>
     <dt>Expunge front <span class="property-type">boolean</span></dt>
-    <dd>Permanently remove already-<code>\Deleted</code> messages found in the front window.</dd>
+    <dd>Permanently remove already-<code>\Deleted</code> messages skipped by the default Deleted selection in the front window.</dd>
     <dt>Expunge limit <span class="property-type">number</span></dt>
     <dd>Maximum number of already-<code>\Deleted</code> messages expunged per fetch cycle.</dd>
     <dt>Attachments <span class="property-type">boolean</span></dt>
@@ -165,10 +196,12 @@
     <dd>Only present when Attachments is enabled.</dd>
     <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
     <dd>Token required by <b>imap email ack</b>.</dd>
+    <dt>msg.imap.flags <span class="property-type">array</span></dt>
+    <dd>IMAP flags returned by the server, for example <code>["\\Seen", "\\Flagged"]</code>.</dd>
   </dl>
 
   <h3>Stats</h3>
-  <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>missingSource</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
+  <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>filteredByFlags</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>missingSource</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
 
   <h3>Delivery guarantee</h3>
   <p>The node provides at-least-once delivery when combined with <b>imap email ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until ACK deletion succeeds.</p>

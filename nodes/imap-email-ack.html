@@ -6,6 +6,13 @@
       name: { value: '' },
       account: { value: '', type: 'imap email account', required: true },
       mailbox: { value: 'INBOX' },
+      actionMode: { value: 'delete' },
+      targetMailbox: { value: '' },
+      createTargetMailbox: { value: true },
+      actionProperty: { value: 'imap.ackAction' },
+      seenAction: { value: 'ignore' },
+      answeredAction: { value: 'ignore' },
+      flaggedAction: { value: 'ignore' },
       batchSize: { value: 100, required: true, validate: RED.validators.number() },
       flushMs: { value: 500, required: true, validate: RED.validators.number() },
       maxUidPerCommand: { value: 500, required: true, validate: RED.validators.number() },
@@ -19,6 +26,16 @@
     icon: 'font-awesome/fa-check',
     label: function () {
       return this.name || 'imap email ack';
+    },
+    oneditprepare: function () {
+      function updateActionRows() {
+        var mode = $('#node-input-actionMode').val();
+        $('.form-row-target-mailbox').toggle(mode === 'move');
+        $('.form-row-action-property').toggle(mode === 'message');
+        $('.form-row-flag-action').toggle(mode !== 'delete' && mode !== 'message');
+      }
+      $('#node-input-actionMode').on('change', updateActionRows);
+      updateActionRows();
     }
   });
 </script>
@@ -35,6 +52,53 @@
   <div class="form-row">
     <label for="node-input-mailbox"><i class="fa fa-inbox"></i> Mailbox fallback</label>
     <input type="text" id="node-input-mailbox" placeholder="INBOX">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-actionMode">Mode</label>
+    <select id="node-input-actionMode">
+      <option value="delete">delete</option>
+      <option value="keep-requeue-later">keep/requeue later</option>
+      <option value="keep-requeue-now">keep/requeue now</option>
+      <option value="move">move to folder</option>
+      <option value="message">set by msg.&lt;xxx&gt;</option>
+    </select>
+  </div>
+  <div class="form-row form-row-target-mailbox">
+    <label for="node-input-targetMailbox">Target folder</label>
+    <input type="text" id="node-input-targetMailbox" placeholder="Archive/Processed">
+  </div>
+  <div class="form-row form-row-target-mailbox">
+    <label for="node-input-createTargetMailbox">Create folder</label>
+    <input type="checkbox" id="node-input-createTargetMailbox" style="display:inline-block; width:auto; vertical-align:top;">
+  </div>
+  <div class="form-row form-row-action-property">
+    <label for="node-input-actionProperty">Action property</label>
+    <input type="text" id="node-input-actionProperty" placeholder="imap.ackAction">
+  </div>
+  <div class="form-row form-row-flag-action">
+    <label for="node-input-seenAction">Seen</label>
+    <select id="node-input-seenAction">
+      <option value="ignore">no change</option>
+      <option value="set">set</option>
+      <option value="clear">clear</option>
+    </select>
+  </div>
+  <div class="form-row form-row-flag-action">
+    <label for="node-input-answeredAction">Answered</label>
+    <select id="node-input-answeredAction">
+      <option value="ignore">no change</option>
+      <option value="set">set</option>
+      <option value="clear">clear</option>
+    </select>
+  </div>
+  <div class="form-row form-row-flag-action">
+    <label for="node-input-flaggedAction">Flagged</label>
+    <select id="node-input-flaggedAction">
+      <option value="ignore">no change</option>
+      <option value="set">set</option>
+      <option value="clear">clear</option>
+    </select>
   </div>
   <hr>
   <div class="form-row">
@@ -65,22 +129,25 @@
 </script>
 
 <script type="text/html" data-help-name="imap email ack">
-  <p>Positive acknowledgement node for messages emitted by <b>imap email in</b>.</p>
+  <p>Completion node for messages emitted by <b>imap email in</b>.</p>
 
   <h3>Behavior</h3>
-  <p>Wire this node only after all required processing has succeeded. The node batches incoming ACKs internally and deletes the corresponding messages by UID from the mailbox described by <code>msg.imap.ackToken</code>.</p>
+  <p>Wire this node after processing has decided what should happen to the mail. Multiple differently configured <b>imap email ack</b> nodes can be used in one flow.</p>
+  <p>The node batches incoming completions internally and acts on messages by UID from the mailbox described by <code>msg.imap.ackToken</code>.</p>
   <p>No separate Inject or flush node is required. The node uses an internal flush timer.</p>
 
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
     <dd>ACK token emitted by <b>imap email in</b>.</dd>
+    <dt>msg.imap.ackAction <span class="property-type">object</span></dt>
+    <dd>When Mode is <code>set by msg.&lt;xxx&gt;</code>, the configured message property contains disposition, target folder, requeue mode and flag actions.</dd>
   </dl>
 
   <h3>Outputs</h3>
   <ol class="node-ports">
-    <li>ACK success. The original message is passed through with <code>msg.imapAck.ok = true</code>.</li>
-    <li>ACK error. The original message is passed through with <code>msg.imapAck.ok = false</code>.</li>
+    <li>Completion success. The original message is passed through with <code>msg.imapAck.ok = true</code>.</li>
+    <li>Completion error. The original message is passed through with <code>msg.imapAck.ok = false</code>.</li>
     <li>Batch stats when Diagnostics is <code>stats</code> or <code>debug</code>.</li>
   </ol>
 
@@ -90,6 +157,16 @@
     <dd>Required <b>imap email account</b> configuration.</dd>
     <dt>Mailbox fallback <span class="property-type">string</span></dt>
     <dd>Mailbox used if the incoming ACK token does not include a mailbox. Usually <code>INBOX</code>.</dd>
+    <dt>Mode <span class="property-type">select</span></dt>
+    <dd><code>delete</code>, <code>keep/requeue later</code>, <code>keep/requeue now</code>, <code>move to folder</code>, or <code>set by msg.&lt;xxx&gt;</code>.</dd>
+    <dt>Target folder <span class="property-type">string</span></dt>
+    <dd>Destination mailbox used by <code>move to folder</code>.</dd>
+    <dt>Create folder <span class="property-type">boolean</span></dt>
+    <dd>Create the target folder before moving if the server reports it as missing.</dd>
+    <dt>Action property <span class="property-type">string</span></dt>
+    <dd>Message property path used by <code>set by msg.&lt;xxx&gt;</code>. Default: <code>imap.ackAction</code>.</dd>
+    <dt>Seen / Answered / Flagged <span class="property-type">no change | set | clear</span></dt>
+    <dd>Optional IMAP flag changes. Flag changes are allowed with keep and move actions. Delete cannot be combined with flag changes.</dd>
     <dt>Batch size <span class="property-type">number</span></dt>
     <dd>Number of ACKs to collect before flushing immediately.</dd>
     <dt>Flush ms <span class="property-type">number</span></dt>
@@ -103,9 +180,12 @@
   </dl>
 
   <h3>ACK result</h3>
-  <p>Successful messages receive <code>msg.imapAck</code> with <code>ok</code>, <code>mailbox</code>, <code>uid</code>, <code>uidValidity</code>, <code>batchSize</code> and <code>ranges</code>.</p>
-  <p>Failed ACKs receive <code>msg.imapAck.ok = false</code> and <code>msg.imapAck.error</code>. The message remains in the mailbox and may be delivered again.</p>
+  <p>Successful messages receive <code>msg.imapAck</code> with fields such as <code>ok</code>, <code>mode</code>, <code>disposition</code>, <code>mailbox</code>, <code>targetMailbox</code>, <code>uid</code>, <code>uidValidity</code>, <code>flags</code>, <code>batchSize</code>, <code>ranges</code>, <code>requeue</code> and <code>inflightRemoved</code>.</p>
+  <p>Failed completions receive <code>msg.imapAck.ok = false</code> and <code>msg.imapAck.error</code>. A mail is not treated as successfully completed when the configured IMAP action fails.</p>
+
+  <h3>At-least-once behavior</h3>
+  <p><code>delete</code> and successful <code>move</code> complete the message and remove the inflight entry. <code>keep/requeue later</code> keeps the inflight entry until the retry timeout. <code>keep/requeue now</code> removes the inflight entry immediately without changing the mail.</p>
 
   <h3>Stats</h3>
-  <p>Stats include <code>requested</code>, <code>groups</code>, <code>okCount</code>, <code>errorCount</code>, <code>pendingAfter</code>, <code>ranges</code> and timings such as <code>connectMs</code>, <code>lockMs</code>, <code>deleteMs</code> and <code>totalMs</code>.</p>
+  <p>Stats include <code>requested</code>, <code>groups</code>, <code>actions</code>, <code>okCount</code>, <code>errorCount</code>, <code>pendingAfter</code>, <code>ranges</code> and timings such as <code>connectMs</code>, <code>lockMs</code> and <code>totalMs</code>.</p>
 </script>

@@ -8,6 +8,8 @@ const {
   parseNumber,
   parseBoolean,
   isDeleted,
+  normalizeFlagSelection,
+  matchesFlagSelections,
   flagsToArray,
   headersToObject
 } = require("../lib/imap-utils");
@@ -26,7 +28,17 @@ module.exports = function registerImapEmailIn(RED) {
     node.maxInflight = parseNumber(config.maxInflight, 500, 1, 100000);
     node.retryAfterMs = parseNumber(config.retryAfterMs, 30 * 60 * 1000, 1000, 7 * 24 * 60 * 60 * 1000);
     node.maxUidPerCommand = parseNumber(config.maxUidPerCommand, 500, 1, 5000);
-    node.skipDeleted = parseBoolean(config.skipDeleted, true);
+    const legacyDeletedSelection = parseBoolean(config.skipDeleted, true) ? "exclude" : "ignore";
+    node.deletedSelection = normalizeFlagSelection(config.deletedSelection, legacyDeletedSelection);
+    node.seenSelection = normalizeFlagSelection(config.seenSelection, "ignore");
+    node.answeredSelection = normalizeFlagSelection(config.answeredSelection, "ignore");
+    node.flaggedSelection = normalizeFlagSelection(config.flaggedSelection, "ignore");
+    node.selection = {
+      deleted: node.deletedSelection,
+      seen: node.seenSelection,
+      answered: node.answeredSelection,
+      flagged: node.flaggedSelection
+    };
     node.expungeDeletedFront = parseBoolean(config.expungeDeletedFront, true);
     node.expungeDeletedFrontLimit = parseNumber(config.expungeDeletedFrontLimit, 200, 0, 10000);
     node.includeAttachments = parseBoolean(config.includeAttachments, false);
@@ -66,6 +78,8 @@ module.exports = function registerImapEmailIn(RED) {
         maxInflight: node.maxInflight,
         capacity: 0,
         candidates: 0,
+        filteredByFlags: 0,
+        filteredByInflight: 0,
         fetched: 0,
         emitted: 0,
         parseErrors: 0,
@@ -76,6 +90,7 @@ module.exports = function registerImapEmailIn(RED) {
         skipped: false,
         reason: undefined,
         queueKey: node.queueKey,
+        selection: node.selection,
         startedAt: new Date().toISOString(),
         finishedAt: null,
         timings: {}
@@ -215,14 +230,19 @@ module.exports = function registerImapEmailIn(RED) {
           const deleted = isDeleted(item.flags);
           if (deleted) {
             stats.deletedFlagged += 1;
-            deletedUids.push(uid);
-            registry.removeInflight(node.queueKey, uidValidity, uid);
-            if (node.skipDeleted) {
-              continue;
+          }
+
+          if (!matchesFlagSelections(item.flags, node.selection)) {
+            stats.filteredByFlags += 1;
+            if (deleted && node.deletedSelection === "exclude") {
+              deletedUids.push(uid);
+              registry.removeInflight(node.queueKey, uidValidity, uid);
             }
+            continue;
           }
 
           if (registry.isActiveInflight(node.queueKey, uidValidity, uid, node.retryAfterMs, now)) {
+            stats.filteredByInflight += 1;
             continue;
           }
 
@@ -279,21 +299,18 @@ module.exports = function registerImapEmailIn(RED) {
               uidValidity
             });
 
-            if (messageDeleted && node.skipDeleted) {
-              stats.deletedSkippedDuringFetch += 1;
-              deletedSeenDuringFetch.add(uid);
-              registry.removeInflight(node.queueKey, uidValidity, uid);
+            if (!matchesFlagSelections(imapMessage.flags, node.selection)) {
+              stats.filteredByFlags += 1;
+              if (messageDeleted && node.deletedSelection === "exclude") {
+                stats.deletedSkippedDuringFetch += 1;
+                deletedSeenDuringFetch.add(uid);
+                registry.removeInflight(node.queueKey, uidValidity, uid);
+              }
               continue;
             }
 
             if (imapMessage.source === undefined || imapMessage.source === null) {
               stats.missingSource += 1;
-
-              if (messageDeleted) {
-                deletedSeenDuringFetch.add(uid);
-                registry.removeInflight(node.queueKey, uidValidity, uid);
-                continue;
-              }
 
               registry.markInflight(node.queueKey, ackToken, {
                 subject: imapMessage.envelope && imapMessage.envelope.subject

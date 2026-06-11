@@ -3,7 +3,15 @@
 const { extractAckToken } = require("../lib/ack-token");
 const registry = require("../lib/runtime-registry");
 const { chunkUidRanges } = require("../lib/uid-range");
-const { parseNumber } = require("../lib/imap-utils");
+const { parseNumber, parseBoolean } = require("../lib/imap-utils");
+const {
+  normalizeAckAction,
+  normalizeAckActionFromMessage,
+  buildImapAckResult,
+  buildImapAckError,
+  executeAckActionBatch,
+  actionPlanKey
+} = require("../lib/imap-ack-actions");
 const diagnostics = require("../lib/diagnostics");
 
 module.exports = function registerImapEmailAck(RED) {
@@ -18,7 +26,16 @@ module.exports = function registerImapEmailAck(RED) {
     node.flushMs = parseNumber(config.flushMs, 500, 1, 60000);
     node.maxUidPerCommand = parseNumber(config.maxUidPerCommand, 500, 1, 5000);
     node.maxBatchesPerFlush = parseNumber(config.maxBatchesPerFlush, 20, 1, 1000);
+    node.actionMode = config.actionMode || config.mode || "delete";
+    node.targetMailbox = config.targetMailbox || "";
+    node.createTargetMailbox = parseBoolean(config.createTargetMailbox, true);
+    node.actionProperty = config.actionProperty || "imap.ackAction";
+    node.seenAction = config.seenAction || "ignore";
+    node.answeredAction = config.answeredAction || "ignore";
+    node.flaggedAction = config.flaggedAction || "ignore";
     node.diagnostics = diagnostics.normalizeDiagnostics(config.diagnostics, "stats");
+    node.actionPlan = null;
+    node.configError = null;
 
     node.pending = [];
     node.timer = null;
@@ -30,6 +47,23 @@ module.exports = function registerImapEmailAck(RED) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
       node.error("Missing imap email account configuration");
       return;
+    }
+
+    if (node.actionMode !== "message") {
+      try {
+        node.actionPlan = normalizeAckAction({
+          mode: node.actionMode,
+          targetMailbox: node.targetMailbox,
+          createTargetMailbox: node.createTargetMailbox,
+          seenAction: node.seenAction,
+          answeredAction: node.answeredAction,
+          flaggedAction: node.flaggedAction
+        });
+      } catch (err) {
+        node.configError = err;
+        node.status({ fill: "red", shape: "ring", text: err.message });
+        node.error(err);
+      }
     }
 
     function defaultTokenValues() {
@@ -78,12 +112,14 @@ module.exports = function registerImapEmailAck(RED) {
           token.host || node.account.host,
           token.user || node.account.getUsername(),
           token.mailbox || node.mailbox || "INBOX",
-          token.uidValidity
+          token.uidValidity,
+          actionPlanKey(item.plan)
         ].join("|");
 
         if (!groups.has(key)) {
           groups.set(key, {
             token,
+            plan: item.plan,
             items: [],
             uids: []
           });
@@ -118,6 +154,7 @@ module.exports = function registerImapEmailAck(RED) {
         okCount: 0,
         errorCount: 0,
         pendingAfter: 0,
+        actions: {},
         ranges: [],
         errors: [],
         timings: {}
@@ -130,80 +167,108 @@ module.exports = function registerImapEmailAck(RED) {
           let client;
           let lock;
           const token = group.token;
+          const plan = group.plan;
           const mailbox = token.mailbox || node.mailbox || "INBOX";
           const groupStats = {
             mailbox,
+            action: plan.mode,
+            disposition: plan.disposition,
+            targetMailbox: plan.targetMailbox || undefined,
             uidValidity: token.uidValidity,
             count: group.items.length,
             ranges: []
           };
 
           try {
-            client = node.account.createClient({ node, context: "imap email ack" });
-
-            let t = Date.now();
-            await client.connect();
-            addTiming(stats.timings, "connectMs", t);
-
-            t = Date.now();
-            lock = await client.getMailboxLock(mailbox);
-            addTiming(stats.timings, "lockMs", t);
-
-            const currentUidValidity = String(client.mailbox && client.mailbox.uidValidity || "");
-            if (token.uidValidity && currentUidValidity !== String(token.uidValidity)) {
-              throw new Error(`UIDVALIDITY mismatch for ${mailbox}: token=${token.uidValidity}, current=${currentUidValidity}`);
-            }
-
             const uidRanges = chunkUidRanges(group.uids, node.maxUidPerCommand);
             groupStats.ranges = uidRanges;
-            stats.ranges.push({ mailbox, uidValidity: token.uidValidity, ranges: uidRanges, count: group.items.length });
+            stats.ranges.push({
+              mailbox,
+              uidValidity: token.uidValidity,
+              action: plan.mode,
+              disposition: plan.disposition,
+              targetMailbox: plan.targetMailbox || undefined,
+              flags: plan.flags,
+              ranges: uidRanges,
+              count: group.items.length
+            });
 
-            t = Date.now();
-            for (const range of uidRanges) {
-              await client.messageDelete(range, { uid: true });
+            const actionCounter = stats.actions[plan.mode] || { requested: 0, ok: 0, error: 0 };
+            actionCounter.requested += group.items.length;
+            stats.actions[plan.mode] = actionCounter;
+
+            const needsImap = plan.disposition !== "keep"
+              || plan.flags.add.length > 0
+              || plan.flags.remove.length > 0;
+
+            if (needsImap) {
+              client = node.account.createClient({ node, context: "imap email ack" });
+
+              let t = Date.now();
+              await client.connect();
+              addTiming(stats.timings, "connectMs", t);
+
+              t = Date.now();
+              lock = await client.getMailboxLock(mailbox);
+              addTiming(stats.timings, "lockMs", t);
+
+              const currentUidValidity = String(client.mailbox && client.mailbox.uidValidity || "");
+              if (token.uidValidity && currentUidValidity !== String(token.uidValidity)) {
+                throw new Error(`UIDVALIDITY mismatch for ${mailbox}: token=${token.uidValidity}, current=${currentUidValidity}`);
+              }
+
+              t = Date.now();
+              await executeAckActionBatch({ client, plan, uidRanges, mailbox });
+              addTiming(stats.timings, `${plan.disposition}Ms`, t);
             }
-            addTiming(stats.timings, "deleteMs", t);
 
             for (const item of group.items) {
               const ackToken = item.token;
               const queueKey = ackToken.queueKey;
-              if (queueKey) {
+              const inflightRemoved = plan.requeue !== "later";
+              if (queueKey && inflightRemoved) {
                 registry.removeInflight(queueKey, ackToken.uidValidity, ackToken.uid);
               }
 
-              item.msg.imapAck = {
-                ok: true,
+              item.msg.imapAck = buildImapAckResult({
+                token: ackToken,
+                plan,
                 mailbox,
-                uid: ackToken.uid,
-                uidValidity: ackToken.uidValidity,
+                ranges: uidRanges,
                 batchSize: group.items.length,
-                ranges: uidRanges
-              };
+                inflightRemoved
+              });
 
               item.send([item.msg, null, null]);
               if (item.done) {
                 item.done();
               }
               stats.okCount += 1;
+              actionCounter.ok += 1;
             }
           } catch (err) {
             stats.ok = false;
             stats.errorCount += group.items.length;
+            const actionCounter = stats.actions[plan.mode] || { requested: 0, ok: 0, error: 0 };
+            actionCounter.error += group.items.length;
+            stats.actions[plan.mode] = actionCounter;
             stats.errors.push({
               mailbox,
+              action: plan.mode,
+              disposition: plan.disposition,
+              targetMailbox: plan.targetMailbox || undefined,
               uidValidity: token.uidValidity,
               count: group.items.length,
               error: err.message
             });
 
             for (const item of group.items) {
-              item.msg.imapAck = {
-                ok: false,
+              item.msg.imapAck = buildImapAckError({
+                token: item.token,
+                plan,
                 mailbox,
-                uid: item.token.uid,
-                uidValidity: item.token.uidValidity,
-                error: err.message
-              };
+                error: err
+              });
               item.send([null, item.msg, null]);
               if (item.done) {
                 item.done();
@@ -261,10 +326,39 @@ module.exports = function registerImapEmailAck(RED) {
       try {
         token = extractAckToken(msg, defaultTokenValues());
       } catch (err) {
-        msg.imapAck = {
-          ok: false,
-          error: err.message
-        };
+        msg.imapAck = buildImapAckError({
+          plan: node.actionPlan || normalizeAckAction({ mode: "delete" }),
+          mailbox: node.mailbox || "INBOX",
+          error: err
+        });
+        send([null, msg, null]);
+        if (done) {
+          done();
+        }
+        return;
+      }
+
+      let plan;
+      try {
+        if (node.configError) {
+          throw node.configError;
+        }
+        plan = node.actionMode === "message"
+          ? normalizeAckActionFromMessage(msg, node.actionProperty)
+          : node.actionPlan;
+      } catch (err) {
+        msg.imapAck = buildImapAckError({
+          token,
+          plan: node.actionPlan || {
+            mode: node.actionMode,
+            disposition: "keep",
+            targetMailbox: "",
+            requeue: "later",
+            flags: { add: [], remove: [] }
+          },
+          mailbox: token.mailbox || node.mailbox || "INBOX",
+          error: err
+        });
         send([null, msg, null]);
         if (done) {
           done();
@@ -277,6 +371,7 @@ module.exports = function registerImapEmailAck(RED) {
         send,
         done,
         token,
+        plan,
         enqueuedAt: Date.now()
       });
 
@@ -284,6 +379,7 @@ module.exports = function registerImapEmailAck(RED) {
       diagnostics.debug(node, node.diagnostics, "imap email ack.queued", {
         pending: node.pending.length,
         mailbox: token.mailbox || node.mailbox || "INBOX",
+        action: plan.mode,
         uid: token.uid,
         uidValidity: token.uidValidity
       });

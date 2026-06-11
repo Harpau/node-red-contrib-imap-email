@@ -60,6 +60,19 @@ Inject / scheduler / HTTP trigger
 
 Only wire messages to `imap email ack` after all processing that must succeed has actually succeeded.
 
+`imap email ack` can be configured multiple times in one flow. Typical modes:
+
+```text
+delete              delete the mail by UID and complete it
+keep/requeue later  keep the mail and retry after the inflight timeout
+keep/requeue now    keep the mail and make it immediately eligible again
+move to folder      move the mail to a configured IMAP folder
+set by msg.<xxx>    read action, target folder and flags from the message
+```
+
+The ack node can set or clear `\Seen`, `\Answered` and `\Flagged` for keep and
+move actions. Delete is intentionally not combined with flag changes.
+
 ## Large Mailboxes
 
 `imap email in` is designed for mailboxes that may contain many messages. It does not run an unbounded mailbox-wide search. Instead, each trigger reads only a bounded front window such as `1:500`, emits at most the configured batch size, and waits for ACK deletion through `imap email ack`.
@@ -72,6 +85,26 @@ Front window     maximum number of front messages inspected per trigger
 Max inflight     maximum emitted but not-yet-ACKed messages tracked in memory
 Retry after ms   time after which an un-ACKed message may be emitted again
 UIDs/command     maximum UID count per IMAP command chunk
+```
+
+Selection settings:
+
+```text
+Deleted   Any | Only with flag | Only without flag
+Seen      Any | Only with flag | Only without flag
+Answered  Any | Only with flag | Only without flag
+Flagged   Any | Only with flag | Only without flag
+```
+
+The defaults are `Deleted = Only without flag` and all other flags set to
+`Any`. These filters are applied only inside the bounded front window. A
+selective filter may emit fewer messages than `Batch size`; it never causes a
+full-mailbox scan to fill the batch.
+
+Output messages include the server flags as an array:
+
+```js
+msg.imap.flags // for example ["\\Seen", "\\Flagged"]
 ```
 
 ## Delivery Semantics
@@ -87,11 +120,34 @@ Exactly once             = not guaranteed
 
 The inflight registry is volatile process memory. If Node-RED restarts after a message was emitted but before it was ACKed, the message remains in the mailbox and may be emitted again.
 
+No message is reported as successfully completed if the configured IMAP action
+fails. In that case output 2 receives the original message with
+`msg.imapAck.ok = false`.
+
+For dynamic decisions, configure `imap email ack` to `set by msg.<xxx>` and set
+`msg.imap.ackAction`:
+
+```js
+msg.imap.ackAction = {
+  disposition: "move",          // keep, delete, move
+  targetMailbox: "Archive",
+  createTargetMailbox: true,
+  requeue: "complete",          // complete, later, now
+  flags: {
+    seen: "set",                // ignore, set, clear
+    answered: "ignore",
+    flagged: "clear"
+  }
+};
+```
+
+Successful completions add `msg.imapAck` with fields such as `mode`,
+`disposition`, `mailbox`, `targetMailbox`, `uid`, `uidValidity`, `flags`,
+`ranges`, `requeue` and `inflightRemoved`.
+
 ## Current Limits
 
-- `imap email ack` currently performs the existing positive ACK behavior: batched UID deletion.
 - The predecessor's separate NACK node is not registered in this package.
-- Unified ACK/NACK actions and additional flag-selection controls are planned follow-up work, not part of this safe rename.
 - OAuth2 token acquisition and refresh are not implemented. The account node supports username/password and an optional static access token field.
 
 ## Migration Notes
