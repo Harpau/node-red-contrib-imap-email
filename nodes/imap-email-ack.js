@@ -6,6 +6,7 @@ const { chunkUids, compressUids } = require("../lib/uid-range");
 const { parseNumber } = require("../lib/imap-utils");
 const {
   isTransientImapConnectionError,
+  safeClose,
   safeLogout
 } = require("../lib/imap-connection");
 const {
@@ -17,6 +18,8 @@ const {
   actionPlanKey
 } = require("../lib/imap-ack-actions");
 const diagnostics = require("../lib/diagnostics");
+
+const DEFAULT_CLOSE_TIMEOUT_MS = 10000;
 
 module.exports = function registerImapEmailAck(RED) {
   function ImapEmailAckNode(config) {
@@ -30,6 +33,7 @@ module.exports = function registerImapEmailAck(RED) {
     node.flushMs = parseNumber(config.flushMs, 500, 1, 60000);
     node.maxUidPerCommand = parseNumber(config.maxUidPerCommand, 500, 1, 5000);
     node.maxBatchesPerFlush = parseNumber(config.maxBatchesPerFlush, 20, 1, 1000);
+    node.closeTimeoutMs = parseNumber(config.closeTimeoutMs, DEFAULT_CLOSE_TIMEOUT_MS, 1, 14000);
     node.actionMode = config.actionMode || config.action || "delete";
     node.targetMailbox = config.targetMailbox || "";
     node.actionProperty = "imap.ackAction";
@@ -44,7 +48,13 @@ module.exports = function registerImapEmailAck(RED) {
     node.timer = null;
     node.running = false;
     node.closed = false;
+    node.closing = false;
     node.closeDone = null;
+    node.closeTimer = null;
+    node.closeFinalized = false;
+    node.closeAbortError = null;
+    node.activeClients = new Set();
+    node.inflightItems = new Set();
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
@@ -91,6 +101,115 @@ module.exports = function registerImapEmailAck(RED) {
         node.send([null, null, { payload: stats }]);
       }
       diagnostics.debug(node, node.diagnostics, "imap email ack.flush", stats);
+    }
+
+    function buildCloseError() {
+      const err = new Error("ACK not completed before node close");
+      err.code = "IMAP_EMAIL_ACK_CLOSE";
+      return err;
+    }
+
+    function trackClient(client) {
+      if (client) {
+        node.activeClients.add(client);
+      }
+      return client;
+    }
+
+    function untrackClient(client) {
+      if (client) {
+        node.activeClients.delete(client);
+      }
+    }
+
+    function closeActiveClients() {
+      for (const client of Array.from(node.activeClients)) {
+        safeClose(client);
+      }
+    }
+
+    function markItemSettled(item) {
+      if (!item || item._imapEmailAckSettled) {
+        return false;
+      }
+      item._imapEmailAckSettled = true;
+      node.inflightItems.delete(item);
+      return true;
+    }
+
+    function failItemsForClose(items, err) {
+      let count = 0;
+      for (const item of items) {
+        if (!markItemSettled(item)) {
+          continue;
+        }
+
+        const token = item.token || {};
+        item.msg.imapAck = buildImapAckError({
+          token,
+          plan: item.plan || {
+            action: node.actionMode,
+            disposition: "keep",
+            targetMailbox: "",
+            flags: { add: [], remove: [] }
+          },
+          mailbox: token.mailbox || node.mailbox || "INBOX",
+          error: err
+        });
+        item.send([null, item.msg, null]);
+        if (item.done) {
+          item.done();
+        }
+        count += 1;
+      }
+      return count;
+    }
+
+    function clearCloseTimer() {
+      if (node.closeTimer) {
+        clearTimeout(node.closeTimer);
+        node.closeTimer = null;
+      }
+    }
+
+    function finishCloseNow() {
+      if (node.closeFinalized) {
+        return;
+      }
+
+      node.closeFinalized = true;
+      node.closeAbortError = node.closeAbortError || buildCloseError();
+      clearCloseTimer();
+      closeActiveClients();
+      failItemsForClose(node.pending.splice(0), node.closeAbortError);
+      failItemsForClose(Array.from(node.inflightItems), node.closeAbortError);
+
+      if (node.closeDone) {
+        const done = node.closeDone;
+        node.closeDone = null;
+        done();
+      }
+    }
+
+    function completeCloseIfReady() {
+      if (!node.closeDone || node.closeFinalized || node.running) {
+        return;
+      }
+
+      const closeErr = buildCloseError();
+      failItemsForClose(node.pending.splice(0), closeErr);
+      finishCloseNow();
+    }
+
+    function scheduleCloseDeadline() {
+      if (node.closeTimer) {
+        return;
+      }
+
+      node.closeTimer = setTimeout(() => {
+        node.closeAbortError = node.closeAbortError || buildCloseError();
+        finishCloseNow();
+      }, node.closeTimeoutMs);
     }
 
     node.scheduleFlush = function scheduleFlush(delayMs) {
@@ -146,6 +265,9 @@ module.exports = function registerImapEmailAck(RED) {
       const startedAt = Date.now();
       const maxItems = node.batchSize * node.maxBatchesPerFlush;
       const items = node.pending.splice(0, maxItems);
+      for (const item of items) {
+        node.inflightItems.add(item);
+      }
       const groups = node.groupItems(items);
       const stats = {
         ok: true,
@@ -185,6 +307,10 @@ module.exports = function registerImapEmailAck(RED) {
 
           function completeItems(chunkItems, range) {
             for (const item of chunkItems) {
+              if (!markItemSettled(item)) {
+                continue;
+              }
+
               const ackToken = item.token;
               if (ackToken.queueKey) {
                 registry.removeInflight(ackToken.queueKey, ackToken.uidValidity, ackToken.uid);
@@ -207,21 +333,12 @@ module.exports = function registerImapEmailAck(RED) {
           }
 
           function failItems(chunkItems, range, err) {
-            stats.ok = false;
-            stats.errorCount += chunkItems.length;
-            actionCounter.error += chunkItems.length;
-            stats.errors.push({
-              mailbox,
-              action: plan.action,
-              disposition: plan.disposition,
-              targetMailbox: plan.targetMailbox || undefined,
-              uidValidity: token.uidValidity,
-              range: range || undefined,
-              count: chunkItems.length,
-              error: err.message
-            });
-
+            let failedCount = 0;
             for (const item of chunkItems) {
+              if (!markItemSettled(item)) {
+                continue;
+              }
+
               item.msg.imapAck = buildImapAckError({
                 token: item.token,
                 plan,
@@ -233,7 +350,26 @@ module.exports = function registerImapEmailAck(RED) {
               if (item.done) {
                 item.done();
               }
+              failedCount += 1;
             }
+
+            if (failedCount === 0) {
+              return;
+            }
+
+            stats.ok = false;
+            stats.errorCount += failedCount;
+            actionCounter.error += failedCount;
+            stats.errors.push({
+              mailbox,
+              action: plan.action,
+              disposition: plan.disposition,
+              targetMailbox: plan.targetMailbox || undefined,
+              uidValidity: token.uidValidity,
+              range: range || undefined,
+              count: failedCount,
+              error: err.message
+            });
           }
 
           try {
@@ -243,7 +379,7 @@ module.exports = function registerImapEmailAck(RED) {
               || plan.flags.remove.length > 0;
 
             if (needsImap) {
-              client = node.account.createClient({ node, context: "imap email ack" });
+              client = trackClient(node.account.createClient({ node, context: "imap email ack" }));
 
               let t = Date.now();
               await client.connect();
@@ -262,6 +398,10 @@ module.exports = function registerImapEmailAck(RED) {
             let targetMailboxEnsured = false;
             let connectionInterrupted = null;
             for (const uidChunk of uidChunks) {
+              if (node.closeAbortError) {
+                throw node.closeAbortError;
+              }
+
               const range = compressUids(uidChunk);
               const chunkItems = itemsForChunk(uidChunk);
 
@@ -277,6 +417,10 @@ module.exports = function registerImapEmailAck(RED) {
               });
 
               try {
+                if (node.closeAbortError) {
+                  throw node.closeAbortError;
+                }
+
                 if (connectionInterrupted) {
                   throw connectionInterrupted;
                 }
@@ -347,6 +491,8 @@ module.exports = function registerImapEmailAck(RED) {
               }
             } catch (err) {
               // ignore
+            } finally {
+              untrackClient(client);
             }
           }
         }
@@ -355,23 +501,21 @@ module.exports = function registerImapEmailAck(RED) {
         stats.pendingAfter = node.pending.length;
         stats.finishedAt = new Date().toISOString();
         stats.timings.totalMs = Math.max(0, Date.now() - startedAt);
-        emitFlushStats(stats);
+        if (!node.closeFinalized) {
+          emitFlushStats(stats);
 
-        node.status({
-          fill: stats.errorCount > 0 ? "red" : "green",
-          shape: stats.errorCount > 0 ? "ring" : "dot",
-          text: `ACK ok ${stats.okCount}, err ${stats.errorCount}, pending ${node.pending.length}`
-        });
+          node.status({
+            fill: stats.errorCount > 0 ? "red" : "green",
+            shape: stats.errorCount > 0 ? "ring" : "dot",
+            text: `ACK ok ${stats.okCount}, err ${stats.errorCount}, pending ${node.pending.length}`
+          });
+        }
 
         if (node.pending.length > 0 && !node.closed) {
           node.scheduleFlush(1);
         }
 
-        if (node.closeDone && node.pending.length === 0 && !node.running) {
-          const done = node.closeDone;
-          node.closeDone = null;
-          done();
-        }
+        completeCloseIfReady();
       }
     };
 
@@ -455,23 +599,27 @@ module.exports = function registerImapEmailAck(RED) {
 
     node.on("close", function onClose(removed, done) {
       node.closed = true;
+      node.closing = true;
       if (node.timer) {
         clearTimeout(node.timer);
         node.timer = null;
       }
 
+      node.closeDone = done;
+      scheduleCloseDeadline();
+
       if (node.pending.length > 0 && !node.running) {
-        node.flush().then(() => done()).catch((err) => {
-          node.error(err);
-          done();
+        node.flush().then(() => {
+          completeCloseIfReady();
+        }).catch((err) => {
+          node.warn(`IMAP ACK close flush failed: ${err.message}`);
+          completeCloseIfReady();
         });
         return;
       }
 
-      if (node.running) {
-        node.closeDone = done;
-      } else {
-        done();
+      if (!node.running) {
+        completeCloseIfReady();
       }
     });
   }

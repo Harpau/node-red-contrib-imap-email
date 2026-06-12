@@ -36,6 +36,7 @@ function createAckNode(config = {}, clientFactory) {
   const warnings = [];
   const errors = [];
   const sends = [];
+  const handlers = {};
   const account = {
     id: "account-1",
     host: "imap.example.test",
@@ -54,7 +55,9 @@ function createAckNode(config = {}, clientFactory) {
         node.warn = (message) => warnings.push(message);
         node.error = (err) => errors.push(err);
         node.send = (output) => sends.push(output);
-        node.on = () => {};
+        node.on = (event, handler) => {
+          handlers[event] = handler;
+        };
       },
       getNode(id) {
         return id === "account-1" ? account : null;
@@ -79,12 +82,30 @@ function createAckNode(config = {}, clientFactory) {
     statuses,
     warnings,
     errors,
-    sends
+    sends,
+    handlers
   };
 }
 
 function sendWithCapture(itemOutputs) {
   return (output) => itemOutputs.push(output);
+}
+
+function pushPendingAckItems(node, uids, itemOutputs, onDone) {
+  for (const uid of uids) {
+    node.pending.push({
+      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
+      send: sendWithCapture(itemOutputs),
+      done: () => {
+        if (onDone) {
+          onDone(uid);
+        }
+      },
+      token: sampleToken(uid),
+      plan: node.actionPlan,
+      enqueuedAt: Date.now()
+    });
+  }
 }
 
 test("imap email ack action helper module exposes the simplified API", () => {
@@ -511,4 +532,190 @@ test("ack runtime ignores transient logout failures after successful actions", a
   assert.equal(doneCount, 1);
   assert.equal(itemOutputs.length, 1);
   assert.equal(itemOutputs[0][0].imapAck.ok, true);
+});
+
+test("ack close fails remaining pending items after a running bounded flush", async () => {
+  const key = "queue-1";
+  registry.clearQueue(key);
+  for (const uid of [1, 2]) {
+    registry.markInflight(key, sampleToken(uid), { now: 1000 });
+  }
+
+  let resolveAction;
+  let actionStarted;
+  const actionStartedPromise = new Promise((resolve) => {
+    actionStarted = resolve;
+  });
+  const { node, handlers, errors } = createAckNode({
+    actionMode: "delete",
+    batchSize: 1,
+    maxBatchesPerFlush: 1,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    usable: true,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    messageDelete(range) {
+      actionStarted(range);
+      return new Promise((resolve) => {
+        resolveAction = resolve;
+      });
+    },
+    async logout() {}
+  }));
+
+  const itemOutputs = [];
+  const doneUids = [];
+  pushPendingAckItems(node, [1, 2], itemOutputs, (uid) => doneUids.push(uid));
+
+  const flushPromise = node.flush();
+  assert.equal(await actionStartedPromise, "1");
+
+  let closeDoneCount = 0;
+  handlers.close(false, () => {
+    closeDoneCount += 1;
+  });
+
+  resolveAction();
+  await flushPromise;
+
+  assert.equal(closeDoneCount, 1);
+  assert.equal(errors.length, 0);
+  assert.deepEqual(doneUids.sort((a, b) => a - b), [1, 2]);
+  assert.deepEqual(itemOutputs.filter((output) => output[0]).map((output) => output[0].imapAck.uid), [1]);
+  assert.deepEqual(itemOutputs.filter((output) => output[1]).map((output) => output[1].imapAck.uid), [2]);
+  assert.match(itemOutputs.find((output) => output[1])[1].imapAck.error, /node close/);
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 1, 10000, 2000), false);
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 2, 10000, 2000), true);
+});
+
+test("ack close drains one bounded flush and fails excess pending without removing inflight", async () => {
+  const key = "queue-1";
+  registry.clearQueue(key);
+  for (const uid of [1, 2, 3]) {
+    registry.markInflight(key, sampleToken(uid), { now: 1000 });
+  }
+
+  const clientCalls = [];
+  const { node, handlers, errors } = createAckNode({
+    actionMode: "delete",
+    batchSize: 1,
+    maxBatchesPerFlush: 1,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    usable: true,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async messageDelete(range) {
+      clientCalls.push(range);
+    },
+    async logout() {}
+  }));
+
+  const itemOutputs = [];
+  let doneCount = 0;
+  pushPendingAckItems(node, [1, 2, 3], itemOutputs, () => {
+    doneCount += 1;
+  });
+
+  let closeDoneCount = 0;
+  await new Promise((resolve) => {
+    handlers.close(false, () => {
+      closeDoneCount += 1;
+      resolve();
+    });
+  });
+
+  assert.equal(closeDoneCount, 1);
+  assert.equal(doneCount, 3);
+  assert.equal(errors.length, 0);
+  assert.deepEqual(clientCalls, ["1"]);
+  assert.deepEqual(itemOutputs.filter((output) => output[0]).map((output) => output[0].imapAck.uid), [1]);
+  assert.deepEqual(itemOutputs.filter((output) => output[1]).map((output) => output[1].imapAck.uid), [2, 3]);
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 1, 10000, 2000), false);
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 2, 10000, 2000), true);
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 3, 10000, 2000), true);
+});
+
+test("ack close deadline aborts active clients and does not escalate transient aborts", async () => {
+  const key = "queue-1";
+  registry.clearQueue(key);
+  registry.markInflight(key, sampleToken(1), { now: 1000 });
+
+  let rejectAction;
+  let actionStarted;
+  const actionStartedPromise = new Promise((resolve) => {
+    actionStarted = resolve;
+  });
+  let closeCalls = 0;
+  const client = {
+    usable: true,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    messageDelete(range) {
+      actionStarted(range);
+      return new Promise((resolve, reject) => {
+        rejectAction = reject;
+      });
+    },
+    close() {
+      closeCalls += 1;
+      client.usable = false;
+      if (rejectAction) {
+        rejectAction(createConnectionError("Connection not available", "NoConnection"));
+      }
+    },
+    async logout() {
+      throw new Error("logout should be skipped after close");
+    }
+  };
+
+  const { node, handlers, warnings, errors } = createAckNode({
+    actionMode: "delete",
+    batchSize: 1,
+    maxBatchesPerFlush: 1,
+    flushMs: 60000,
+    closeTimeoutMs: 5,
+    diagnostics: "off"
+  }, () => client);
+
+  const itemOutputs = [];
+  let doneCount = 0;
+  pushPendingAckItems(node, [1], itemOutputs, () => {
+    doneCount += 1;
+  });
+
+  const flushPromise = node.flush();
+  assert.equal(await actionStartedPromise, "1");
+
+  let closeDoneCount = 0;
+  await new Promise((resolve) => {
+    handlers.close(false, () => {
+      closeDoneCount += 1;
+      resolve();
+    });
+  });
+  await flushPromise;
+
+  assert.equal(closeDoneCount, 1);
+  assert.equal(closeCalls, 1);
+  assert.equal(doneCount, 1);
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0]), /Connection not available|node close/);
+  assert.equal(itemOutputs.length, 1);
+  assert.equal(itemOutputs[0][1].imapAck.ok, false);
+  assert.match(itemOutputs[0][1].imapAck.error, /node close/);
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 1, 10000, 2000), true);
 });
