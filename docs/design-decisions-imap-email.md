@@ -363,8 +363,7 @@ Der bestehende Fallback auf `msg.imap.uid`, `msg.imap.mailbox` und
 msg.imap.flags = ["\\Seen", "\\Flagged"];
 ```
 
-Zusaetzlich soll `msg.imap.flagState` als Convenience-Objekt ausgegeben
-werden:
+Zusaetzlich wird `msg.imap.flagState` als Convenience-Objekt ausgegeben:
 
 ```js
 msg.imap.flagState = {

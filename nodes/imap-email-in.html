@@ -28,6 +28,13 @@
     icon: 'font-awesome/fa-envelope-o',
     label: function () {
       return this.name || ('imap email ' + (this.mailbox || 'INBOX'));
+    },
+    oneditprepare: function () {
+      function updateExpungeRows() {
+        $('.form-row-expunge-deleted').toggle($('#node-input-deletedSelection').val() === 'exclude');
+      }
+      $('#node-input-deletedSelection').on('change', updateExpungeRows);
+      updateExpungeRows();
     }
   });
 </script>
@@ -99,11 +106,11 @@
       <option value="exclude">Only without flag</option>
     </select>
   </div>
-  <div class="form-row">
+  <div class="form-row form-row-expunge-deleted">
     <label for="node-input-expungeDeletedFront">Expunge window</label>
     <input type="checkbox" id="node-input-expungeDeletedFront" style="display:inline-block; width:auto; vertical-align:top;">
   </div>
-  <div class="form-row">
+  <div class="form-row form-row-expunge-deleted">
     <label for="node-input-expungeDeletedFrontLimit">Expunge limit</label>
     <input type="number" id="node-input-expungeDeletedFrontLimit">
   </div>
@@ -169,7 +176,7 @@
     <dt>Deleted / Seen / Answered / Flagged <span class="property-type">selection</span></dt>
     <dd>Select <code>Any</code>, <code>Only with flag</code>, or <code>Only without flag</code> for each IMAP flag. The filters are applied only inside the bounded cursor window; the node does not scan the whole mailbox to fill a batch.</dd>
     <dt>Expunge window <span class="property-type">boolean</span></dt>
-    <dd>Permanently remove already-<code>\Deleted</code> messages skipped by the default Deleted selection in the current cursor window.</dd>
+    <dd>Permanently remove already-<code>\Deleted</code> messages skipped by <code>Deleted = Only without flag</code> in the current cursor window.</dd>
     <dt>Expunge limit <span class="property-type">number</span></dt>
     <dd>Maximum number of already-<code>\Deleted</code> messages expunged per fetch cycle.</dd>
     <dt>Attachments <span class="property-type">boolean</span></dt>
@@ -198,6 +205,8 @@
     <dd>Token required by <b>imap email ack</b>.</dd>
     <dt>msg.imap.flags <span class="property-type">array</span></dt>
     <dd>IMAP flags returned by the server, for example <code>["\\Seen", "\\Flagged"]</code>.</dd>
+    <dt>msg.imap.flagState <span class="property-type">object</span></dt>
+    <dd>Convenience booleans for <code>deleted</code>, <code>seen</code>, <code>answered</code> and <code>flagged</code>.</dd>
   </dl>
 
   <h3>Stats</h3>

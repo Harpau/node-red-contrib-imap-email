@@ -11,6 +11,7 @@ const {
   normalizeFlagSelection,
   matchesFlagSelections,
   flagsToArray,
+  flagsToState,
   headersToObject
 } = require("../lib/imap-utils");
 const diagnostics = require("../lib/diagnostics");
@@ -125,6 +126,7 @@ module.exports = function registerImapEmailIn(RED) {
         uidValidity,
         size: imapMessage && imapMessage.size,
         flags: flagsToArray(imapMessage && imapMessage.flags),
+        flagState: flagsToState(imapMessage && imapMessage.flags),
         ackToken,
         delivery: {
           mode: "at-least-once",
@@ -410,6 +412,7 @@ module.exports = function registerImapEmailIn(RED) {
                   uid,
                   uidValidity,
                   flags: flagsToArray(imapMessage.flags),
+                  flagState: flagsToState(imapMessage.flags),
                   internalDate: imapMessage.internalDate,
                   size: imapMessage.size,
                   ackToken,

@@ -6,7 +6,8 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   normalizeFlagSelection,
-  matchesFlagSelections
+  matchesFlagSelections,
+  flagsToState
 } = require("../lib/imap-utils");
 const registerImapEmailIn = require("../nodes/imap-email-in");
 
@@ -119,6 +120,17 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
   };
 }
 
+function createMailSource(subject = "Hello") {
+  return [
+    `Subject: ${subject}`,
+    "Message-ID: <message-1@example.test>",
+    "From: sender@example.test",
+    "To: receiver@example.test",
+    "",
+    "Body"
+  ].join("\r\n");
+}
+
 function collectStats(outputs) {
   return outputs
     .filter((output) => output && output[2] && output[2].payload)
@@ -186,6 +198,13 @@ test("internal flag selection helpers map UI values to IMAP flags", () => {
     answered: "ignore",
     flagged: "ignore"
   }), false);
+
+  assert.deepEqual(flagsToState(["\\Seen", "\\Flagged"]), {
+    deleted: false,
+    seen: true,
+    answered: false,
+    flagged: true
+  });
 });
 
 test("example flow serializes imap email in selection fields", () => {
@@ -215,6 +234,77 @@ test("imap email in UI exposes tri-state flag selection values", () => {
     assert.match(block, /value=["']require["'][^>]*>[^<]*Only with flag/i, `${field} must map Only with flag to require`);
     assert.match(block, /value=["']exclude["'][^>]*>[^<]*Only without flag/i, `${field} must map Only without flag to exclude`);
   }
+});
+
+test("imap email in UI only shows expunge controls when deleted messages are excluded", () => {
+  const html = readProjectFile(path.join("nodes", "imap-email-in.html"));
+
+  assert.match(html, /oneditprepare\s*:\s*function/, "editor must define dynamic UI behavior");
+  assert.match(html, /node-input-deletedSelection/, "deleted selection must drive the expunge UI");
+  assert.match(html, /form-row-expunge-deleted/, "expunge rows must be grouped for toggling");
+  assert.match(html, /deletedSelection.*exclude|exclude.*deletedSelection/s, "expunge controls must be tied to exclude mode");
+});
+
+test("imap email in outputs both raw flags and flagState", async () => {
+  const { node } = createCursorTestNode({ frontWindowSize: 10 }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-1",
+      front: [
+        {
+          uid: 123,
+          flags: ["\\Seen", "\\Flagged"],
+          envelope: { subject: "Hello" },
+          internalDate: new Date("2026-01-01T00:00:00Z"),
+          size: 100
+        }
+      ]
+    }
+  ]);
+  node.account.createClient = () => ({
+    mailbox: { exists: 1, uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async fetchAll(range, query, options) {
+      if (options && options.uid) {
+        return [
+          {
+            uid: 123,
+            flags: ["\\Seen", "\\Flagged"],
+            envelope: { subject: "Hello" },
+            internalDate: new Date("2026-01-01T00:00:00Z"),
+            size: 100,
+            source: createMailSource("Hello")
+          }
+        ];
+      }
+      return [
+        {
+          uid: 123,
+          flags: ["\\Seen", "\\Flagged"],
+          envelope: { subject: "Hello" },
+          internalDate: new Date("2026-01-01T00:00:00Z"),
+          size: 100
+        }
+      ];
+    },
+    async logout() {}
+  });
+
+  const outputs = [];
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  const mail = outputs.find((output) => output && output[0] && output[0].imap);
+  assert.ok(mail, "expected one emitted mail");
+  assert.deepEqual(mail[0].imap.flags, ["\\Seen", "\\Flagged"]);
+  assert.deepEqual(mail[0].imap.flagState, {
+    deleted: false,
+    seen: true,
+    answered: false,
+    flagged: true
+  });
 });
 
 test("imap email in advances one bounded cursor window per trigger", async () => {

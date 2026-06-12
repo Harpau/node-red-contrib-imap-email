@@ -154,6 +154,33 @@ test("normalizes set by msg. action objects", () => {
   });
 });
 
+test("set by msg. uses the fixed msg.imap.ackAction path", () => {
+  const { normalizeAckActionFromMessage } = loadAckActions();
+  const { node } = createAckNode({
+    actionMode: "message",
+    actionProperty: "custom.path"
+  }, () => ({
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async logout() {}
+  }));
+
+  assert.equal(node.actionProperty, "imap.ackAction");
+  assert.deepEqual(normalizeAckActionFromMessage({
+    imap: {
+      ackAction: { action: "delete" }
+    }
+  }), {
+    action: "delete",
+    disposition: "delete",
+    targetMailbox: "",
+    flags: { add: [], remove: [] }
+  });
+});
+
 test("rejects invalid simplified ack action combinations", () => {
   const { normalizeAckAction, validateAckActionPlan } = loadAckActions();
 

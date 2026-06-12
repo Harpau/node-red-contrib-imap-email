@@ -8,7 +8,6 @@
       mailbox: { value: 'INBOX' },
       actionMode: { value: 'delete' },
       targetMailbox: { value: '' },
-      actionProperty: { value: 'imap.ackAction' },
       seenAction: { value: 'ignore' },
       answeredAction: { value: 'ignore' },
       flaggedAction: { value: 'ignore' },
@@ -30,7 +29,6 @@
       function updateActionRows() {
         var mode = $('#node-input-actionMode').val();
         $('.form-row-target-mailbox').toggle(mode === 'move');
-        $('.form-row-action-property').toggle(mode === 'message');
         $('.form-row-flag-action').toggle(mode === 'flag');
       }
       $('#node-input-actionMode').on('change', updateActionRows);
@@ -65,10 +63,6 @@
   <div class="form-row form-row-target-mailbox">
     <label for="node-input-targetMailbox">Target folder</label>
     <input type="text" id="node-input-targetMailbox" placeholder="Archive/Processed">
-  </div>
-  <div class="form-row form-row-action-property">
-    <label for="node-input-actionProperty">Action property</label>
-    <input type="text" id="node-input-actionProperty" placeholder="imap.ackAction">
   </div>
   <div class="form-row form-row-flag-action">
     <label for="node-input-seenAction">Seen</label>
@@ -135,7 +129,7 @@
     <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
     <dd>ACK token emitted by <b>imap email in</b>.</dd>
     <dt>msg.imap.ackAction <span class="property-type">object</span></dt>
-    <dd>When Mode is <code>set by msg.</code>, the configured message property contains action, target folder and flag actions.</dd>
+    <dd>When Mode is <code>set by msg.</code>, this fixed message property contains action, target folder and flag actions.</dd>
   </dl>
 
   <h3>Outputs</h3>
@@ -155,8 +149,6 @@
     <dd><code>delete</code>, <code>move</code>, <code>flag</code>, or <code>set by msg.</code>.</dd>
     <dt>Target folder <span class="property-type">string</span></dt>
     <dd>Destination mailbox used by <code>move</code>. The target folder is created automatically if needed.</dd>
-    <dt>Action property <span class="property-type">string</span></dt>
-    <dd>Message property path used by <code>set by msg.</code>. Default: <code>imap.ackAction</code>.</dd>
     <dt>Seen / Answered / Flagged <span class="property-type">no change | set | clear</span></dt>
     <dd>Optional IMAP flag changes for <code>flag</code>. <code>delete</code> and <code>move</code> cannot be combined with flag changes.</dd>
     <dt>Batch size <span class="property-type">number</span></dt>

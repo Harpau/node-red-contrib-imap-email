@@ -20,6 +20,7 @@ test("example flow is importable and contains no credentials", () => {
   assert.equal(flow.some((node) => node.type === "imap queue nack"), false);
   assert.equal(flow.some((node) => node.type === "imap-queue-in"), false);
   assert.equal(flow.some((node) => Object.prototype.hasOwnProperty.call(node, "credentials")), false);
+  assert.equal(flow.some((node) => Object.prototype.hasOwnProperty.call(node, "actionProperty")), false);
 });
 
 test("example flow uses only public imap email nodes", () => {

@@ -106,6 +106,7 @@ Output messages include the server flags as an array:
 
 ```js
 msg.imap.flags // for example ["\\Seen", "\\Flagged"]
+msg.imap.flagState // { deleted: false, seen: true, answered: false, flagged: true }
 ```
 
 ## Delivery Semantics

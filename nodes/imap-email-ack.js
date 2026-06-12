@@ -28,7 +28,7 @@ module.exports = function registerImapEmailAck(RED) {
     node.maxBatchesPerFlush = parseNumber(config.maxBatchesPerFlush, 20, 1, 1000);
     node.actionMode = config.actionMode || config.action || "delete";
     node.targetMailbox = config.targetMailbox || "";
-    node.actionProperty = config.actionProperty || "imap.ackAction";
+    node.actionProperty = "imap.ackAction";
     node.seenAction = config.seenAction || "ignore";
     node.answeredAction = config.answeredAction || "ignore";
     node.flaggedAction = config.flaggedAction || "ignore";
@@ -386,7 +386,7 @@ module.exports = function registerImapEmailAck(RED) {
           throw node.configError;
         }
         plan = node.actionMode === "message"
-          ? normalizeAckActionFromMessage(msg, node.actionProperty)
+          ? normalizeAckActionFromMessage(msg)
           : node.actionPlan;
       } catch (err) {
         msg.imapAck = buildImapAckError({
