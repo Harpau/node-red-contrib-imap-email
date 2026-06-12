@@ -477,7 +477,7 @@ module.exports = function registerImapEmailIn(RED) {
     }
 
     function markInflight(ackToken, meta = {}) {
-      registry.markInflight(node.queueKey, ackToken, meta);
+      return registry.markInflight(node.queueKey, ackToken, meta);
     }
 
     function noteConnectionError(stats, err, operation) {
@@ -497,6 +497,7 @@ module.exports = function registerImapEmailIn(RED) {
 
       const timing = diagnostics.createTimings();
       const stats = buildBaseStats();
+      let activeInflightForStatus = 0;
 
       function finishStats() {
         stats.inflightPruned += registry.pruneExpiredInflight(node.queueKey, node.retryAfterMs);
@@ -504,6 +505,37 @@ module.exports = function registerImapEmailIn(RED) {
         stats.inflightTotal = registry.countAllInflight(node.queueKey);
         stats.timings = timing.finish();
         return stats;
+      }
+
+      function markInflightForFetch(ackToken, meta = {}) {
+        const wasActive = registry.isActiveInflight(
+          node.queueKey,
+          ackToken.uidValidity,
+          ackToken.uid,
+          node.retryAfterMs
+        );
+        const entry = markInflight(ackToken, meta);
+        if (entry && !wasActive) {
+          activeInflightForStatus += 1;
+        }
+        return entry;
+      }
+
+      function removeInflightForFetch(uidValidity, uid) {
+        const wasActive = registry.isActiveInflight(node.queueKey, uidValidity, uid, node.retryAfterMs);
+        const removed = registry.removeInflight(node.queueKey, uidValidity, uid);
+        if (removed && wasActive && activeInflightForStatus > 0) {
+          activeInflightForStatus -= 1;
+        }
+        return removed;
+      }
+
+      function updateSentStatus() {
+        node.status({
+          fill: "green",
+          shape: "dot",
+          text: `sent ${stats.emitted}, inflight ${activeInflightForStatus}/${node.maxInflight}`
+        });
       }
 
       if (node.running) {
@@ -528,6 +560,7 @@ module.exports = function registerImapEmailIn(RED) {
 
       const activeInflight = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
       const capacity = Math.max(0, node.maxInflight - activeInflight);
+      activeInflightForStatus = activeInflight;
       stats.activeInflight = activeInflight;
       stats.capacity = capacity;
 
@@ -609,7 +642,7 @@ module.exports = function registerImapEmailIn(RED) {
               if (deletedUids.length < node.expungeDeletedFrontLimit) {
                 deletedUids.push(uid);
               }
-              registry.removeInflight(node.queueKey, uidValidity, uid);
+              removeInflightForFetch(uidValidity, uid);
             }
             continue;
           }
@@ -628,6 +661,7 @@ module.exports = function registerImapEmailIn(RED) {
 
         let cursorAfterCycle = scanWindow.nextCursor;
         let expungedAny = await expungeDeletedUids(client, uidValidity, deletedUids, stats, timing);
+        activeInflightForStatus = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
         const deletedSeenDuringFetch = [];
         const deletedSeenSet = new Set();
         let connectionInterrupted = false;
@@ -675,7 +709,7 @@ module.exports = function registerImapEmailIn(RED) {
             if (messageDeleted && node.deletedSelection === "exclude") {
               stats.deletedSkippedDuringFetch += 1;
               rememberDeletedDuringFetch(fetchedUid);
-              registry.removeInflight(node.queueKey, uidValidity, fetchedUid);
+              removeInflightForFetch(uidValidity, fetchedUid);
             }
             continue;
           }
@@ -683,7 +717,7 @@ module.exports = function registerImapEmailIn(RED) {
           const messageSize = Number(imapMessage.size);
           if (node.maxMessageBytes > 0 && Number.isFinite(messageSize) && messageSize > node.maxMessageBytes) {
             const err = buildTooLargeError(node.maxMessageBytes);
-            markInflight(ackToken, {
+            markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
             stats.tooLarge += 1;
@@ -707,7 +741,7 @@ module.exports = function registerImapEmailIn(RED) {
             });
             addTiming(timing, "downloadMs", started);
           } catch (err) {
-            markInflight(ackToken, {
+            markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
             stats.parseErrors += 1;
@@ -729,7 +763,7 @@ module.exports = function registerImapEmailIn(RED) {
 
           if (!download || !download.content) {
             stats.missingSource += 1;
-            markInflight(ackToken, {
+            markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
             stats.parseErrors += 1;
@@ -756,7 +790,7 @@ module.exports = function registerImapEmailIn(RED) {
             });
             addTiming(timing, "parseMs", started);
 
-            markInflight(ackToken, {
+            markInflightForFetch(ackToken, {
               messageId: parsed.messageId,
               subject: parsed.subject
             });
@@ -802,9 +836,10 @@ module.exports = function registerImapEmailIn(RED) {
             }
 
             stats.emitted += 1;
+            updateSentStatus();
             send([out, null, null]);
           } catch (err) {
-            markInflight(ackToken, {
+            markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
 

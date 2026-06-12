@@ -502,7 +502,7 @@ test("imap email in limits stored candidates after streaming one front window", 
     internalDate: new Date("2026-01-01T00:00:00Z"),
     source: createMailSource(`Message ${item.uid}`)
   }));
-  const { node, fetchCalls, fetchOneCalls, downloadCalls, commandsDuringFetch } = createCursorTestNode({
+  const { node, statuses, fetchCalls, fetchOneCalls, downloadCalls, commandsDuringFetch } = createCursorTestNode({
     frontWindowSize: 20,
     batchSize: 2,
     maxInflight: 2
@@ -515,14 +515,25 @@ test("imap email in limits stored candidates after streaming one front window", 
     }
   ]);
   const outputs = [];
+  const mailSendStatusTexts = [];
 
-  await node.runFetchCycle({}, (output) => outputs.push(output));
+  await node.runFetchCycle({}, (output) => {
+    outputs.push(output);
+    if (output && output[0]) {
+      const latestStatus = statuses[statuses.length - 1];
+      mailSendStatusTexts.push(latestStatus && latestStatus.text);
+    }
+  });
 
   assert.deepEqual(commandsDuringFetch, []);
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0].range, "1:20");
   assert.equal(fetchOneCalls.length, 2);
   assert.equal(downloadCalls.length, 2);
+  assert.deepEqual(mailSendStatusTexts, [
+    "sent 1, inflight 1/2",
+    "sent 2, inflight 2/2"
+  ]);
 
   const stats = collectStats(outputs)[0];
   assert.equal(stats.frontWindowRead, 20);
