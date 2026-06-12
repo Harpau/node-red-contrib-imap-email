@@ -15,6 +15,11 @@ const {
   flagsToState,
   headersToObject
 } = require("../lib/imap-utils");
+const {
+  formatImapError,
+  isTransientImapConnectionError,
+  safeLogout
+} = require("../lib/imap-connection");
 const diagnostics = require("../lib/diagnostics");
 
 const DEFAULT_DOWNLOAD_CHUNK_SIZE = 64 * 1024;
@@ -130,6 +135,26 @@ function parseMailStream(source, options = {}) {
     let settled = false;
     let reading = false;
 
+    function unpipeQuietly(from, to) {
+      try {
+        if (from && typeof from.unpipe === "function") {
+          from.unpipe(to);
+        }
+      } catch (ignored) {
+        // ignore
+      }
+    }
+
+    function destroyQuietly(stream) {
+      try {
+        if (stream && typeof stream.destroy === "function" && !stream.destroyed) {
+          stream.destroy();
+        }
+      } catch (ignored) {
+        // ignore
+      }
+    }
+
     function finish(err, value) {
       if (settled) {
         return;
@@ -137,16 +162,11 @@ function parseMailStream(source, options = {}) {
       settled = true;
 
       if (err) {
-        try {
-          source.destroy(err);
-        } catch (ignored) {
-          // ignore
-        }
-        try {
-          parser.destroy(err);
-        } catch (ignored) {
-          // ignore
-        }
+        unpipeQuietly(source, counter);
+        unpipeQuietly(counter, parser);
+        destroyQuietly(source);
+        destroyQuietly(counter);
+        destroyQuietly(parser);
         reject(err);
       } else {
         resolve(value);
@@ -196,9 +216,9 @@ function parseMailStream(source, options = {}) {
       }
     });
 
-    parser.once("error", finish);
-    counter.once("error", finish);
-    source.once("error", finish);
+    parser.on("error", finish);
+    counter.on("error", finish);
+    source.on("error", finish);
 
     parser.once("end", () => {
       headersToMailFields(mail);
@@ -322,6 +342,7 @@ module.exports = function registerImapEmailIn(RED) {
         missingSource: 0,
         missingMessages: 0,
         tooLarge: 0,
+        connectionErrors: 0,
         maxMessageBytes: node.maxMessageBytes,
         downloadChunkSize: node.downloadChunkSize,
         skipped: false,
@@ -457,6 +478,13 @@ module.exports = function registerImapEmailIn(RED) {
 
     function markInflight(ackToken, meta = {}) {
       registry.markInflight(node.queueKey, ackToken, meta);
+    }
+
+    function noteConnectionError(stats, err, operation) {
+      stats.ok = false;
+      stats.error = err.message;
+      stats.connectionErrors += 1;
+      diagnostics.warn(node, `${operation} failed for ${node.mailbox}: ${formatImapError(err)}`);
     }
 
     node.runFetchCycle = async function runFetchCycle(triggerMsg, send) {
@@ -602,6 +630,7 @@ module.exports = function registerImapEmailIn(RED) {
         let expungedAny = await expungeDeletedUids(client, uidValidity, deletedUids, stats, timing);
         const deletedSeenDuringFetch = [];
         const deletedSeenSet = new Set();
+        let connectionInterrupted = false;
 
         function rememberDeletedDuringFetch(uid) {
           if (deletedSeenSet.has(uid)) {
@@ -690,6 +719,11 @@ module.exports = function registerImapEmailIn(RED) {
               },
               null
             ]);
+            if (isTransientImapConnectionError(err)) {
+              noteConnectionError(stats, err, "IMAP download");
+              connectionInterrupted = true;
+              break;
+            }
             continue;
           }
 
@@ -788,15 +822,25 @@ module.exports = function registerImapEmailIn(RED) {
               },
               null
             ]);
+            if (isTransientImapConnectionError(err)) {
+              noteConnectionError(stats, err, "IMAP parse");
+              connectionInterrupted = true;
+              break;
+            }
           }
         }
 
-        if (deletedSeenDuringFetch.length > 0) {
+        if (!connectionInterrupted && deletedSeenDuringFetch.length > 0) {
           const didExpunge = await expungeDeletedUids(client, uidValidity, deletedSeenDuringFetch, stats, timing);
           expungedAny = expungedAny || didExpunge;
         }
 
-        if (expungedAny) {
+        if (connectionInterrupted) {
+          cursorAfterCycle = windowStart;
+          stats.scanCursorAdjusted = true;
+          stats.scanCursorNext = cursorAfterCycle;
+          stats.scanWrapped = cursorAfterCycle === 1;
+        } else if (expungedAny) {
           cursorAfterCycle = windowStart;
           stats.scanCursorAdjusted = true;
           stats.scanCursorNext = cursorAfterCycle;
@@ -809,13 +853,17 @@ module.exports = function registerImapEmailIn(RED) {
         finishStats();
         emitStats(send, stats);
         node.status({
-          fill: stats.emitted > 0 ? "green" : "grey",
-          shape: "dot",
-          text: `sent ${stats.emitted}, inflight ${stats.activeInflightAfter}/${node.maxInflight}`
+          fill: stats.ok ? (stats.emitted > 0 ? "green" : "grey") : "red",
+          shape: stats.ok ? "dot" : "ring",
+          text: stats.ok ? `sent ${stats.emitted}, inflight ${stats.activeInflightAfter}/${node.maxInflight}` : stats.error
         });
       } catch (err) {
+        const transientConnectionError = isTransientImapConnectionError(err);
         stats.ok = false;
         stats.error = err.message;
+        if (transientConnectionError) {
+          stats.connectionErrors += 1;
+        }
         finishStats();
 
         node.status({ fill: "red", shape: "ring", text: err.message });
@@ -831,7 +879,11 @@ module.exports = function registerImapEmailIn(RED) {
           null
         ]);
         emitStats(send, stats);
-        node.error(err, triggerMsg);
+        if (transientConnectionError) {
+          diagnostics.warn(node, `IMAP fetch failed for ${node.mailbox}: ${formatImapError(err)}`);
+        } else {
+          node.error(err, triggerMsg);
+        }
       } finally {
         try {
           if (lock) {
@@ -843,8 +895,10 @@ module.exports = function registerImapEmailIn(RED) {
         try {
           if (client) {
             const started = Date.now();
-            await client.logout();
-            addTiming(timing, "logoutMs", started);
+            const result = await safeLogout(client);
+            if (!result.skipped) {
+              addTiming(timing, "logoutMs", started);
+            }
           }
         } catch (err) {
           // ignore

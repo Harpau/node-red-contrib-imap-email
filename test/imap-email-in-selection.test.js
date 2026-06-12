@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { Readable } = require("node:stream");
+const { PassThrough, Readable } = require("node:stream");
 const test = require("node:test");
 const {
   normalizeFlagSelection,
@@ -34,6 +34,9 @@ function readExampleFlow() {
 
 function createInputNode(config = {}, options = {}) {
   let InputCtor;
+  const statuses = options.statuses || [];
+  const warnings = options.warnings || [];
+  const errors = options.errors || [];
   const account = {
     id: "account-1",
     host: "imap.example.test",
@@ -46,8 +49,9 @@ function createInputNode(config = {}, options = {}) {
     nodes: {
       createNode(node) {
         node.id = "node-1";
-        node.status = () => {};
-        node.error = () => {};
+        node.status = (status) => statuses.push(status);
+        node.warn = (message) => warnings.push(message);
+        node.error = (err) => errors.push(err);
         node.on = () => {};
       },
       getNode(id) {
@@ -81,7 +85,16 @@ function findMessage(mailbox, uid) {
   return messages.find((message) => Number(message.uid) === Number(uid));
 }
 
+function createConnectionError(message, code) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
 function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValidity: "uidv-1" }]) {
+  const statuses = [];
+  const warnings = [];
+  const errors = [];
   const fetchCalls = [];
   const fetchOneCalls = [];
   const downloadCalls = [];
@@ -105,13 +118,22 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
       mailboxIndex += 1;
 
       return {
+        usable: currentMailbox.usable,
+        isClosed: currentMailbox.isClosed,
         capabilities: new Set(currentMailbox.capabilities || []),
         mailbox: {
           exists: currentMailbox.exists,
           uidValidity: currentMailbox.uidValidity
         },
-        async connect() {},
+        async connect() {
+          if (typeof currentMailbox.connect === "function") {
+            return currentMailbox.connect();
+          }
+        },
         async getMailboxLock(mailbox) {
+          if (typeof currentMailbox.getMailboxLock === "function") {
+            return currentMailbox.getMailboxLock(mailbox);
+          }
           return {
             release() {
               releasedLocks.push(mailbox);
@@ -167,6 +189,9 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
           return true;
         },
         async logout() {
+          if (typeof currentMailbox.logout === "function") {
+            return currentMailbox.logout();
+          }
           loggedOutClients.push(currentMailbox.uidValidity);
         }
       };
@@ -178,11 +203,14 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
     includeAttachments: false,
     emitRaw: false,
     ...config
-  }, { account });
+  }, { account, statuses, warnings, errors });
   registry.clearQueue(node.queueKey);
 
   return {
     node,
+    statuses,
+    warnings,
+    errors,
     fetchCalls,
     fetchOneCalls,
     downloadCalls,
@@ -500,6 +528,199 @@ test("imap email in limits stored candidates after streaming one front window", 
   assert.equal(stats.frontWindowRead, 20);
   assert.equal(stats.candidates, 20);
   assert.equal(stats.emitted, 2);
+});
+
+test("imap email in handles transient connect, lock and fetch errors without node.error", async () => {
+  const cases = [
+    {
+      name: "connect",
+      code: "ENOTFOUND",
+      message: "getaddrinfo ENOTFOUND imap.strato.de",
+      apply(mailbox, err) {
+        mailbox.connect = () => {
+          throw err;
+        };
+      },
+      expectReleasedLock: false
+    },
+    {
+      name: "lock",
+      code: "NoConnection",
+      message: "Connection not available",
+      apply(mailbox, err) {
+        mailbox.getMailboxLock = () => {
+          throw err;
+        };
+      },
+      expectReleasedLock: false
+    },
+    {
+      name: "fetchOne",
+      code: "EADDRNOTAVAIL",
+      message: "read EADDRNOTAVAIL",
+      apply(mailbox, err) {
+        mailbox.fetchOne = () => {
+          throw err;
+        };
+      },
+      expectReleasedLock: true
+    }
+  ];
+
+  for (const item of cases) {
+    const err = createConnectionError(item.message, item.code);
+    const mailbox = {
+      usable: false,
+      exists: 1,
+      uidValidity: `uidv-${item.name}`,
+      front: [{ uid: 11, flags: [], size: 100 }],
+      messages: [{
+        uid: 11,
+        flags: [],
+        envelope: { subject: "Transient" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Transient")
+      }]
+    };
+    item.apply(mailbox, err);
+
+    const { node, statuses, warnings, errors, releasedLocks, loggedOutClients } = createCursorTestNode({
+      frontWindowSize: 1,
+      batchSize: 1
+    }, [mailbox]);
+    const outputs = [];
+
+    await node.runFetchCycle({}, (output) => outputs.push(output));
+
+    assert.equal(node.running, false, `${item.name} must reset running state`);
+    assert.equal(errors.length, 0, `${item.name} must not call node.error`);
+    assert.equal(warnings.length, 1, `${item.name} must warn once`);
+    assert.match(String(warnings[0]), new RegExp(item.code), `${item.name} warning must include the connection code`);
+    assert.equal(loggedOutClients.length, 0, `${item.name} must not logout a closed client`);
+    assert.deepEqual(releasedLocks, item.expectReleasedLock ? ["INBOX"] : []);
+    assert.equal(statuses[statuses.length - 1].fill, "red");
+
+    const errorOutput = outputs.find((output) => output && output[1]);
+    assert.equal(errorOutput[1].error.code, item.code);
+
+    const stats = collectStats(outputs)[0];
+    assert.equal(stats.ok, false);
+    assert.equal(stats.connectionErrors, 1);
+    assert.match(stats.error, new RegExp(item.message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
+test("imap email in handles transient download errors without node.error", async () => {
+  const err = createConnectionError("Connection not available", "NoConnection");
+  const { node, statuses, warnings, errors, releasedLocks, loggedOutClients, downloadCalls } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1
+  }, [
+    {
+      usable: false,
+      exists: 1,
+      uidValidity: "uidv-download-connection",
+      front: [{ uid: 22, flags: [], size: 100 }],
+      messages: [{
+        uid: 22,
+        flags: [],
+        envelope: { subject: "Download lost" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Download lost")
+      }],
+      download() {
+        throw err;
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0]), /NoConnection/);
+  assert.deepEqual(releasedLocks, ["INBOX"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.equal(downloadCalls.length, 1);
+  assert.equal(node.scanCursor, 1);
+  assert.equal(statuses[statuses.length - 1].fill, "red");
+
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.code, "NoConnection");
+  assert.equal(errorOutput[1].imap.uid, 22);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.ok, false);
+  assert.equal(stats.connectionErrors, 1);
+  assert.equal(stats.scanCursorAdjusted, true);
+});
+
+test("imap email in swallows late download stream errors after parse failure", async () => {
+  const firstErr = createConnectionError("Connection not available", "NoConnection");
+  const lateErr = createConnectionError("Connection not available", "NoConnection");
+  const unexpectedProcessErrors = [];
+  const recordUnexpected = (err) => unexpectedProcessErrors.push(err);
+  const source = new PassThrough();
+  const { node, warnings, errors, loggedOutClients } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1
+  }, [
+    {
+      usable: false,
+      exists: 1,
+      uidValidity: "uidv-late-stream-error",
+      front: [{ uid: 33, flags: [], size: 100 }],
+      messages: [{
+        uid: 33,
+        flags: [],
+        envelope: { subject: "Late stream error" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Late stream error")
+      }],
+      download() {
+        setImmediate(() => {
+          source.emit("error", firstErr);
+          setImmediate(() => {
+            source.emit("error", lateErr);
+          });
+        });
+        return {
+          meta: { expectedSize: 100 },
+          content: source
+        };
+      }
+    }
+  ]);
+  const outputs = [];
+
+  process.prependListener("uncaughtException", recordUnexpected);
+  process.prependListener("unhandledRejection", recordUnexpected);
+
+  try {
+    await node.runFetchCycle({}, (output) => outputs.push(output));
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    process.removeListener("uncaughtException", recordUnexpected);
+    process.removeListener("unhandledRejection", recordUnexpected);
+  }
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.deepEqual(unexpectedProcessErrors, []);
+  assert.equal(warnings.length, 1);
+  assert.equal(loggedOutClients.length, 0);
+
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.code, "NoConnection");
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.ok, false);
+  assert.equal(stats.connectionErrors, 1);
 });
 
 test("imap email in rejects known oversized messages without downloading them", async () => {

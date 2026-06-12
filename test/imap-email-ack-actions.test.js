@@ -24,6 +24,12 @@ function sampleToken(uid = 123) {
   };
 }
 
+function createConnectionError(message, code) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
 function createAckNode(config = {}, clientFactory) {
   let AckCtor;
   const statuses = [];
@@ -363,4 +369,146 @@ test("ack runtime handles chunk failures at chunk granularity", async () => {
   assert.equal(registry.isActiveInflight(key, "uidv-1", 2, 10000, 2000), false);
   assert.equal(registry.isActiveInflight(key, "uidv-1", 3, 10000, 2000), true);
   assert.equal(registry.isActiveInflight(key, "uidv-1", 4, 10000, 2000), true);
+});
+
+test("ack runtime handles transient connect failures without node.error", async () => {
+  const err = createConnectionError("getaddrinfo ENOTFOUND imap.strato.de", "ENOTFOUND");
+  const { node, warnings, errors } = createAckNode({
+    actionMode: "delete",
+    batchSize: 1,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    usable: false,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {
+      throw err;
+    },
+    async logout() {
+      throw new Error("logout should be skipped for closed clients");
+    }
+  }));
+
+  const itemOutputs = [];
+  let doneCount = 0;
+  node.pending.push({
+    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
+    send: sendWithCapture(itemOutputs),
+    done: () => {
+      doneCount += 1;
+    },
+    token: sampleToken(1),
+    plan: node.actionPlan,
+    enqueuedAt: Date.now()
+  });
+
+  await node.flush();
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0]), /ENOTFOUND/);
+  assert.equal(doneCount, 1);
+  assert.equal(itemOutputs.length, 1);
+  assert.equal(itemOutputs[0][1].imapAck.ok, false);
+  assert.equal(itemOutputs[0][1].imapAck.error, "getaddrinfo ENOTFOUND imap.strato.de");
+});
+
+test("ack runtime fails remaining chunks after a transient action connection loss", async () => {
+  const err = createConnectionError("read ECONNRESET", "ECONNRESET");
+  const clientCalls = [];
+  const { node, warnings, errors } = createAckNode({
+    actionMode: "delete",
+    batchSize: 4,
+    maxUidPerCommand: 2,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    usable: true,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async messageDelete(range) {
+      clientCalls.push(range);
+      throw err;
+    },
+    async logout() {}
+  }));
+
+  const itemOutputs = [];
+  let doneCount = 0;
+  for (const uid of [1, 2, 3, 4]) {
+    node.pending.push({
+      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
+      send: sendWithCapture(itemOutputs),
+      done: () => {
+        doneCount += 1;
+      },
+      token: sampleToken(uid),
+      plan: node.actionPlan,
+      enqueuedAt: Date.now()
+    });
+  }
+
+  await node.flush();
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.deepEqual(clientCalls, ["1:2"]);
+  assert.equal(warnings.length, 2);
+  assert.equal(doneCount, 4);
+  assert.equal(itemOutputs.filter((output) => output[1]).length, 4);
+  assert.deepEqual(
+    itemOutputs.filter((output) => output[1]).map((output) => output[1].imapAck.uid),
+    [1, 2, 3, 4]
+  );
+});
+
+test("ack runtime ignores transient logout failures after successful actions", async () => {
+  const err = createConnectionError("Connection not available", "NoConnection");
+  const clientCalls = [];
+  const { node, warnings, errors } = createAckNode({
+    actionMode: "delete",
+    batchSize: 1,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    usable: true,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async messageDelete(range) {
+      clientCalls.push(range);
+    },
+    async logout() {
+      throw err;
+    }
+  }));
+
+  const itemOutputs = [];
+  let doneCount = 0;
+  node.pending.push({
+    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
+    send: sendWithCapture(itemOutputs),
+    done: () => {
+      doneCount += 1;
+    },
+    token: sampleToken(1),
+    plan: node.actionPlan,
+    enqueuedAt: Date.now()
+  });
+
+  await node.flush();
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 0);
+  assert.deepEqual(clientCalls, ["1"]);
+  assert.equal(doneCount, 1);
+  assert.equal(itemOutputs.length, 1);
+  assert.equal(itemOutputs[0][0].imapAck.ok, true);
 });

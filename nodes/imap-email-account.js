@@ -2,15 +2,7 @@
 
 const { ImapFlow } = require("imapflow");
 const { parseNumber, parseBoolean } = require("../lib/imap-utils");
-
-function errorMessage(err) {
-  if (!err) {
-    return "Unknown IMAP client error";
-  }
-
-  const message = err.message || String(err);
-  return err.code ? `${message} (${err.code})` : message;
-}
+const { formatImapError } = require("../lib/imap-connection");
 
 module.exports = function registerImapEmailAccount(RED) {
   function ImapEmailAccountNode(config) {
@@ -70,7 +62,7 @@ module.exports = function registerImapEmailAccount(RED) {
     // exception and the Node-RED runtime can exit. Keep this handler deliberately
     // small and non-throwing.
     client.on("error", (err) => {
-      const message = `${context} IMAP connection error: ${errorMessage(err)}`;
+      const message = `${context} IMAP connection error: ${formatImapError(err)}`;
 
       try {
         if (typeof options.onError === "function") {
@@ -82,22 +74,11 @@ module.exports = function registerImapEmailAccount(RED) {
         // Never throw from an EventEmitter error handler.
         try {
           if (ownerNode && typeof ownerNode.warn === "function") {
-            ownerNode.warn(`${context} IMAP error handler failed: ${errorMessage(handlerErr)}`);
+            ownerNode.warn(`${context} IMAP error handler failed: ${formatImapError(handlerErr)}`);
           }
         } catch (ignored) {
           // ignore
         }
-      }
-
-      // A reset IMAP/TLS connection is no longer useful for the current command.
-      // closeAfter() is designed for use from error handlers and lets the current
-      // tick finish before the socket is torn down.
-      try {
-        if (typeof client.closeAfter === "function") {
-          client.closeAfter();
-        }
-      } catch (ignored) {
-        // ignore
       }
     });
 

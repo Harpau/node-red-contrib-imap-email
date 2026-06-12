@@ -43,6 +43,10 @@ test("account-created IMAP clients handle asynchronous error events", () => {
   };
 
   const client = account.createClient({ context: "test client" });
+  let closeAfterCalls = 0;
+  client.closeAfter = () => {
+    closeAfterCalls += 1;
+  };
 
   assert.doesNotThrow(() => {
     const err = new Error("read ECONNRESET");
@@ -51,5 +55,6 @@ test("account-created IMAP clients handle asynchronous error events", () => {
   });
 
   assert.equal(warnings.length, 1);
+  assert.equal(closeAfterCalls, 0);
   assert.match(warnings[0], /test client IMAP connection error: read ECONNRESET \(ECONNRESET\)/);
 });

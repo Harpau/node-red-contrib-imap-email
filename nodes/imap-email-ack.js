@@ -5,6 +5,10 @@ const registry = require("../lib/runtime-registry");
 const { chunkUids, compressUids } = require("../lib/uid-range");
 const { parseNumber } = require("../lib/imap-utils");
 const {
+  isTransientImapConnectionError,
+  safeLogout
+} = require("../lib/imap-connection");
+const {
   normalizeAckAction,
   normalizeAckActionFromMessage,
   buildImapAckResult,
@@ -256,6 +260,7 @@ module.exports = function registerImapEmailAck(RED) {
             }
 
             let targetMailboxEnsured = false;
+            let connectionInterrupted = null;
             for (const uidChunk of uidChunks) {
               const range = compressUids(uidChunk);
               const chunkItems = itemsForChunk(uidChunk);
@@ -272,6 +277,10 @@ module.exports = function registerImapEmailAck(RED) {
               });
 
               try {
+                if (connectionInterrupted) {
+                  throw connectionInterrupted;
+                }
+
                 if (needsImap) {
                   const t = Date.now();
                   await executeAckActionRange({
@@ -312,6 +321,9 @@ module.exports = function registerImapEmailAck(RED) {
                 });
                 failItems(chunkItems, range, err);
                 node.warn(`IMAP ACK failed for ${mailbox} ${range}: ${err.message}`);
+                if (isTransientImapConnectionError(err)) {
+                  connectionInterrupted = err;
+                }
               }
             }
           } catch (err) {
@@ -328,8 +340,10 @@ module.exports = function registerImapEmailAck(RED) {
             try {
               if (client) {
                 const t = Date.now();
-                await client.logout();
-                addTiming(stats.timings, "logoutMs", t);
+                const result = await safeLogout(client);
+                if (!result.skipped) {
+                  addTiming(stats.timings, "logoutMs", t);
+                }
               }
             } catch (err) {
               // ignore
