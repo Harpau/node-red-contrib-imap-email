@@ -84,6 +84,8 @@ Front window     maximum messages inspected per trigger from the current cursor
 Max inflight     maximum emitted but not-yet-ACKed messages tracked in memory
 Retry after ms   time after which an un-ACKed message may be emitted again
 UIDs/command     maximum UID count per IMAP command chunk
+Max bytes        maximum RFC822 bytes per message, 0 means unlimited
+Chunk bytes      streamed IMAP download chunk size
 ```
 
 Selection settings:
@@ -108,6 +110,13 @@ Output messages include the server flags as an array:
 msg.imap.flags // for example ["\\Seen", "\\Flagged"]
 msg.imap.flagState // { deleted: false, seen: true, answered: false, flagged: true }
 ```
+
+Message bodies are downloaded as streams after the bounded front window has
+selected candidate UIDs. Attachments are drained without buffering unless
+`Attachments` is enabled. `Raw source` intentionally buffers the full RFC822
+message in `msg.raw`; keep it disabled for very large messages. Set `Max bytes`
+to a positive value to reject oversized messages on output 2 with
+`msg.imap.ackToken` instead of parsing them.
 
 ## Delivery Semantics
 

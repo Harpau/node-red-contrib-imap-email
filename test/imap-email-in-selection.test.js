@@ -3,12 +3,14 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { Readable } = require("node:stream");
 const test = require("node:test");
 const {
   normalizeFlagSelection,
   matchesFlagSelections,
   flagsToState
 } = require("../lib/imap-utils");
+const registry = require("../lib/runtime-registry");
 const registerImapEmailIn = require("../nodes/imap-email-in");
 
 const root = path.resolve(__dirname, "..");
@@ -64,8 +66,27 @@ function createInputNode(config = {}, options = {}) {
   return new InputCtor({ account: "account-1", ...config });
 }
 
+function sourceToStream(source) {
+  if (source && typeof source.pipe === "function") {
+    return source;
+  }
+  if (Array.isArray(source)) {
+    return Readable.from(source);
+  }
+  return Readable.from([Buffer.isBuffer(source) ? source : Buffer.from(String(source || ""))]);
+}
+
+function findMessage(mailbox, uid) {
+  const messages = mailbox.messages || mailbox.front || [];
+  return messages.find((message) => Number(message.uid) === Number(uid));
+}
+
 function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValidity: "uidv-1" }]) {
   const fetchCalls = [];
+  const fetchOneCalls = [];
+  const downloadCalls = [];
+  const messageDeleteCalls = [];
+  const commandsDuringFetch = [];
   const releasedLocks = [];
   const loggedOutClients = [];
   let mailboxIndex = 0;
@@ -84,6 +105,7 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
       mailboxIndex += 1;
 
       return {
+        capabilities: new Set(currentMailbox.capabilities || []),
         mailbox: {
           exists: currentMailbox.exists,
           uidValidity: currentMailbox.uidValidity
@@ -96,9 +118,53 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
             }
           };
         },
-        async fetchAll(range, query, options) {
+        async *fetch(range, query, options) {
           fetchCalls.push({ range, query, options });
-          return currentMailbox.front || [];
+          this.inFetch = true;
+          try {
+            for (const item of currentMailbox.front || []) {
+              yield item;
+            }
+          } finally {
+            this.inFetch = false;
+          }
+        },
+        async fetchOne(uid, query, options) {
+          if (this.inFetch) {
+            commandsDuringFetch.push("fetchOne");
+          }
+          fetchOneCalls.push({ uid, query, options });
+          if (typeof currentMailbox.fetchOne === "function") {
+            return currentMailbox.fetchOne(uid, query, options);
+          }
+          return findMessage(currentMailbox, uid) || null;
+        },
+        async download(uid, part, options) {
+          if (this.inFetch) {
+            commandsDuringFetch.push("download");
+          }
+          downloadCalls.push({ uid, part, options });
+          if (typeof currentMailbox.download === "function") {
+            return currentMailbox.download(uid, part, options);
+          }
+          const message = findMessage(currentMailbox, uid);
+          if (!message || message.source === undefined || message.source === null) {
+            return {};
+          }
+          return {
+            meta: { expectedSize: message.size },
+            content: sourceToStream(message.source)
+          };
+        },
+        async messageDelete(range, options) {
+          if (this.inFetch) {
+            commandsDuringFetch.push("messageDelete");
+          }
+          messageDeleteCalls.push({ range, options });
+          if (typeof currentMailbox.messageDelete === "function") {
+            return currentMailbox.messageDelete(range, options);
+          }
+          return true;
         },
         async logout() {
           loggedOutClients.push(currentMailbox.uidValidity);
@@ -107,14 +173,21 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
     }
   };
 
+  const node = createInputNode({
+    diagnostics: "stats",
+    includeAttachments: false,
+    emitRaw: false,
+    ...config
+  }, { account });
+  registry.clearQueue(node.queueKey);
+
   return {
-    node: createInputNode({
-      diagnostics: "stats",
-      includeAttachments: false,
-      emitRaw: false,
-      ...config
-    }, { account }),
+    node,
     fetchCalls,
+    fetchOneCalls,
+    downloadCalls,
+    messageDeleteCalls,
+    commandsDuringFetch,
     releasedLocks,
     loggedOutClients
   };
@@ -131,6 +204,30 @@ function createMailSource(subject = "Hello") {
   ].join("\r\n");
 }
 
+function createMailWithAttachment(subject = "Attachment") {
+  return [
+    `Subject: ${subject}`,
+    "Message-ID: <attachment-1@example.test>",
+    "From: sender@example.test",
+    "To: receiver@example.test",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/mixed; boundary="test-boundary"',
+    "",
+    "--test-boundary",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    "Body",
+    "--test-boundary",
+    "Content-Type: text/plain; name=\"note.txt\"",
+    "Content-Disposition: attachment; filename=\"note.txt\"",
+    "Content-Transfer-Encoding: base64",
+    "",
+    Buffer.from("attachment-body").toString("base64"),
+    "--test-boundary--",
+    ""
+  ].join("\r\n");
+}
+
 function collectStats(outputs) {
   return outputs
     .filter((output) => output && output[2] && output[2].payload)
@@ -138,9 +235,9 @@ function collectStats(outputs) {
 }
 
 function findHtmlDefault(html, field) {
-  const pattern = new RegExp(`${field}:\\s*\\{\\s*value:\\s*['"]([^'"]+)['"]`);
+  const pattern = new RegExp(`${field}:\\s*\\{\\s*value:\\s*(?:['"]([^'"]+)['"]|([^,}\\s]+))`);
   const match = html.match(pattern);
-  return match && match[1];
+  return match && (match[1] || match[2]);
 }
 
 function findSelectBlock(html, field) {
@@ -155,6 +252,8 @@ test("imap email in selection defaults match the design decision", () => {
   for (const [field, expected] of Object.entries(selectionDefaults)) {
     assert.equal(findHtmlDefault(html, field), expected, `${field} must default to ${expected}`);
   }
+  assert.equal(findHtmlDefault(html, "maxMessageBytes"), "0");
+  assert.equal(findHtmlDefault(html, "downloadChunkSize"), "65536");
 
   const node = createInputNode();
   assert.deepEqual(node.selection, {
@@ -163,6 +262,8 @@ test("imap email in selection defaults match the design decision", () => {
     answered: "ignore",
     flagged: "ignore"
   });
+  assert.equal(node.maxMessageBytes, 0);
+  assert.equal(node.downloadChunkSize, 65536);
 });
 
 test("legacy skipDeleted maps to deletedSelection only when selection is absent", () => {
@@ -172,6 +273,26 @@ test("legacy skipDeleted maps to deletedSelection only when selection is absent"
     createInputNode({ skipDeleted: false, deletedSelection: "require" }).deletedSelection,
     "require"
   );
+});
+
+test("imap email in normalizes numeric limits to integers", () => {
+  const node = createInputNode({
+    batchSize: "2.9",
+    frontWindowSize: "3.9",
+    maxInflight: "4.9",
+    maxUidPerCommand: "5.9",
+    expungeDeletedFrontLimit: "6.9",
+    maxMessageBytes: "123.9",
+    downloadChunkSize: "999"
+  });
+
+  assert.equal(node.batchSize, 2);
+  assert.equal(node.frontWindowSize, 3);
+  assert.equal(node.maxInflight, 4);
+  assert.equal(node.maxUidPerCommand, 5);
+  assert.equal(node.expungeDeletedFrontLimit, 6);
+  assert.equal(node.maxMessageBytes, 123);
+  assert.equal(node.downloadChunkSize, 1024);
 });
 
 test("internal flag selection helpers map UI values to IMAP flags", () => {
@@ -217,6 +338,9 @@ test("example flow serializes imap email in selection fields", () => {
     assert.equal(inputNode[field], expected, `example flow must serialize ${field}`);
   }
 
+  assert.equal(inputNode.maxMessageBytes, "0");
+  assert.equal(inputNode.downloadChunkSize, "65536");
+
   assert.equal(
     Object.prototype.hasOwnProperty.call(inputNode, "skipDeleted"),
     false,
@@ -254,44 +378,21 @@ test("imap email in outputs both raw flags and flagState", async () => {
         {
           uid: 123,
           flags: ["\\Seen", "\\Flagged"],
-          envelope: { subject: "Hello" },
-          internalDate: new Date("2026-01-01T00:00:00Z"),
           size: 100
         }
-      ]
-    }
-  ]);
-  node.account.createClient = () => ({
-    mailbox: { exists: 1, uidValidity: "uidv-1" },
-    async connect() {},
-    async getMailboxLock() {
-      return { release() {} };
-    },
-    async fetchAll(range, query, options) {
-      if (options && options.uid) {
-        return [
-          {
-            uid: 123,
-            flags: ["\\Seen", "\\Flagged"],
-            envelope: { subject: "Hello" },
-            internalDate: new Date("2026-01-01T00:00:00Z"),
-            size: 100,
-            source: createMailSource("Hello")
-          }
-        ];
-      }
-      return [
+      ],
+      messages: [
         {
           uid: 123,
           flags: ["\\Seen", "\\Flagged"],
           envelope: { subject: "Hello" },
           internalDate: new Date("2026-01-01T00:00:00Z"),
-          size: 100
+          size: 100,
+          source: createMailSource("Hello")
         }
-      ];
-    },
-    async logout() {}
-  });
+      ]
+    }
+  ]);
 
   const outputs = [];
   await node.runFetchCycle({}, (output) => outputs.push(output));
@@ -361,6 +462,261 @@ test("imap email in resets the scan cursor on UIDVALIDITY changes", async () => 
   assert.equal(stats[1].uidValidity, "uidv-2");
 });
 
+test("imap email in limits stored candidates after streaming one front window", async () => {
+  const front = Array.from({ length: 20 }, (_, index) => ({
+    uid: index + 1,
+    flags: [],
+    size: 80
+  }));
+  const messages = front.map((item) => ({
+    ...item,
+    envelope: { subject: `Message ${item.uid}` },
+    internalDate: new Date("2026-01-01T00:00:00Z"),
+    source: createMailSource(`Message ${item.uid}`)
+  }));
+  const { node, fetchCalls, fetchOneCalls, downloadCalls, commandsDuringFetch } = createCursorTestNode({
+    frontWindowSize: 20,
+    batchSize: 2,
+    maxInflight: 2
+  }, [
+    {
+      exists: 20,
+      uidValidity: "uidv-1",
+      front,
+      messages
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(commandsDuringFetch, []);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].range, "1:20");
+  assert.equal(fetchOneCalls.length, 2);
+  assert.equal(downloadCalls.length, 2);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.frontWindowRead, 20);
+  assert.equal(stats.candidates, 20);
+  assert.equal(stats.emitted, 2);
+});
+
+test("imap email in rejects known oversized messages without downloading them", async () => {
+  const { node, downloadCalls } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    maxMessageBytes: 10
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-oversize",
+      front: [{ uid: 77, flags: [], size: 100 }],
+      messages: [{
+        uid: 77,
+        flags: [],
+        envelope: { subject: "Too big" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Too big")
+      }]
+    }
+  ]);
+  registry.clearQueue(node.queueKey);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(downloadCalls.length, 0);
+  assert.equal(registry.countAllInflight(node.queueKey), 1);
+
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.code, "IMAP_EMAIL_MESSAGE_TOO_LARGE");
+  assert.equal(errorOutput[1].imap.uid, 77);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.tooLarge, 1);
+  assert.equal(stats.emitted, 0);
+});
+
+test("imap email in aborts unknown-size streams that exceed maxMessageBytes", async () => {
+  const { node, downloadCalls } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    maxMessageBytes: 20
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-stream-oversize",
+      front: [{ uid: 88, flags: [] }],
+      messages: [{
+        uid: 88,
+        flags: [],
+        envelope: { subject: "Unknown big" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        source: createMailSource("Unknown big").repeat(10)
+      }]
+    }
+  ]);
+  registry.clearQueue(node.queueKey);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(downloadCalls.length, 1);
+  assert.equal(registry.countAllInflight(node.queueKey), 1);
+
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.code, "IMAP_EMAIL_MESSAGE_TOO_LARGE");
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.tooLarge, 1);
+});
+
+test("imap email in drains attachments unless attachment output is enabled", async () => {
+  const source = createMailWithAttachment("With attachment");
+  const mailbox = {
+    exists: 1,
+    uidValidity: "uidv-attachment",
+    front: [{ uid: 99, flags: [], size: Buffer.byteLength(source) }],
+    messages: [{
+      uid: 99,
+      flags: [],
+      envelope: { subject: "With attachment" },
+      internalDate: new Date("2026-01-01T00:00:00Z"),
+      size: Buffer.byteLength(source),
+      source
+    }]
+  };
+
+  const noAttachments = createCursorTestNode({ frontWindowSize: 1, batchSize: 1 }, [mailbox]);
+  const noAttachmentOutputs = [];
+  await noAttachments.node.runFetchCycle({}, (output) => noAttachmentOutputs.push(output));
+  const noAttachmentMail = noAttachmentOutputs.find((output) => output && output[0]);
+  assert.equal(Object.prototype.hasOwnProperty.call(noAttachmentMail[0].email, "attachments"), false);
+
+  const withAttachments = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    includeAttachments: true
+  }, [mailbox]);
+  const attachmentOutputs = [];
+  await withAttachments.node.runFetchCycle({}, (output) => attachmentOutputs.push(output));
+  const attachmentMail = attachmentOutputs.find((output) => output && output[0]);
+  assert.equal(attachmentMail[0].email.attachments.length, 1);
+  assert.equal(attachmentMail[0].email.attachments[0].filename, "note.txt");
+  assert.equal(attachmentMail[0].email.attachments[0].content.toString(), "attachment-body");
+});
+
+test("imap email in keeps raw output only when raw source is enabled", async () => {
+  const source = createMailSource("Raw");
+  const { node } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    emitRaw: true
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-raw",
+      front: [{ uid: 55, flags: [], size: Buffer.byteLength(source) }],
+      messages: [{
+        uid: 55,
+        flags: [],
+        envelope: { subject: "Raw" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: Buffer.byteLength(source),
+        source
+      }]
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  const mail = outputs.find((output) => output && output[0]);
+  assert.ok(Buffer.isBuffer(mail[0].raw));
+  assert.equal(mail[0].raw.toString(), source);
+});
+
+test("imap email in only expunges deleted front-window UIDs with UIDPLUS", async () => {
+  const skipped = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 1,
+    expungeDeletedFront: true,
+    expungeDeletedFrontLimit: 1
+  }, [
+    {
+      exists: 5,
+      uidValidity: "uidv-no-uidplus",
+      front: [{ uid: 10, flags: ["\\Deleted"], size: 10 }]
+    }
+  ]);
+  const skippedOutputs = [];
+  await skipped.node.runFetchCycle({}, (output) => skippedOutputs.push(output));
+
+  assert.equal(skipped.messageDeleteCalls.length, 0);
+  assert.equal(skipped.node.scanCursor, 1);
+  assert.equal(collectStats(skippedOutputs)[0].deletedExpungeSkipped, 1);
+
+  const expunged = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 1,
+    expungeDeletedFront: true,
+    expungeDeletedFrontLimit: 1
+  }, [
+    {
+      exists: 10,
+      uidValidity: "uidv-uidplus",
+      capabilities: ["UIDPLUS"],
+      front: [{ uid: 10, flags: ["\\Deleted"], size: 10 }]
+    }
+  ]);
+  expunged.node.scanCursor = 6;
+  const expungedOutputs = [];
+  await expunged.node.runFetchCycle({}, (output) => expungedOutputs.push(output));
+
+  assert.equal(expunged.messageDeleteCalls.length, 1);
+  assert.equal(expunged.messageDeleteCalls[0].range, "10");
+  assert.deepEqual(expunged.messageDeleteCalls[0].options, { uid: true });
+  assert.equal(expunged.node.scanCursor, 6);
+
+  const stats = collectStats(expungedOutputs)[0];
+  assert.equal(stats.deletedExpunged, 1);
+  assert.equal(stats.scanCursorAdjusted, true);
+  assert.equal(stats.scanCursorNext, 6);
+});
+
+test("imap email in does not adjust cursor when expunge returns false", async () => {
+  const { node, messageDeleteCalls } = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 1,
+    expungeDeletedFront: true,
+    expungeDeletedFrontLimit: 1
+  }, [
+    {
+      exists: 10,
+      uidValidity: "uidv-expunge-false",
+      capabilities: ["UIDPLUS"],
+      front: [{ uid: 10, flags: ["\\Deleted"], size: 10 }],
+      messageDelete() {
+        return false;
+      }
+    }
+  ]);
+  node.scanCursor = 6;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(messageDeleteCalls.length, 1);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.deletedExpungeErrors, 1);
+  assert.equal(stats.scanCursorAdjusted, false);
+  assert.equal(stats.scanCursorNext, 1);
+});
+
 test("imap email in runtime contract is not limited to legacy skipDeleted", () => {
   const source = readProjectFile(path.join("nodes", "imap-email-in.js"));
   const html = readProjectFile(path.join("nodes", "imap-email-in.html"));
@@ -405,9 +761,10 @@ test("imap email in flag filters must not require unbounded mailbox scans", () =
   );
   assert.match(
     source,
-    /fetchAll\(`\$\{windowStart\}:\$\{windowEnd\}`/,
-    "front fetch must read one bounded cursor window"
+    /client\.fetch\(`\$\{windowStart\}:\$\{windowEnd\}`/,
+    "front fetch must stream one bounded cursor window"
   );
+  assert.equal(source.includes("fetchAll"), false, "input node must not collect IMAP fetch results with fetchAll");
   assert.equal(/\bsearch\s*\(/i.test(source), false, "flag filtering must not introduce IMAP SEARCH");
   assert.equal(source.includes("1:*"), false, "flag filtering must not fetch the whole mailbox");
   assert.equal(source.includes("maxWindowsPerCycle"), false, "cursor scan must not add a second scan limit");

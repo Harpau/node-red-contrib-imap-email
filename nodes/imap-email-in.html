@@ -17,6 +17,8 @@
       flaggedSelection: { value: 'ignore' },
       expungeDeletedFront: { value: true },
       expungeDeletedFrontLimit: { value: 200, required: true, validate: RED.validators.number() },
+      maxMessageBytes: { value: 0, required: true, validate: RED.validators.number() },
+      downloadChunkSize: { value: 65536, required: true, validate: RED.validators.number() },
       includeAttachments: { value: false },
       emitRaw: { value: false },
       diagnostics: { value: 'stats' }
@@ -116,6 +118,15 @@
   </div>
   <hr>
   <div class="form-row">
+    <label for="node-input-maxMessageBytes">Max bytes</label>
+    <input type="number" id="node-input-maxMessageBytes">
+  </div>
+  <div class="form-row">
+    <label for="node-input-downloadChunkSize">Chunk bytes</label>
+    <input type="number" id="node-input-downloadChunkSize">
+  </div>
+  <hr>
+  <div class="form-row">
     <label for="node-input-includeAttachments">Attachments</label>
     <input type="checkbox" id="node-input-includeAttachments" style="display:inline-block; width:auto; vertical-align:top;">
     <span>Include parsed attachments in msg.email.attachments</span>
@@ -179,10 +190,14 @@
     <dd>Permanently remove already-<code>\Deleted</code> messages skipped by <code>Deleted = Only without flag</code> in the current cursor window.</dd>
     <dt>Expunge limit <span class="property-type">number</span></dt>
     <dd>Maximum number of already-<code>\Deleted</code> messages expunged per fetch cycle.</dd>
+    <dt>Max bytes <span class="property-type">number</span></dt>
+    <dd>Maximum RFC822 message bytes to download and parse. <code>0</code> means unlimited; set a positive value to reject oversized messages on output 2 with an ACK token.</dd>
+    <dt>Chunk bytes <span class="property-type">number</span></dt>
+    <dd>IMAP download chunk size for streamed message downloads.</dd>
     <dt>Attachments <span class="property-type">boolean</span></dt>
-    <dd>Include parsed attachments in <code>msg.email.attachments</code>. No top-level <code>msg.attachments</code> is emitted.</dd>
+    <dd>Include parsed attachments in <code>msg.email.attachments</code>. When disabled, attachment streams are drained without buffering. No top-level <code>msg.attachments</code> is emitted.</dd>
     <dt>Raw source <span class="property-type">boolean</span></dt>
-    <dd>Include the raw RFC822 message in <code>msg.raw</code>. This can be large.</dd>
+    <dd>Include the raw RFC822 message in <code>msg.raw</code>. This buffers the message and can be large.</dd>
     <dt>Diagnostics <span class="property-type">off | stats | debug</span></dt>
     <dd><code>off</code> emits no stats; <code>stats</code> emits output 3; <code>debug</code> also writes redacted debug summaries to the runtime log.</dd>
   </dl>
@@ -210,7 +225,7 @@
   </dl>
 
   <h3>Stats</h3>
-  <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>scanCursorStart</code>, <code>scanCursorEnd</code>, <code>scanCursorNext</code>, <code>scanWrapped</code>, <code>filteredByFlags</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>missingSource</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
+  <p>Stats include counters such as <code>exists</code>, <code>frontWindowRead</code>, <code>scanCursorStart</code>, <code>scanCursorEnd</code>, <code>scanCursorNext</code>, <code>scanWrapped</code>, <code>scanCursorAdjusted</code>, <code>filteredByFlags</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>deletedExpungeSkipped</code>, <code>inflightPruned</code>, <code>missingSource</code>, <code>missingMessages</code>, <code>tooLarge</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>downloadMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
 
   <h3>Delivery guarantee</h3>
   <p>The node provides at-least-once delivery when combined with <b>imap email ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until the configured ACK action succeeds.</p>

@@ -53,6 +53,8 @@
     "flaggedSelection": "ignore",
     "expungeDeletedFront": true,
     "expungeDeletedFrontLimit": "200",
+    "maxMessageBytes": "0",
+    "downloadChunkSize": "65536",
     "includeAttachments": false,
     "emitRaw": false,
     "diagnostics": "stats",
