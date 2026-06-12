@@ -54,7 +54,7 @@ function createAckNode(config = {}, clientFactory) {
         return id === "account-1" ? account : null;
       },
       registerType(type, ctor) {
-        if (type === "imap email ack") {
+        if (type === "imap-email ack") {
           AckCtor = ctor;
         }
       }

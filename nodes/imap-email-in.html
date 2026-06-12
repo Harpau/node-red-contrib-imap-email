@@ -1,10 +1,10 @@
 <script type="text/javascript">
-  RED.nodes.registerType('imap email in', {
+  RED.nodes.registerType('imap-email in', {
     category: 'imap email',
     color: '#D8BFD8',
     defaults: {
       name: { value: '' },
-      account: { value: '', type: 'imap email account', required: true },
+      account: { value: '', type: 'imap-email account', required: true },
       mailbox: { value: 'INBOX', required: true },
       batchSize: { value: 50, required: true, validate: RED.validators.number() },
       frontWindowSize: { value: 500, required: true, validate: RED.validators.number() },
@@ -41,7 +41,7 @@
   });
 </script>
 
-<script type="text/html" data-template-name="imap email in">
+<script type="text/html" data-template-name="imap-email in">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name" placeholder="imap email in">
@@ -147,7 +147,7 @@
   </div>
 </script>
 
-<script type="text/html" data-help-name="imap email in">
+<script type="text/html" data-help-name="imap-email in">
   <p>Externally triggered IMAP input node for using a mailbox as an at-least-once email source.</p>
 
   <h3>Behavior</h3>

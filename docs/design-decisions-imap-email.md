@@ -15,21 +15,24 @@ Es wurde aus dem frueheren Paket `@compeso/node-red-contrib-imap-queue`
 abgeleitet, soll aber unabhaengig weiterentwickelt, versioniert und
 veroeffentlicht werden.
 
-Die oeffentlichen Node-RED-Typen des neuen Pakets sind:
+Die gespeicherten Node-RED-Flow-Typen des neuen Pakets sind:
 
 ```text
-imap email account
-imap email in
-imap email ack
+imap-email account
+imap-email in
+imap-email ack
 ```
+
+Die sichtbaren Palette-Labels bleiben benutzerfreundlich `imap email account`,
+`imap email in` und `imap email ack`.
 
 Das Paket soll weiterhin fuer grosse Postfaecher geeignet sein. Der
 Eingangsnode darf keine unbeschraenkten Mailbox-Scans ausfuehren. Die
 bestehende bounded-window-Strategie bleibt ein zentrales Architekturprinzip.
 
-Der Node `imap email ack` soll die bisher getrennten positiven und negativen
+Der Node `imap-email ack` soll die bisher getrennten positiven und negativen
 Abschlussaktionen in einem Node zusammenfuehren. Nutzer sollen mehrere
-unterschiedlich konfigurierte `imap email ack` Nodes parallel in einem Flow
+unterschiedlich konfigurierte `imap-email ack` Nodes parallel in einem Flow
 verwenden koennen.
 
 ## 2. Nicht-Ziele
@@ -50,11 +53,11 @@ Nicht Teil dieser Spezifikation:
 - Keine OAuth2-Tokenbeschaffung oder automatische OAuth2-Tokenaktualisierung in
   dieser Phase.
 
-## 3. `imap email in` Spezifikation
+## 3. `imap-email in` Spezifikation
 
 ### 3.1 Grundverhalten
 
-`imap email in` ist ein extern getriggerter Eingangsnode. Jede eingehende
+`imap-email in` ist ein extern getriggerter Eingangsnode. Jede eingehende
 Nachricht startet hoechstens einen Fetch-Zyklus.
 
 Der Node liest pro Trigger nur ein begrenztes Cursor-Fenster des Postfachs,
@@ -192,21 +195,21 @@ scanWrapped
 
 `selection` sollte keine Zugangsdaten oder privaten Werte enthalten.
 
-## 4. `imap email ack` Spezifikation
+## 4. `imap-email ack` Spezifikation
 
 ### 4.1 Grundziel
 
-`imap email ack` ist der einheitliche Abschlussnode fuer erfolgreich oder
+`imap-email ack` ist der einheitliche Abschlussnode fuer erfolgreich oder
 anderweitig fachlich behandelte Mails.
 
 Mehrere unterschiedlich konfigurierte Nodes sollen parallel verwendbar sein:
 
 ```text
-imap email in
+imap-email in
   -> fachliche Verarbeitung
-      -> imap email ack Variante A
-      -> imap email ack Variante B
-      -> imap email ack Variante C
+      -> imap-email ack Variante A
+      -> imap-email ack Variante B
+      -> imap-email ack Variante C
 ```
 
 ### 4.2 Modi
@@ -312,7 +315,7 @@ Nicht erlaubt:
 
 `flag` ohne Flag-Aenderung ist technisch erlaubt, muss aber dokumentiert
 werden: Die Mail bleibt im Postfach und kann erneut erscheinen, falls
-`imap email in` sie weiter selektiert.
+`imap-email in` sie weiter selektiert.
 
 ### 4.6 Reihenfolge der IMAP-Aktionen
 
@@ -333,8 +336,8 @@ wird nicht auf einzelne UIDs heruntergebrochen.
 
 ### 5.1 `msg.imap.ackToken`
 
-`msg.imap.ackToken` bleibt der zentrale Vertrag zwischen `imap email in` und
-`imap email ack`.
+`msg.imap.ackToken` bleibt der zentrale Vertrag zwischen `imap-email in` und
+`imap-email ack`.
 
 Erwartete Felder:
 
@@ -445,7 +448,7 @@ msg.imapAck = {
 
 ## 6. UI-Konfiguration
 
-### 6.1 `imap email in`
+### 6.1 `imap-email in`
 
 UI-Bereich: `Selection`.
 
@@ -479,7 +482,7 @@ Flagged   Any
 Only without flag` gesetzt ist. Runtime-seitig bleibt Expunge ebenfalls auf
 `deletedSelection=exclude` beschraenkt.
 
-### 6.2 `imap email ack`
+### 6.2 `imap-email ack`
 
 Hauptfeld:
 
@@ -511,7 +514,7 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 
 ## 7. Runtime-Verhalten
 
-### 7.1 `imap email in`
+### 7.1 `imap-email in`
 
 - Ein Trigger startet hoechstens einen Fetch-Zyklus.
 - Wenn bereits ein Fetch-Zyklus laeuft, wird kein paralleler Fetch gestartet.
@@ -520,7 +523,7 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Full-Fetch-Flags werden erneut validiert.
 - Ausgegebene Nachrichten werden im volatile Inflight-Registry markiert.
 
-### 7.2 `imap email ack`
+### 7.2 `imap-email ack`
 
 - Eingehende Nachrichten werden wie bisher gebatcht.
 - Token werden aus `msg.imap.ackToken` extrahiert.
@@ -540,14 +543,14 @@ IMAP-Aktion fehlgeschlagen ist.
 Fehler werden ueber Output 2 ausgegeben und in `msg.imapAck.ok = false`
 sichtbar gemacht.
 
-### 8.2 Fehler bei `imap email in`
+### 8.2 Fehler bei `imap-email in`
 
 - Operative Fetch-Fehler gehen auf Output 2.
 - Parse-Fehler gehen auf Output 2 und enthalten nach Moeglichkeit den
   ACK-Token.
 - Der Node loescht keine normal verarbeiteten Nachrichten.
 
-### 8.3 Fehler bei `imap email ack`
+### 8.3 Fehler bei `imap-email ack`
 
 Fehlerfaelle:
 
@@ -562,12 +565,12 @@ Bei Fehlern:
 - Output 2.
 - `msg.imapAck.ok = false`.
 - Inflight bleibt fuer die betroffenen Mails erhalten. Dadurch kann
-  `imap email in` die Mail nach Ablauf von `retryAfterMs` erneut ausgeben.
+  `imap-email in` die Mail nach Ablauf von `retryAfterMs` erneut ausgeben.
 - Stats enthalten Fehlerzaehler, Chunk-Informationen und Fehlermeldung.
 
 ## 9. Skalierbarkeitsregeln fuer grosse Postfaecher
 
-`imap email in`:
+`imap-email in`:
 
 - Kein unbounded Mailbox-Scan.
 - Kein mailboxweites IMAP `SEARCH`.
@@ -581,7 +584,7 @@ Bei Fehlern:
 - Selektive Filter koennen dazu fuehren, dass weniger Nachrichten als
   `batchSize` ausgegeben werden.
 
-`imap email ack`:
+`imap-email ack`:
 
 - `batchSize` begrenzt eingehende ACK-Items bis zum Flush.
 - `maxBatchesPerFlush` begrenzt Arbeit pro Flush.
@@ -594,14 +597,14 @@ Bei Fehlern:
 Empfohlene Defaults bleiben:
 
 ```text
-imap email in:
+imap-email in:
   batchSize:        50
   frontWindowSize:  500
   maxInflight:      500
   retryAfterMs:     1800000
   maxUidPerCommand: 500
 
-imap email ack:
+imap-email ack:
   batchSize:        100
   flushMs:          500
   maxUidPerCommand: 500
@@ -610,7 +613,7 @@ imap email ack:
 
 ## 10. Testplan
 
-### 10.1 `imap email in`
+### 10.1 `imap-email in`
 
 - Defaults entsprechen altem `skipDeleted=true`.
 - Legacy `skipDeleted=true` wird zu `deletedSelection=exclude`.
@@ -628,7 +631,7 @@ imap email ack:
 - Stats enthalten `selection`, `filteredByFlags` und Cursor-Felder.
 - HTML defaults, labels und help text sind konsistent.
 
-### 10.2 `imap email ack`
+### 10.2 `imap-email ack`
 
 - Default-Modus `delete` verhaelt sich wie bisheriges ACK.
 - `move` ruft Zielordner-Erstellung und `messageMove`.
@@ -643,7 +646,7 @@ imap email ack:
 - Grosse UID-Mengen werden gechunkt.
 - Erfolgreiche Chunks entfernen Inflight und gehen auf Output 1.
 - Fehlgeschlagene Chunks behalten Inflight und gehen auf Output 2.
-- Mehrere unterschiedlich konfigurierte `imap email ack` Nodes koennen gleiche
+- Mehrere unterschiedlich konfigurierte `imap-email ack` Nodes koennen gleiche
   Tokenformen verarbeiten.
 - Stats enthalten Action-Plan, Chunk-Details, Erfolgszaehler, Fehlerzaehler
   und Timings.

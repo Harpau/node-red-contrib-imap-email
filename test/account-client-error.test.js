@@ -18,7 +18,7 @@ test("account-created IMAP clients handle asynchronous error events", () => {
         node.status = () => {};
       },
       registerType(type, ctor) {
-        if (type === "imap email account") {
+        if (type === "imap-email account") {
           AccountCtor = ctor;
         }
       }

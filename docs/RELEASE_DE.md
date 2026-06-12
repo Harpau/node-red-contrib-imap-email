@@ -9,7 +9,8 @@ Wichtig: Diese Datei bereitet keine Veroeffentlichung vor. Ein `npm publish` ode
 - Der Stand ist in einem sauberen Git-Working-Tree.
 - `package.json` zeigt auf `@compeso/node-red-contrib-imap-email`.
 - Repository, Homepage und Issues zeigen auf `https://github.com/Harpau/node-red-contrib-imap-email`.
-- Die Node-RED-Typen sind `imap email account`, `imap email in` und `imap email ack`.
+- Die gespeicherten Node-RED-Flow-Typen sind `imap-email account`, `imap-email in` und `imap-email ack`.
+- Die sichtbaren Palette-Labels sind `imap email account`, `imap email in` und `imap email ack`.
 - README, Beispiele und Node-RED-Hilfetexte sind konsistent.
 
 ## 2. Lokale Pruefung

@@ -37,7 +37,7 @@
   },
   {
     "id": "52c74eb9f1841ec0",
-    "type": "imap email in",
+    "type": "imap-email in",
     "z": "b2f6e3681c7c4801",
     "name": "INBOX email in",
     "account": "2b40b931e3ce3d1a",
@@ -94,7 +94,7 @@
   },
   {
     "id": "b0edbceee5d5e7f8",
-    "type": "imap email ack",
+    "type": "imap-email ack",
     "z": "b2f6e3681c7c4801",
     "name": "ACK delete",
     "account": "2b40b931e3ce3d1a",
@@ -210,7 +210,7 @@
   },
   {
     "id": "2b40b931e3ce3d1a",
-    "type": "imap email account",
+    "type": "imap-email account",
     "name": "STRATO test",
     "host": "imap.strato.de",
     "port": "993",

@@ -1,10 +1,10 @@
 <script type="text/javascript">
-  RED.nodes.registerType('imap email ack', {
+  RED.nodes.registerType('imap-email ack', {
     category: 'imap email',
     color: '#D8BFD8',
     defaults: {
       name: { value: '' },
-      account: { value: '', type: 'imap email account', required: true },
+      account: { value: '', type: 'imap-email account', required: true },
       mailbox: { value: 'INBOX' },
       actionMode: { value: 'delete' },
       targetMailbox: { value: '' },
@@ -37,7 +37,7 @@
   });
 </script>
 
-<script type="text/html" data-template-name="imap email ack">
+<script type="text/html" data-template-name="imap-email ack">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name" placeholder="imap email ack">
@@ -116,7 +116,7 @@
   </div>
 </script>
 
-<script type="text/html" data-help-name="imap email ack">
+<script type="text/html" data-help-name="imap-email ack">
   <p>Completion node for messages emitted by <b>imap email in</b>.</p>
 
   <h3>Behavior</h3>

@@ -887,5 +887,5 @@ module.exports = function registerImapEmailIn(RED) {
     node.status({ fill: "grey", shape: "ring", text: "waiting for trigger" });
   }
 
-  RED.nodes.registerType("imap email in", ImapEmailInNode);
+  RED.nodes.registerType("imap-email in", ImapEmailInNode);
 };

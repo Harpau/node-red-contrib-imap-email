@@ -23,9 +23,9 @@ test("stable package metadata is complete", () => {
   assert.equal(pkg.bugs.url, "https://github.com/Harpau/node-red-contrib-imap-email/issues");
 
   assert.deepEqual(Object.keys(pkg["node-red"].nodes), [
-    "imap email account",
-    "imap email in",
-    "imap email ack"
+    "imap-email account",
+    "imap-email in",
+    "imap-email ack"
   ]);
 });
 

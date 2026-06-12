@@ -11,9 +11,9 @@ test("example flow is importable and contains no credentials", () => {
   const flow = JSON.parse(fs.readFileSync(flowPath, "utf8"));
 
   assert.equal(Array.isArray(flow), true);
-  assert.equal(flow.some((node) => node.type === "imap email account"), true);
-  assert.equal(flow.some((node) => node.type === "imap email in"), true);
-  assert.equal(flow.some((node) => node.type === "imap email ack"), true);
+  assert.equal(flow.some((node) => node.type === "imap-email account"), true);
+  assert.equal(flow.some((node) => node.type === "imap-email in"), true);
+  assert.equal(flow.some((node) => node.type === "imap-email ack"), true);
   assert.equal(flow.some((node) => node.type === "imap queue account"), false);
   assert.equal(flow.some((node) => node.type === "imap queue in"), false);
   assert.equal(flow.some((node) => node.type === "imap queue ack"), false);

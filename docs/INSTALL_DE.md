@@ -72,14 +72,15 @@ Menu -> Import -> examples/basic-at-least-once-flow.json
 ```
 
 Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen.
+Die sichtbaren Palette-Namen verwenden Leerzeichen; in der Flow-JSON werden die technischen Typen mit `imap-email ...` gespeichert.
 
 ## 7. Produktiver Minimal-Flow
 
 ```text
 Inject / Scheduler / HTTP-Trigger
-  -> imap email in
+  -> imap-email in
       -> erfolgreiche Verarbeitung
-          -> imap email ack
+          -> imap-email ack
 ```
 
 Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node fuehren. Wenn die Verarbeitung fehlschlaegt und kein ACK erfolgt, bleibt die Mail in der Mailbox und kann spaeter erneut geliefert werden.
@@ -89,10 +90,13 @@ Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node fuehren. Wenn die Verar
 Dieses Paket registriert nur die neuen Typen:
 
 ```text
-imap email account
-imap email in
-imap email ack
+imap-email account
+imap-email in
+imap-email ack
 ```
+
+Die Palette-Labels duerfen weiterhin als `imap email account`, `imap email in`
+und `imap email ack` angezeigt werden.
 
 Die alten Typen aus `@compeso/node-red-contrib-imap-queue` werden hier nicht registriert:
 
@@ -108,12 +112,14 @@ imap queue nack
 Bestehende Flow-JSONs aus dem alten Paket muessen mindestens diese Typen umstellen:
 
 ```text
-imap queue account -> imap email account
-imap queue in      -> imap email in
-imap queue ack     -> imap email ack
+imap queue account -> imap-email account
+imap queue in      -> imap-email in
+imap queue ack     -> imap-email ack
 ```
 
-Flows mit `imap queue nack` benoetigen eine spaetere fachliche Migration auf die geplanten Abschlussaktionen von `imap email ack`.
+Flows mit `imap queue nack` benoetigen eine spaetere fachliche Migration auf die geplanten Abschlussaktionen von `imap-email ack`.
+Fruehe Entwicklungsflows mit `imap email ...` als gespeichertem Typ muessen auf
+`imap-email ...` aktualisiert werden.
 
 ## 10. Keine Veroeffentlichung ohne Freigabe
 

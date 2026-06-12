@@ -9,9 +9,10 @@ This package is independent from `@compeso/node-red-contrib-imap-queue`. It uses
 ## Nodes
 
 ```text
-imap email account  shared IMAP account configuration
-imap email in       externally triggered bounded cursor-window fetch
-imap email ack      batched acknowledgement and UID actions
+Flow type           Palette label        Purpose
+imap-email account  imap email account   shared IMAP account configuration
+imap-email in       imap email in        externally triggered bounded cursor-window fetch
+imap-email ack      imap email ack       batched acknowledgement and UID actions
 ```
 
 The previous public node types from the predecessor package are not registered by this package:
@@ -47,20 +48,20 @@ Restart Node-RED after installation.
 
 ## Example Flow
 
-Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password.
+Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password. The visible palette labels use spaces; the stored Flow JSON types use the `imap-email ...` prefix.
 
 Minimal flow:
 
 ```text
 Inject / scheduler / HTTP trigger
-  -> imap email in
+  -> imap-email in
       -> your successful processing
-          -> imap email ack
+          -> imap-email ack
 ```
 
-Only wire messages to `imap email ack` after all processing that must succeed has actually succeeded.
+Only wire messages to `imap-email ack` after all processing that must succeed has actually succeeded.
 
-`imap email ack` can be configured multiple times in one flow. Typical modes:
+`imap-email ack` can be configured multiple times in one flow. Typical modes:
 
 ```text
 delete       delete the mail by UID and complete it
@@ -74,7 +75,7 @@ mode. `delete` and `move` are intentionally not combined with flag changes.
 
 ## Large Mailboxes
 
-`imap email in` is designed for mailboxes that may contain many messages. It does not run an unbounded mailbox-wide search. Instead, each trigger reads one bounded cursor window, emits at most the configured batch size, and advances an internal scan cursor after a successful fetch cycle.
+`imap-email in` is designed for mailboxes that may contain many messages. It does not run an unbounded mailbox-wide search. Instead, each trigger reads one bounded cursor window, emits at most the configured batch size, and advances an internal scan cursor after a successful fetch cycle.
 
 Important settings:
 
@@ -136,7 +137,7 @@ fails. In that case output 2 receives the original message with
 `msg.imapAck.ok = false`, and the inflight entry remains available for a later
 retry.
 
-For dynamic decisions, configure `imap email ack` to `set by msg.` and set
+For dynamic decisions, configure `imap-email ack` to `set by msg.` and set
 `msg.imap.ackAction`:
 
 ```js
@@ -173,12 +174,17 @@ New GitHub repo:     https://github.com/Harpau/node-red-contrib-imap-email
 Existing flows from the old package need new node types before they can run with this package:
 
 ```text
-imap queue account -> imap email account
-imap queue in      -> imap email in
-imap queue ack     -> imap email ack
+imap queue account -> imap-email account
+imap queue in      -> imap-email in
+imap queue ack     -> imap-email ack
 ```
 
-Flows that use `imap queue nack` need a later migration step once the planned unified `imap email ack` actions are implemented.
+Flows that use `imap queue nack` need a later migration step once the planned unified `imap-email ack` actions are implemented.
+
+Development flows created before the `imap-email ...` prefix was aligned may
+still contain `imap email account`, `imap email in` or `imap email ack` as Flow
+JSON types. Update those `type` fields to `imap-email account`,
+`imap-email in` and `imap-email ack`.
 
 ## Development Checks
 

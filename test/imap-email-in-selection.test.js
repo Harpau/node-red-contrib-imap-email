@@ -54,7 +54,7 @@ function createInputNode(config = {}, options = {}) {
         return id === "account-1" ? account : null;
       },
       registerType(type, ctor) {
-        if (type === "imap email in") {
+        if (type === "imap-email in") {
           InputCtor = ctor;
         }
       }
@@ -330,9 +330,9 @@ test("internal flag selection helpers map UI values to IMAP flags", () => {
 
 test("example flow serializes imap email in selection fields", () => {
   const flow = readExampleFlow();
-  const inputNode = flow.find((node) => node.type === "imap email in");
+  const inputNode = flow.find((node) => node.type === "imap-email in");
 
-  assert.ok(inputNode, "example flow must contain an imap email in node");
+  assert.ok(inputNode, "example flow must contain an imap-email in node");
 
   for (const [field, expected] of Object.entries(selectionDefaults)) {
     assert.equal(inputNode[field], expected, `example flow must serialize ${field}`);
@@ -731,7 +731,7 @@ test("imap email in runtime contract is not limited to legacy skipDeleted", () =
   assert.equal(flow.includes("skipDeleted"), false, "example flow should use the new selection fields");
 });
 
-test("imap email package does not register old imap queue node types", () => {
+test("imap email package registers only imap-email flow types", () => {
   const pkg = require(path.join(root, "package.json"));
   const nodeTypes = Object.keys(pkg["node-red"].nodes);
   const nodeSources = fs
@@ -741,14 +741,38 @@ test("imap email package does not register old imap queue node types", () => {
     .join("\n");
 
   assert.deepEqual(nodeTypes, [
-    "imap email account",
-    "imap email in",
-    "imap email ack"
+    "imap-email account",
+    "imap-email in",
+    "imap-email ack"
   ]);
   assert.equal(nodeTypes.some((type) => type.startsWith("imap queue")), false);
+  assert.equal(nodeTypes.some((type) => type.startsWith("imap email")), false);
+
+  for (const type of nodeTypes) {
+    const escaped = type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(
+      nodeSources,
+      new RegExp(`RED\\.nodes\\.registerType\\(['"]${escaped}['"]`),
+      `${type} must be registered in JS/HTML`
+    );
+    assert.match(
+      nodeSources,
+      new RegExp(`data-template-name=["']${escaped}["']`),
+      `${type} must have a matching data-template-name`
+    );
+    assert.match(
+      nodeSources,
+      new RegExp(`data-help-name=["']${escaped}["']`),
+      `${type} must have a matching data-help-name`
+    );
+  }
+
   assert.equal(/RED\.nodes\.registerType\(['"]imap queue/.test(nodeSources), false);
   assert.equal(/data-template-name=["']imap queue/.test(nodeSources), false);
   assert.equal(/data-help-name=["']imap queue/.test(nodeSources), false);
+  assert.equal(/RED\.nodes\.registerType\(['"]imap email/.test(nodeSources), false);
+  assert.equal(/data-template-name=["']imap email/.test(nodeSources), false);
+  assert.equal(/data-help-name=["']imap email/.test(nodeSources), false);
 });
 
 test("imap email in flag filters must not require unbounded mailbox scans", () => {

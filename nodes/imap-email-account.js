@@ -104,7 +104,7 @@ module.exports = function registerImapEmailAccount(RED) {
     return client;
   };
 
-  RED.nodes.registerType("imap email account", ImapEmailAccountNode, {
+  RED.nodes.registerType("imap-email account", ImapEmailAccountNode, {
     credentials: {
       username: { type: "text" },
       password: { type: "password" },

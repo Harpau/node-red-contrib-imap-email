@@ -462,5 +462,5 @@ module.exports = function registerImapEmailAck(RED) {
     });
   }
 
-  RED.nodes.registerType("imap email ack", ImapEmailAckNode);
+  RED.nodes.registerType("imap-email ack", ImapEmailAckNode);
 };
