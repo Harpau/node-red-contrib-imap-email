@@ -150,9 +150,10 @@ bereits benoetigten leichten Metadaten.
 
 Der Cursor ist ein fluechtiger Runtime-Zustand pro Node. Nach einem
 erfolgreichen Fetch-Zyklus wird er auf `windowEnd + 1` gesetzt. Wenn das Ende
-der Mailbox erreicht ist, wrappt der Cursor auf `1`. Bei leerer Mailbox,
-ungueltigem Cursor oder geaenderter UIDVALIDITY wird er ebenfalls auf `1`
-zurueckgesetzt.
+der Mailbox erreicht ist, wrappt der Cursor auf `1`. Enthaelt das Fenster mehr
+ausgabefaehige Kandidaten als in die verbleibende Batch-/Inflight-Kapazitaet
+passen, bleibt der Cursor auf `windowStart`. Bei leerer Mailbox, ungueltigem
+Cursor oder geaenderter UIDVALIDITY wird er ebenfalls auf `1` zurueckgesetzt.
 
 Der Cursor bleibt in Version 0.1 bewusst volatil. Nach einem Node-RED-Neustart
 beginnt der Scan-Cursor wieder bei Sequenz `1`. Eine Persistenz ueber
@@ -621,6 +622,8 @@ Bei Fehlern:
 - Kein unbounded Mailbox-Scan.
 - Kein mailboxweites IMAP `SEARCH`.
 - In der Standardstrategie pro Trigger nur ein bounded Cursor-Fenster.
+- Bei Kandidatenueberlauf haelt die Standardstrategie den Cursor auf dem
+  Fensteranfang, statt nicht ausgegebene Kandidaten zu ueberspringen.
 - In der Strategie `new-uid-priority` duerfen pro Trigger mehrere bounded
   Fenster nacheinander gelesen werden. Die Warm-up-Phase wird durch
   `scanTimeLimitMs` begrenzt; im laufenden Betrieb werden hoechstens ein
@@ -678,6 +681,8 @@ imap-email ack:
 - Full-Fetch prueft Flags erneut.
 - In `cursor-window` loesen selektive Filter kein weiteres Fenster im selben
   Trigger aus.
+- In `cursor-window` haelt ein Kandidatenueberlauf den Cursor auf dem
+  Fensteranfang.
 - In `new-uid-priority` aktualisiert die Warm-up-Phase den Status nach jedem
   gelesenen Fenster und respektiert `scanTimeLimitMs`.
 - In `new-uid-priority` halten Warm-up- und Bestandsfenster den Cursor bei

@@ -904,7 +904,7 @@ test("imap email in new UID priority holds backlog cursor when backlog window ov
   assert.equal(stats.scanCursorNext, 1);
 });
 
-test("imap email in default cursor window still advances when candidate list fills", async () => {
+test("imap email in default cursor window holds cursor when candidate list fills", async () => {
   const messages = [
     createMessage(1, "Default one"),
     createMessage(2, "Default two")
@@ -932,12 +932,199 @@ test("imap email in default cursor window still advances when candidate list fil
 
   assert.deepEqual(fetchCalls.map((call) => call.range), ["1:2"]);
   assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["1"]);
-  assert.equal(node.scanCursor, 3);
+  assert.equal(node.scanCursor, 1);
 
   const stats = collectStats(outputs)[0];
   assert.equal(stats.scanStrategy, "cursor-window");
   assert.equal(stats.candidateOverflow, true);
+  assert.equal(stats.scanCursorHeld, true);
+  assert.equal(stats.scanCursorHoldReason, "candidate overflow");
+  assert.equal(stats.scanCursorNext, 1);
+  assert.equal(stats.scanWrapped, false);
+});
+
+test("imap email in default cursor window advances when candidate list fits", async () => {
+  const messages = [
+    createMessage(1, "Default one"),
+    createMessage(2, "Default two")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 2,
+    batchSize: 2
+  }, [
+    {
+      exists: 5,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range) {
+        assert.equal(range, "1:2");
+        return [
+          { uid: 1, flags: [], size: 80 },
+          { uid: 2, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["1:2"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["1", "2"]);
+  assert.equal(node.scanCursor, 3);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.scanStrategy, "cursor-window");
+  assert.equal(stats.candidateOverflow, false);
   assert.equal(stats.scanCursorHeld, false);
+  assert.equal(stats.scanCursorNext, 3);
+  assert.equal(stats.scanWrapped, false);
+});
+
+test("imap email in default cursor window holds overflowing final window without reporting wrap", async () => {
+  const messages = [
+    createMessage(4, "Tail one"),
+    createMessage(5, "Tail two")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 2,
+    batchSize: 1
+  }, [
+    {
+      exists: 5,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range) {
+        assert.equal(range, "4:5");
+        return [
+          { uid: 4, flags: [], size: 80 },
+          { uid: 5, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  node.scanCursor = 4;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["4:5"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["4"]);
+  assert.equal(node.scanCursor, 4);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.candidateOverflow, true);
+  assert.equal(stats.scanCursorStart, 4);
+  assert.equal(stats.scanCursorEnd, 5);
+  assert.equal(stats.scanCursorNext, 4);
+  assert.equal(stats.scanCursorHeld, true);
+  assert.equal(stats.scanWrapped, false);
+});
+
+test("imap email in default cursor window drains held window after emitted mail is removed", async () => {
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 2,
+    batchSize: 1
+  }, [
+    {
+      exists: 2,
+      uidValidity: "uidv-1",
+      messages: [
+        createMessage(1, "Removed first"),
+        createMessage(2, "Remaining second")
+      ],
+      fetch(range) {
+        assert.equal(range, "1:2");
+        return [
+          { uid: 1, flags: [], size: 80 },
+          { uid: 2, flags: [], size: 80 }
+        ];
+      }
+    },
+    {
+      exists: 1,
+      uidValidity: "uidv-1",
+      messages: [
+        createMessage(2, "Remaining second")
+      ],
+      fetch(range) {
+        assert.equal(range, "1:1");
+        return [
+          { uid: 2, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["1:2", "1:1"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["1", "2"]);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs);
+  assert.equal(stats[0].candidateOverflow, true);
+  assert.equal(stats[0].scanCursorHeld, true);
+  assert.equal(stats[1].candidateOverflow, false);
+  assert.equal(stats[1].scanCursorHeld, false);
+  assert.equal(stats[1].scanWrapped, true);
+});
+
+test("imap email in default cursor window keeps held cursor while inflight mail is skipped", async () => {
+  const messages = [
+    createMessage(1, "Inflight first"),
+    createMessage(2, "Next second"),
+    createMessage(3, "Overflow third")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 3,
+    batchSize: 1
+  }, [
+    {
+      exists: 3,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range) {
+        assert.equal(range, "1:3");
+        return [
+          { uid: 1, flags: [], size: 80 },
+          { uid: 2, flags: [], size: 80 },
+          { uid: 3, flags: [], size: 80 }
+        ];
+      }
+    },
+    {
+      exists: 3,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range) {
+        assert.equal(range, "1:3");
+        return [
+          { uid: 1, flags: [], size: 80 },
+          { uid: 2, flags: [], size: 80 },
+          { uid: 3, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["1:3", "1:3"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["1", "2"]);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs);
+  assert.equal(stats[0].candidateOverflow, true);
+  assert.equal(stats[0].scanCursorHeld, true);
+  assert.equal(stats[1].filteredByInflight, 1);
+  assert.equal(stats[1].candidateOverflow, true);
+  assert.equal(stats[1].scanCursorHeld, true);
+  assert.equal(stats[1].scanCursorNext, 1);
 });
 
 test("imap email in new UID priority resets new UID cursor on UIDVALIDITY changes", async () => {

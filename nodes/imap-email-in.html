@@ -196,7 +196,7 @@
     <dt>Retry after ms <span class="property-type">number</span></dt>
     <dd>Time after which an un-ACKed inflight message may be emitted again.</dd>
     <dt>Scan strategy <span class="property-type">selection</span></dt>
-    <dd><code>Cursor window</code> keeps the original one-window-per-trigger behavior. <code>Prioritize new UIDs</code> first warms up through the mailbox, then reads newly arrived UIDs before one cyclic backlog window.</dd>
+    <dd><code>Cursor window</code> reads one bounded window per trigger and keeps that window when more selectable messages exist than can be emitted. <code>Prioritize new UIDs</code> first warms up through the mailbox, then reads newly arrived UIDs before one cyclic backlog window.</dd>
     <dt>Scan time ms <span class="property-type">number</span></dt>
     <dd>Soft time budget for warm-up scans in <code>Prioritize new UIDs</code>. The node checks the limit after each fully read window. <code>0</code> reads only one warm-up window.</dd>
     <dt>UIDs/command <span class="property-type">number</span></dt>

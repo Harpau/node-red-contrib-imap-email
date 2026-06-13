@@ -804,7 +804,7 @@ module.exports = function registerImapEmailIn(RED) {
             stats.scanCursorHoldReason = "candidate overflow";
             stats.scanCursorAdjusted = true;
             stats.scanCursorNext = cursorAfterCycle;
-            stats.scanWrapped = cursorAfterCycle === 1;
+            stats.scanWrapped = false;
           }
           return { scanWindow, result };
         }
@@ -839,7 +839,9 @@ module.exports = function registerImapEmailIn(RED) {
         }
 
         async function readDefaultCursorWindow() {
-          await readCursorWindow("cursor", node.frontWindowSize);
+          await readCursorWindow("cursor", node.frontWindowSize, {
+            holdOnOverflow: true
+          });
         }
 
         async function readPriorityWindows() {

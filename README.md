@@ -75,7 +75,12 @@ mode. `delete` and `move` are intentionally not combined with flag changes.
 
 ## Large Mailboxes
 
-`imap-email in` is designed for mailboxes that may contain many messages. It does not run an unbounded mailbox-wide search. Instead, each trigger reads one bounded cursor window, emits at most the configured batch size, and advances an internal scan cursor after a successful fetch cycle.
+`imap-email in` is designed for mailboxes that may contain many messages. It
+does not run an unbounded mailbox-wide search. Instead, each trigger reads one
+bounded cursor window and emits at most the configured batch size. The internal
+scan cursor advances after a successful fetch cycle unless the current window
+contains more selectable messages than the remaining batch/inflight capacity can
+hold.
 
 Important settings:
 
@@ -106,6 +111,12 @@ selective filter may emit fewer messages than `Batch size`; it never causes a
 full-mailbox scan to fill the batch. When the cursor reaches the end of the
 mailbox, it wraps back to the first sequence number. The cursor is volatile and
 resets when Node-RED restarts or when IMAP UIDVALIDITY changes.
+
+In the default `cursor-window` strategy, a window with more selectable
+messages than can currently be emitted is held on the same sequence start for a
+later trigger. This is especially useful when the ACK node deletes or moves
+processed mails: after those mails leave the mailbox, remaining messages shift
+into the held sequence window and can be drained without being skipped.
 
 The optional `Prioritize new UIDs` scan strategy is intended for mailboxes where
 processed messages stay in the same folder, for example after setting `\Seen`.
