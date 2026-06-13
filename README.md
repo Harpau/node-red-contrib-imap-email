@@ -113,7 +113,9 @@ After restart or UIDVALIDITY reset it warms up from the beginning with full
 front-window sized reads. Empty windows are discarded and the node updates its
 status after every read window. The warm-up stops when the batch/capacity is
 filled, the mailbox end is reached, or `Scan time ms` expires; `0` means only
-one warm-up window.
+one warm-up window. If a window contains more selectable messages than the
+remaining batch/capacity can hold, the scan cursor is kept on that window so a
+later trigger can continue draining it instead of leaving messages behind.
 
 Once the mailbox end has been reached, the node records the current `UIDNEXT`.
 Later triggers first read newly arrived UIDs up to a per-trigger `UIDNEXT`
@@ -121,7 +123,9 @@ snapshot, then read one cyclic backlog window if capacity remains. In this mode
 the new-UID and backlog windows each use about half of `Front window`, with the
 larger half assigned to new UIDs. New UIDs are emitted before backlog messages
 and in ascending UID order, but the mode does not guarantee globally oldest
-unread delivery across the whole mailbox.
+unread delivery across the whole mailbox. Backlog windows are also held on
+candidate overflow. New-UID windows advance to the first UID that did not fit
+into the current batch.
 
 Output messages include the server flags as an array:
 

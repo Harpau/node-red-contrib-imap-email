@@ -179,8 +179,12 @@ Nach jedem vollstaendig gelesenen Fenster wird der Node-Status aktualisiert.
 Leere Fenster werden verworfen. Die Warm-up-Phase laeuft weiter, bis
 `batchSize`, `maxInflight`-Kapazitaet, Mailbox-Ende oder `scanTimeLimitMs`
 erreicht ist. `scanTimeLimitMs=0` bedeutet: nur ein Warm-up-Fenster lesen.
-Wird das Mailbox-Ende erreicht, wird `newUidCursor` auf den pro Trigger
-fixierten `uidNextSnapshot` gesetzt.
+Enthaelt ein Fenster mehr ausgabefaehige Kandidaten als in die verbleibende
+Batch-/Inflight-Kapazitaet passen, wird der Scan-Cursor auf dem Fensteranfang
+gehalten. Dieses Fenster wird dann bei einem spaeteren Trigger erneut gelesen,
+statt Kandidaten hinter dem Cursor zurueckzulassen. Wird das Mailbox-Ende ohne
+Kandidatenueberlauf erreicht, wird `newUidCursor` auf den pro Trigger fixierten
+`uidNextSnapshot` gesetzt.
 
 Sobald `newUidCursor` gueltig ist, wird pro Trigger zuerst ein UID-Fenster fuer
 neu eingegangene Nachrichten gelesen:
@@ -192,9 +196,12 @@ uidWindowEnd   = min(uidNextSnapshot - 1, newUidCursor + ceil(frontWindowSize / 
 
 Danach wird, sofern noch Batch-/Inflight-Kapazitaet frei ist, ein zyklisches
 Bestandsfenster mit der kleineren Haelfte von `frontWindowSize` gelesen. Neue
-UIDs werden zuerst und in aufsteigender UID-Reihenfolge ausgegeben. Die
-Strategie garantiert dadurch keine global strikt aelteste ungelesene Nachricht
-ueber das gesamte Postfach.
+UIDs werden zuerst und in aufsteigender UID-Reihenfolge ausgegeben. Wenn ein
+New-UID-Fenster ueberlaeuft, wird `newUidCursor` auf die erste nicht mehr in
+die Batch passende UID gesetzt. Wenn ein Bestandsfenster ueberlaeuft, wird der
+Bestands-Cursor auf dem Fensteranfang gehalten. Die Strategie garantiert
+dadurch keine global strikt aelteste ungelesene Nachricht ueber das gesamte
+Postfach.
 
 Nicht erlaubt:
 
@@ -673,6 +680,8 @@ imap-email ack:
   Trigger aus.
 - In `new-uid-priority` aktualisiert die Warm-up-Phase den Status nach jedem
   gelesenen Fenster und respektiert `scanTimeLimitMs`.
+- In `new-uid-priority` halten Warm-up- und Bestandsfenster den Cursor bei
+  Kandidatenueberlauf auf dem Fensteranfang.
 - In `new-uid-priority` werden neue UIDs vor dem Bestandsfenster ausgegeben.
 - In `new-uid-priority` teilt der laufende Betrieb `frontWindowSize` auf New-
   UID- und Bestandsfenster auf.

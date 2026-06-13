@@ -336,6 +336,8 @@ module.exports = function registerImapEmailIn(RED) {
         scanCursorNext: node.scanCursor,
         scanCursorReset: false,
         scanCursorAdjusted: false,
+        scanCursorHeld: false,
+        scanCursorHoldReason: undefined,
         scanWrapped: false,
         newUidCursor: node.newUidCursor,
         newUidCursorReset: false,
@@ -350,6 +352,8 @@ module.exports = function registerImapEmailIn(RED) {
         maxInflight: node.maxInflight,
         capacity: 0,
         candidates: 0,
+        candidateOverflow: false,
+        windowUnselectedCandidates: 0,
         filteredByFlags: 0,
         filteredByInflight: 0,
         fetched: 0,
@@ -709,7 +713,10 @@ module.exports = function registerImapEmailIn(RED) {
         async function readCandidateWindow(window) {
           const result = {
             selected: 0,
-            lastSelectedUid: null
+            lastSelectedUid: null,
+            firstUnselectedUid: null,
+            unselectedCandidates: 0,
+            candidateOverflow: false
           };
 
           const fetchStarted = Date.now();
@@ -752,14 +759,22 @@ module.exports = function registerImapEmailIn(RED) {
               continue;
             }
 
+            candidateSet.add(uid);
             stats.candidates += 1;
             if (candidates.length < candidateLimit) {
               candidates.push(uid);
-              candidateSet.add(uid);
               result.selected += 1;
               result.lastSelectedUid = uid;
               if (window.uid && newUidRetryCursor === null) {
                 newUidRetryCursor = window.windowStart;
+              }
+            } else {
+              result.unselectedCandidates += 1;
+              result.candidateOverflow = true;
+              stats.candidateOverflow = true;
+              stats.windowUnselectedCandidates += 1;
+              if (result.firstUnselectedUid === null || uid < result.firstUnselectedUid) {
+                result.firstUnselectedUid = uid;
               }
             }
           }
@@ -770,7 +785,7 @@ module.exports = function registerImapEmailIn(RED) {
           return result;
         }
 
-        async function readCursorWindow(phase, windowSize) {
+        async function readCursorWindow(phase, windowSize, options = {}) {
           const scanWindow = prepareScanWindow(exists, uidValidity, windowSize);
           if (sequenceRetryCursor === null) {
             sequenceRetryCursor = scanWindow.windowStart;
@@ -781,8 +796,16 @@ module.exports = function registerImapEmailIn(RED) {
             uid: false,
             ...scanWindow
           });
-          cursorAfterCycle = scanWindow.nextCursor;
+          const holdCursor = options.holdOnOverflow && result.candidateOverflow;
+          cursorAfterCycle = holdCursor ? scanWindow.windowStart : scanWindow.nextCursor;
           node.scanCursor = cursorAfterCycle;
+          if (holdCursor) {
+            stats.scanCursorHeld = true;
+            stats.scanCursorHoldReason = "candidate overflow";
+            stats.scanCursorAdjusted = true;
+            stats.scanCursorNext = cursorAfterCycle;
+            stats.scanWrapped = cursorAfterCycle === 1;
+          }
           return { scanWindow, result };
         }
 
@@ -790,7 +813,13 @@ module.exports = function registerImapEmailIn(RED) {
           warmupStartedAt = Date.now();
 
           while (candidates.length < candidateLimit) {
-            const { scanWindow } = await readCursorWindow("warm-up", node.frontWindowSize);
+            const { scanWindow, result } = await readCursorWindow("warm-up", node.frontWindowSize, {
+              holdOnOverflow: true
+            });
+
+            if (result.candidateOverflow) {
+              break;
+            }
 
             if (scanWindow.wrapped) {
               node.newUidCursor = uidNextSnapshot || (highestUidSeen > 0 ? highestUidSeen + 1 : null);
@@ -843,8 +872,8 @@ module.exports = function registerImapEmailIn(RED) {
               wrapped: uidWindowEnd + 1 >= uidNextSnapshot
             });
 
-            if (result.selected > 0 && candidates.length >= candidateLimit && result.lastSelectedUid !== null) {
-              node.newUidCursor = result.lastSelectedUid + 1;
+            if (result.candidateOverflow && result.firstUnselectedUid !== null) {
+              node.newUidCursor = result.firstUnselectedUid;
             } else {
               node.newUidCursor = uidWindowEnd + 1;
             }
@@ -853,7 +882,9 @@ module.exports = function registerImapEmailIn(RED) {
           stats.newUidCursor = node.newUidCursor;
 
           if (candidates.length < candidateLimit) {
-            await readCursorWindow("backlog", backlogWindowSize);
+            await readCursorWindow("backlog", backlogWindowSize, {
+              holdOnOverflow: true
+            });
           }
         }
 
