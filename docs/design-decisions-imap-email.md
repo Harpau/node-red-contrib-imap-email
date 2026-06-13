@@ -136,7 +136,8 @@ Wenn sowohl `deletedSelection` als auch `skipDeleted` vorhanden sind, hat
 
 ### 3.5 Cursor-Window-Regel
 
-Pro Fetch-Zyklus wird genau ein begrenztes Cursor-Fenster gelesen:
+Die Standardstrategie `cursor-window` liest pro Fetch-Zyklus genau ein
+begrenztes Cursor-Fenster:
 
 ```text
 windowStart = scanCursor
@@ -157,10 +158,48 @@ Der Cursor bleibt in Version 0.1 bewusst volatil. Nach einem Node-RED-Neustart
 beginnt der Scan-Cursor wieder bei Sequenz `1`. Eine Persistenz ueber
 Node-RED Context ist kein Ziel fuer Version 0.1.
 
+### 3.5.1 New-UID-Priority-Strategie
+
+Die optionale Strategie `new-uid-priority` ist fuer Postfaecher gedacht, in
+denen verarbeitete Nachrichten im selben Ordner bleiben und z. B. nur mit
+`\Seen` markiert werden. Auch diese Strategie bleibt speicherbegrenzt: Es wird
+immer nur ein Fenster gestreamt und verworfen, bevor das naechste Fenster
+gelesen wird. Gespeichert werden nur Kandidaten bis `batchSize` bzw. bis zur
+verfuegbaren `maxInflight`-Kapazitaet.
+
+Nach Node-RED-Neustart, ungueltigem `newUidCursor` oder UIDVALIDITY-Wechsel
+laeuft die Strategie in eine Warm-up-Phase:
+
+```text
+windowSize = frontWindowSize
+range      = scanCursor : min(mailbox.exists, scanCursor + windowSize - 1)
+```
+
+Nach jedem vollstaendig gelesenen Fenster wird der Node-Status aktualisiert.
+Leere Fenster werden verworfen. Die Warm-up-Phase laeuft weiter, bis
+`batchSize`, `maxInflight`-Kapazitaet, Mailbox-Ende oder `scanTimeLimitMs`
+erreicht ist. `scanTimeLimitMs=0` bedeutet: nur ein Warm-up-Fenster lesen.
+Wird das Mailbox-Ende erreicht, wird `newUidCursor` auf den pro Trigger
+fixierten `uidNextSnapshot` gesetzt.
+
+Sobald `newUidCursor` gueltig ist, wird pro Trigger zuerst ein UID-Fenster fuer
+neu eingegangene Nachrichten gelesen:
+
+```text
+uidWindowStart = newUidCursor
+uidWindowEnd   = min(uidNextSnapshot - 1, newUidCursor + ceil(frontWindowSize / 2) - 1)
+```
+
+Danach wird, sofern noch Batch-/Inflight-Kapazitaet frei ist, ein zyklisches
+Bestandsfenster mit der kleineren Haelfte von `frontWindowSize` gelesen. Neue
+UIDs werden zuerst und in aufsteigender UID-Reihenfolge ausgegeben. Die
+Strategie garantiert dadurch keine global strikt aelteste ungelesene Nachricht
+ueber das gesamte Postfach.
+
 Nicht erlaubt:
 
 - IMAP `SEARCH` ueber das gesamte Postfach.
-- Wiederholtes Lesen weiterer Fenster, bis `batchSize` erreicht ist.
+- Unbegrenztes Lesen weiterer Fenster ohne Zeit- oder Strategielimit.
 - Dynamische Erhoehung von `frontWindowSize` durch Message-Input.
 - Ein zweiter Limit-Parameter wie `maxWindowsPerCycle`.
 
@@ -574,9 +613,14 @@ Bei Fehlern:
 
 - Kein unbounded Mailbox-Scan.
 - Kein mailboxweites IMAP `SEARCH`.
-- Pro Trigger nur ein bounded Cursor-Fenster.
-- `frontWindowSize` bleibt die harte Obergrenze fuer pro Trigger gelesene
-  Nachrichten.
+- In der Standardstrategie pro Trigger nur ein bounded Cursor-Fenster.
+- In der Strategie `new-uid-priority` duerfen pro Trigger mehrere bounded
+  Fenster nacheinander gelesen werden. Die Warm-up-Phase wird durch
+  `scanTimeLimitMs` begrenzt; im laufenden Betrieb werden hoechstens ein
+  New-UID-Fenster und ein Bestandsfenster gelesen.
+- `frontWindowSize` bleibt die harte Obergrenze fuer ein einzelnes gelesenes
+  Fenster. Im laufenden `new-uid-priority`-Betrieb wird es auf New-UID- und
+  Bestandsfenster aufgeteilt.
 - Der interne Scan-Cursor wrappt am Mailbox-Ende auf `1` und wird bei
   UIDVALIDITY-Wechsel zurueckgesetzt.
 - `batchSize` begrenzt die Ausgabe.
@@ -602,6 +646,8 @@ imap-email in:
   frontWindowSize:  500
   maxInflight:      500
   retryAfterMs:     1800000
+  scanStrategy:     cursor-window
+  scanTimeLimitMs:  10000
   maxUidPerCommand: 500
 
 imap-email ack:
@@ -623,8 +669,15 @@ imap-email ack:
 - Kombination mehrerer Flag-Filter.
 - Filterung erfolgt nach Cursor-Fetch und vor Full-Fetch.
 - Full-Fetch prueft Flags erneut.
-- Selektive Filter loesen kein weiteres Fenster im selben Trigger aus.
-- Der interne Cursor liest pro Trigger hoechstens `frontWindowSize` Nachrichten.
+- In `cursor-window` loesen selektive Filter kein weiteres Fenster im selben
+  Trigger aus.
+- In `new-uid-priority` aktualisiert die Warm-up-Phase den Status nach jedem
+  gelesenen Fenster und respektiert `scanTimeLimitMs`.
+- In `new-uid-priority` werden neue UIDs vor dem Bestandsfenster ausgegeben.
+- In `new-uid-priority` teilt der laufende Betrieb `frontWindowSize` auf New-
+  UID- und Bestandsfenster auf.
+- Der interne Cursor liest pro Standard-Trigger hoechstens `frontWindowSize`
+  Nachrichten.
 - Der interne Cursor wrappt am Mailbox-Ende.
 - Der interne Cursor resetet bei UIDVALIDITY-Wechsel.
 - Mock-Client stellt sicher, dass kein `SEARCH` ausgefuehrt wird.

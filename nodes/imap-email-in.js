@@ -24,6 +24,13 @@ const diagnostics = require("../lib/diagnostics");
 
 const DEFAULT_DOWNLOAD_CHUNK_SIZE = 64 * 1024;
 const TOO_LARGE_CODE = "IMAP_EMAIL_MESSAGE_TOO_LARGE";
+const DEFAULT_SCAN_TIME_LIMIT_MS = 10000;
+const VALID_SCAN_STRATEGIES = new Set(["cursor-window", "new-uid-priority"]);
+
+function normalizeScanStrategy(value) {
+  const normalized = String(value || "").toLowerCase();
+  return VALID_SCAN_STRATEGIES.has(normalized) ? normalized : "cursor-window";
+}
 
 function buildTooLargeError(limit) {
   const err = new Error(`IMAP message exceeds maxMessageBytes (${limit})`);
@@ -266,6 +273,8 @@ module.exports = function registerImapEmailIn(RED) {
     node.frontWindowSize = parseInteger(config.frontWindowSize, 500, 1, 100000);
     node.maxInflight = parseInteger(config.maxInflight, 500, 1, 100000);
     node.retryAfterMs = parseInteger(config.retryAfterMs, 30 * 60 * 1000, 1000, 7 * 24 * 60 * 60 * 1000);
+    node.scanStrategy = normalizeScanStrategy(config.scanStrategy);
+    node.scanTimeLimitMs = parseInteger(config.scanTimeLimitMs, DEFAULT_SCAN_TIME_LIMIT_MS, 0, 10 * 60 * 1000);
     node.maxUidPerCommand = parseInteger(config.maxUidPerCommand, 500, 1, 5000);
     const legacyDeletedSelection = parseBoolean(config.skipDeleted, true) ? "exclude" : "ignore";
     node.deletedSelection = normalizeFlagSelection(config.deletedSelection, legacyDeletedSelection);
@@ -291,6 +300,7 @@ module.exports = function registerImapEmailIn(RED) {
     node.closeDone = null;
     node.scanCursor = 1;
     node.scanUidValidity = null;
+    node.newUidCursor = null;
 
     if (!node.account) {
       node.status({ fill: "red", shape: "ring", text: "missing account" });
@@ -313,14 +323,26 @@ module.exports = function registerImapEmailIn(RED) {
         mailbox: node.mailbox,
         exists: 0,
         uidValidity: null,
+        uidNextSnapshot: null,
+        scanStrategy: node.scanStrategy,
+        scanTimeLimitMs: node.scanTimeLimitMs,
+        scanTimeLimitReached: false,
+        phase: null,
         frontWindowSize: node.frontWindowSize,
         frontWindowRead: 0,
+        windowsRead: 0,
         scanCursorStart: null,
         scanCursorEnd: null,
         scanCursorNext: node.scanCursor,
         scanCursorReset: false,
         scanCursorAdjusted: false,
         scanWrapped: false,
+        newUidCursor: node.newUidCursor,
+        newUidCursorReset: false,
+        newUidCursorInitialized: false,
+        uidWindowStart: null,
+        uidWindowEnd: null,
+        uidWindowNext: null,
         activeInflight: 0,
         activeInflightAfter: 0,
         inflightTotal: 0,
@@ -385,7 +407,7 @@ module.exports = function registerImapEmailIn(RED) {
       };
     }
 
-    function prepareScanWindow(exists, uidValidity) {
+    function ensureScanUidValidity(uidValidity) {
       let reset = false;
 
       if (node.scanUidValidity === null) {
@@ -393,8 +415,16 @@ module.exports = function registerImapEmailIn(RED) {
       } else if (node.scanUidValidity !== uidValidity) {
         node.scanUidValidity = uidValidity;
         node.scanCursor = 1;
+        node.newUidCursor = null;
         reset = true;
       }
+
+      return reset;
+    }
+
+    function prepareScanWindow(exists, uidValidity, requestedWindowSize) {
+      let reset = ensureScanUidValidity(uidValidity);
+      const size = parseInteger(requestedWindowSize, node.frontWindowSize, 1, node.frontWindowSize);
 
       if (!Number.isSafeInteger(node.scanCursor) || node.scanCursor < 1 || node.scanCursor > exists) {
         node.scanCursor = 1;
@@ -402,18 +432,37 @@ module.exports = function registerImapEmailIn(RED) {
       }
 
       const windowStart = node.scanCursor;
-      const windowEnd = Math.min(exists, windowStart + node.frontWindowSize - 1);
-      const windowSize = Math.max(0, windowEnd - windowStart + 1);
+      const windowEnd = Math.min(exists, windowStart + size - 1);
+      const measuredWindowSize = Math.max(0, windowEnd - windowStart + 1);
       const nextCursor = windowEnd >= exists ? 1 : windowEnd + 1;
 
       return {
         windowStart,
         windowEnd,
-        windowSize,
+        windowSize: measuredWindowSize,
         nextCursor,
         reset,
         wrapped: nextCursor === 1
       };
+    }
+
+    function splitPriorityWindowSizes() {
+      const newWindowSize = Math.max(1, Math.ceil(node.frontWindowSize / 2));
+      const backlogWindowSize = Math.max(1, node.frontWindowSize - newWindowSize);
+      return { newWindowSize, backlogWindowSize };
+    }
+
+    function isValidUid(uid) {
+      return Number.isSafeInteger(uid) && uid > 0;
+    }
+
+    function normalizeUidNext(value) {
+      const uidNext = Number(value);
+      return isValidUid(uidNext) ? uidNext : null;
+    }
+
+    function hasKnownNewUidCursor() {
+      return isValidUid(Number(node.newUidCursor));
     }
 
     function buildAckTokenForUid(uid, uidValidity) {
@@ -591,75 +640,236 @@ module.exports = function registerImapEmailIn(RED) {
         const mailboxInfo = client.mailbox || {};
         const exists = Number(mailboxInfo.exists || 0);
         const uidValidity = String(mailboxInfo.uidValidity || "");
+        const uidNextSnapshot = normalizeUidNext(mailboxInfo.uidNext);
         stats.exists = exists;
         stats.uidValidity = uidValidity;
+        stats.uidNextSnapshot = uidNextSnapshot;
 
         if (exists < 1) {
           node.scanCursor = 1;
           node.scanUidValidity = uidValidity || null;
+          node.newUidCursor = node.scanStrategy === "new-uid-priority" ? uidNextSnapshot : null;
           stats.scanCursorStart = 1;
           stats.scanCursorEnd = 0;
           stats.scanCursorNext = 1;
+          stats.newUidCursor = node.newUidCursor;
           finishStats();
           node.status({ fill: "green", shape: "ring", text: "empty" });
           emitStats(send, stats);
           return;
         }
 
-        const scanWindow = prepareScanWindow(exists, uidValidity);
-        const { windowStart, windowEnd } = scanWindow;
-        stats.frontWindowRead = scanWindow.windowSize;
-        stats.scanCursorStart = windowStart;
-        stats.scanCursorEnd = windowEnd;
-        stats.scanCursorNext = scanWindow.nextCursor;
-        stats.scanCursorReset = scanWindow.reset;
-        stats.scanWrapped = scanWindow.wrapped;
-
         const candidateLimit = Math.min(node.batchSize, capacity);
         const deletedUids = [];
         const candidates = [];
+        const candidateSet = new Set();
         const now = Date.now();
+        let highestUidSeen = 0;
+        let cursorAfterCycle = node.scanCursor;
+        let sequenceRetryCursor = null;
+        let newUidRetryCursor = null;
+        let warmupStartedAt = Date.now();
 
-        started = Date.now();
-        for await (const item of client.fetch(`${windowStart}:${windowEnd}`, {
-          uid: true,
-          flags: true,
-          size: true
-        })) {
-          const uid = Number(item.uid);
-          if (!Number.isSafeInteger(uid) || uid < 1) {
-            continue;
+        function noteScanWindow(window) {
+          stats.phase = window.phase;
+          stats.windowsRead += 1;
+          stats.frontWindowRead += window.windowSize;
+
+          if (window.uid) {
+            stats.uidWindowStart = window.windowStart;
+            stats.uidWindowEnd = window.windowEnd;
+            stats.uidWindowNext = window.nextCursor;
+            return;
           }
 
-          const deleted = isDeleted(item.flags);
-          if (deleted) {
-            stats.deletedFlagged += 1;
+          if (stats.scanCursorStart === null) {
+            stats.scanCursorStart = window.windowStart;
           }
+          stats.scanCursorEnd = window.windowEnd;
+          stats.scanCursorNext = window.nextCursor;
+          stats.scanCursorReset = stats.scanCursorReset || window.reset;
+          stats.scanWrapped = window.wrapped;
+        }
 
-          if (!matchesFlagSelections(item.flags, node.selection)) {
-            stats.filteredByFlags += 1;
-            if (deleted && node.deletedSelection === "exclude") {
-              if (deletedUids.length < node.expungeDeletedFrontLimit) {
-                deletedUids.push(uid);
-              }
-              removeInflightForFetch(uidValidity, uid);
+        function updateWindowStatus(window) {
+          const label = window.phase === "warm-up"
+            ? "warm-up"
+            : window.phase === "new"
+              ? "new UIDs"
+              : window.phase === "backlog"
+                ? "backlog"
+                : "window";
+          node.status({
+            fill: "blue",
+            shape: "ring",
+            text: `${label} ${window.windowStart}:${window.windowEnd}, candidates ${candidates.length}/${candidateLimit}`
+          });
+        }
+
+        async function readCandidateWindow(window) {
+          const result = {
+            selected: 0,
+            lastSelectedUid: null
+          };
+
+          const fetchStarted = Date.now();
+          const fetchOptions = window.uid ? { uid: true } : undefined;
+
+          for await (const item of client.fetch(`${window.windowStart}:${window.windowEnd}`, {
+            uid: true,
+            flags: true,
+            size: true
+          }, fetchOptions)) {
+            const uid = Number(item.uid);
+            if (!isValidUid(uid)) {
+              continue;
             }
-            continue;
+
+            highestUidSeen = Math.max(highestUidSeen, uid);
+
+            const deleted = isDeleted(item.flags);
+            if (deleted) {
+              stats.deletedFlagged += 1;
+            }
+
+            if (!matchesFlagSelections(item.flags, node.selection)) {
+              stats.filteredByFlags += 1;
+              if (deleted && node.deletedSelection === "exclude") {
+                if (deletedUids.length < node.expungeDeletedFrontLimit) {
+                  deletedUids.push(uid);
+                }
+                removeInflightForFetch(uidValidity, uid);
+              }
+              continue;
+            }
+
+            if (registry.isActiveInflight(node.queueKey, uidValidity, uid, node.retryAfterMs, now)) {
+              stats.filteredByInflight += 1;
+              continue;
+            }
+
+            if (candidateSet.has(uid)) {
+              continue;
+            }
+
+            stats.candidates += 1;
+            if (candidates.length < candidateLimit) {
+              candidates.push(uid);
+              candidateSet.add(uid);
+              result.selected += 1;
+              result.lastSelectedUid = uid;
+              if (window.uid && newUidRetryCursor === null) {
+                newUidRetryCursor = window.windowStart;
+              }
+            }
           }
 
-          if (registry.isActiveInflight(node.queueKey, uidValidity, uid, node.retryAfterMs, now)) {
-            stats.filteredByInflight += 1;
-            continue;
+          addTiming(timing, "frontFetchMs", fetchStarted);
+          noteScanWindow(window);
+          updateWindowStatus(window);
+          return result;
+        }
+
+        async function readCursorWindow(phase, windowSize) {
+          const scanWindow = prepareScanWindow(exists, uidValidity, windowSize);
+          if (sequenceRetryCursor === null) {
+            sequenceRetryCursor = scanWindow.windowStart;
           }
 
-          stats.candidates += 1;
-          if (candidates.length < candidateLimit) {
-            candidates.push(uid);
+          const result = await readCandidateWindow({
+            phase,
+            uid: false,
+            ...scanWindow
+          });
+          cursorAfterCycle = scanWindow.nextCursor;
+          node.scanCursor = cursorAfterCycle;
+          return { scanWindow, result };
+        }
+
+        async function readWarmupWindows() {
+          warmupStartedAt = Date.now();
+
+          while (candidates.length < candidateLimit) {
+            const { scanWindow } = await readCursorWindow("warm-up", node.frontWindowSize);
+
+            if (scanWindow.wrapped) {
+              node.newUidCursor = uidNextSnapshot || (highestUidSeen > 0 ? highestUidSeen + 1 : null);
+              stats.newUidCursorInitialized = node.newUidCursor !== null;
+              break;
+            }
+
+            if (node.scanTimeLimitMs === 0) {
+              break;
+            }
+
+            if (Date.now() - warmupStartedAt >= node.scanTimeLimitMs) {
+              stats.scanTimeLimitReached = true;
+              break;
+            }
           }
         }
-        addTiming(timing, "frontFetchMs", started);
 
-        let cursorAfterCycle = scanWindow.nextCursor;
+        async function readDefaultCursorWindow() {
+          await readCursorWindow("cursor", node.frontWindowSize);
+        }
+
+        async function readPriorityWindows() {
+          const uidReset = ensureScanUidValidity(uidValidity);
+          stats.scanCursorReset = stats.scanCursorReset || uidReset;
+          stats.newUidCursorReset = uidReset;
+
+          if (!hasKnownNewUidCursor()) {
+            await readWarmupWindows();
+            return;
+          }
+
+          if (uidNextSnapshot && Number(node.newUidCursor) > uidNextSnapshot) {
+            node.newUidCursor = uidNextSnapshot;
+          }
+
+          const { newWindowSize, backlogWindowSize } = splitPriorityWindowSizes();
+
+          if (uidNextSnapshot && Number(node.newUidCursor) < uidNextSnapshot && candidates.length < candidateLimit) {
+            const uidWindowStart = Number(node.newUidCursor);
+            const uidWindowEnd = Math.min(uidNextSnapshot - 1, uidWindowStart + newWindowSize - 1);
+            const result = await readCandidateWindow({
+              phase: "new",
+              uid: true,
+              windowStart: uidWindowStart,
+              windowEnd: uidWindowEnd,
+              windowSize: Math.max(0, uidWindowEnd - uidWindowStart + 1),
+              nextCursor: uidWindowEnd + 1,
+              reset: false,
+              wrapped: uidWindowEnd + 1 >= uidNextSnapshot
+            });
+
+            if (result.selected > 0 && candidates.length >= candidateLimit && result.lastSelectedUid !== null) {
+              node.newUidCursor = result.lastSelectedUid + 1;
+            } else {
+              node.newUidCursor = uidWindowEnd + 1;
+            }
+          }
+
+          stats.newUidCursor = node.newUidCursor;
+
+          if (candidates.length < candidateLimit) {
+            await readCursorWindow("backlog", backlogWindowSize);
+          }
+        }
+
+        if (node.scanStrategy === "new-uid-priority") {
+          await readPriorityWindows();
+        } else {
+          await readDefaultCursorWindow();
+        }
+
+        stats.newUidCursor = node.newUidCursor;
+        if (stats.scanCursorStart === null) {
+          stats.scanCursorStart = node.scanCursor;
+          stats.scanCursorEnd = node.scanCursor - 1;
+          stats.scanCursorNext = node.scanCursor;
+        }
+
         let expungedAny = await expungeDeletedUids(client, uidValidity, deletedUids, stats, timing);
         activeInflightForStatus = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
         const deletedSeenDuringFetch = [];
@@ -871,15 +1081,27 @@ module.exports = function registerImapEmailIn(RED) {
         }
 
         if (connectionInterrupted) {
-          cursorAfterCycle = windowStart;
-          stats.scanCursorAdjusted = true;
-          stats.scanCursorNext = cursorAfterCycle;
-          stats.scanWrapped = cursorAfterCycle === 1;
+          if (sequenceRetryCursor !== null) {
+            cursorAfterCycle = sequenceRetryCursor;
+            stats.scanCursorAdjusted = true;
+            stats.scanCursorNext = cursorAfterCycle;
+            stats.scanWrapped = cursorAfterCycle === 1;
+          }
+          if (newUidRetryCursor !== null) {
+            node.newUidCursor = newUidRetryCursor;
+            stats.newUidCursor = node.newUidCursor;
+          } else if (stats.newUidCursorInitialized && sequenceRetryCursor !== null) {
+            node.newUidCursor = null;
+            stats.newUidCursor = null;
+            stats.newUidCursorInitialized = false;
+          }
         } else if (expungedAny) {
-          cursorAfterCycle = windowStart;
-          stats.scanCursorAdjusted = true;
-          stats.scanCursorNext = cursorAfterCycle;
-          stats.scanWrapped = cursorAfterCycle === 1;
+          if (sequenceRetryCursor !== null) {
+            cursorAfterCycle = sequenceRetryCursor;
+            stats.scanCursorAdjusted = true;
+            stats.scanCursorNext = cursorAfterCycle;
+            stats.scanWrapped = cursorAfterCycle === 1;
+          }
         }
 
         node.scanCursor = cursorAfterCycle;

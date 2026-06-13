@@ -84,6 +84,8 @@ Batch size       maximum messages emitted per trigger
 Front window     maximum messages inspected per trigger from the current cursor
 Max inflight     maximum emitted but not-yet-ACKed messages tracked in memory
 Retry after ms   time after which an un-ACKed message may be emitted again
+Scan strategy    cursor-window or opt-in new-uid-priority
+Scan time ms     warm-up scan soft time budget; 0 means one warm-up window
 UIDs/command     maximum UID count per IMAP command chunk
 Max bytes        maximum RFC822 bytes per message, 0 means unlimited
 Chunk bytes      streamed IMAP download chunk size
@@ -104,6 +106,22 @@ selective filter may emit fewer messages than `Batch size`; it never causes a
 full-mailbox scan to fill the batch. When the cursor reaches the end of the
 mailbox, it wraps back to the first sequence number. The cursor is volatile and
 resets when Node-RED restarts or when IMAP UIDVALIDITY changes.
+
+The optional `Prioritize new UIDs` scan strategy is intended for mailboxes where
+processed messages stay in the same folder, for example after setting `\Seen`.
+After restart or UIDVALIDITY reset it warms up from the beginning with full
+front-window sized reads. Empty windows are discarded and the node updates its
+status after every read window. The warm-up stops when the batch/capacity is
+filled, the mailbox end is reached, or `Scan time ms` expires; `0` means only
+one warm-up window.
+
+Once the mailbox end has been reached, the node records the current `UIDNEXT`.
+Later triggers first read newly arrived UIDs up to a per-trigger `UIDNEXT`
+snapshot, then read one cyclic backlog window if capacity remains. In this mode
+the new-UID and backlog windows each use about half of `Front window`, with the
+larger half assigned to new UIDs. New UIDs are emitted before backlog messages
+and in ascending UID order, but the mode does not guarantee globally oldest
+unread delivery across the whole mailbox.
 
 Output messages include the server flags as an array:
 

@@ -123,7 +123,8 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
         capabilities: new Set(currentMailbox.capabilities || []),
         mailbox: {
           exists: currentMailbox.exists,
-          uidValidity: currentMailbox.uidValidity
+          uidValidity: currentMailbox.uidValidity,
+          uidNext: currentMailbox.uidNext
         },
         async connect() {
           if (typeof currentMailbox.connect === "function") {
@@ -144,7 +145,10 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
           fetchCalls.push({ range, query, options });
           this.inFetch = true;
           try {
-            for (const item of currentMailbox.front || []) {
+            const front = typeof currentMailbox.fetch === "function"
+              ? currentMailbox.fetch(range, query, options)
+              : currentMailbox.front || [];
+            for await (const item of front) {
               yield item;
             }
           } finally {
@@ -256,6 +260,22 @@ function createMailWithAttachment(subject = "Attachment") {
   ].join("\r\n");
 }
 
+function createMessage(uid, subject = `Message ${uid}`, flags = []) {
+  return {
+    uid,
+    flags,
+    envelope: { subject },
+    internalDate: new Date("2026-01-01T00:00:00Z"),
+    size: 80,
+    source: createMailSource(subject)
+  };
+}
+
+function rangeBounds(range) {
+  const [start, end] = String(range).split(":").map((value) => Number(value));
+  return { start, end };
+}
+
 function collectStats(outputs) {
   return outputs
     .filter((output) => output && output[2] && output[2].payload)
@@ -280,6 +300,8 @@ test("imap email in selection defaults match the design decision", () => {
   for (const [field, expected] of Object.entries(selectionDefaults)) {
     assert.equal(findHtmlDefault(html, field), expected, `${field} must default to ${expected}`);
   }
+  assert.equal(findHtmlDefault(html, "scanStrategy"), "cursor-window");
+  assert.equal(findHtmlDefault(html, "scanTimeLimitMs"), "10000");
   assert.equal(findHtmlDefault(html, "maxMessageBytes"), "0");
   assert.equal(findHtmlDefault(html, "downloadChunkSize"), "65536");
 
@@ -290,6 +312,8 @@ test("imap email in selection defaults match the design decision", () => {
     answered: "ignore",
     flagged: "ignore"
   });
+  assert.equal(node.scanStrategy, "cursor-window");
+  assert.equal(node.scanTimeLimitMs, 10000);
   assert.equal(node.maxMessageBytes, 0);
   assert.equal(node.downloadChunkSize, 65536);
 });
@@ -308,6 +332,7 @@ test("imap email in normalizes numeric limits to integers", () => {
     batchSize: "2.9",
     frontWindowSize: "3.9",
     maxInflight: "4.9",
+    scanTimeLimitMs: "7.9",
     maxUidPerCommand: "5.9",
     expungeDeletedFrontLimit: "6.9",
     maxMessageBytes: "123.9",
@@ -317,6 +342,7 @@ test("imap email in normalizes numeric limits to integers", () => {
   assert.equal(node.batchSize, 2);
   assert.equal(node.frontWindowSize, 3);
   assert.equal(node.maxInflight, 4);
+  assert.equal(node.scanTimeLimitMs, 7);
   assert.equal(node.maxUidPerCommand, 5);
   assert.equal(node.expungeDeletedFrontLimit, 6);
   assert.equal(node.maxMessageBytes, 123);
@@ -539,6 +565,204 @@ test("imap email in limits stored candidates after streaming one front window", 
   assert.equal(stats.frontWindowRead, 20);
   assert.equal(stats.candidates, 20);
   assert.equal(stats.emitted, 2);
+});
+
+test("imap email in new UID priority warm-up reads only one window when scanTimeLimitMs is zero", async () => {
+  const { node, fetchCalls } = createCursorTestNode({
+    scanStrategy: "new-uid-priority",
+    scanTimeLimitMs: 0,
+    frontWindowSize: 2,
+    batchSize: 2
+  }, [
+    {
+      exists: 5,
+      uidNext: 6,
+      uidValidity: "uidv-1",
+      fetch() {
+        return [];
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["1:2"]);
+  assert.equal(node.scanCursor, 3);
+  assert.equal(node.newUidCursor, null);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.scanStrategy, "new-uid-priority");
+  assert.equal(stats.windowsRead, 1);
+  assert.equal(stats.frontWindowRead, 2);
+  assert.equal(stats.scanTimeLimitReached, false);
+});
+
+test("imap email in new UID priority warm-up updates status after every window and initializes new UID cursor at mailbox end", async () => {
+  const messages = [createMessage(5, "Newest unseen")];
+  const { node, statuses, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    scanStrategy: "new-uid-priority",
+    scanTimeLimitMs: 10000,
+    frontWindowSize: 2,
+    batchSize: 2,
+    seenSelection: "exclude"
+  }, [
+    {
+      exists: 5,
+      uidNext: 10,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range) {
+        const { start, end } = rangeBounds(range);
+        if (start <= 5 && end >= 5) {
+          return [{ uid: 5, flags: [], size: 80 }];
+        }
+        return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => ({
+          uid: start + index,
+          flags: ["\\Seen"],
+          size: 80
+        }));
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["1:2", "3:4", "5:5"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["5"]);
+  assert.equal(node.scanCursor, 1);
+  assert.equal(node.newUidCursor, 10);
+  assert.equal(statuses.filter((status) => /^warm-up /.test(status.text || "")).length, 3);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.newUidCursorInitialized, true);
+  assert.equal(stats.newUidCursor, 10);
+  assert.equal(stats.windowsRead, 3);
+  assert.equal(stats.emitted, 1);
+});
+
+test("imap email in new UID priority emits new UIDs before backlog and splits window size", async () => {
+  const messages = [
+    createMessage(1, "Backlog one"),
+    createMessage(101, "New one"),
+    createMessage(102, "New two")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    scanStrategy: "new-uid-priority",
+    frontWindowSize: 5,
+    batchSize: 3
+  }, [
+    {
+      exists: 6,
+      uidNext: 104,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        if (options && options.uid) {
+          assert.equal(range, "101:103");
+          return [
+            { uid: 101, flags: [], size: 80 },
+            { uid: 102, flags: [], size: 80 }
+          ];
+        }
+
+        assert.equal(range, "1:2");
+        return [{ uid: 1, flags: [], size: 80 }];
+      }
+    }
+  ]);
+  const outputs = [];
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103", "1:2"]);
+  assert.deepEqual(fetchCalls.map((call) => call.options), [{ uid: true }, undefined]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102", "1"]);
+  assert.equal(node.newUidCursor, 104);
+  assert.equal(node.scanCursor, 3);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.uidWindowStart, 101);
+  assert.equal(stats.uidWindowEnd, 103);
+  assert.equal(stats.scanCursorStart, 1);
+  assert.equal(stats.scanCursorEnd, 2);
+  assert.equal(stats.emitted, 3);
+});
+
+test("imap email in new UID priority skips backlog when new UIDs fill capacity", async () => {
+  const messages = [
+    createMessage(101, "New one"),
+    createMessage(102, "New two")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    scanStrategy: "new-uid-priority",
+    frontWindowSize: 5,
+    batchSize: 2
+  }, [
+    {
+      exists: 6,
+      uidNext: 104,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        assert.equal(range, "101:103");
+        return [
+          { uid: 101, flags: [], size: 80 },
+          { uid: 102, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102"]);
+  assert.equal(node.newUidCursor, 103);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.windowsRead, 1);
+  assert.equal(stats.emitted, 2);
+});
+
+test("imap email in new UID priority resets new UID cursor on UIDVALIDITY changes", async () => {
+  const { node, fetchCalls } = createCursorTestNode({
+    scanStrategy: "new-uid-priority",
+    scanTimeLimitMs: 0,
+    frontWindowSize: 2,
+    batchSize: 1
+  }, [
+    {
+      exists: 5,
+      uidNext: 6,
+      uidValidity: "uidv-new",
+      fetch() {
+        return [];
+      }
+    }
+  ]);
+  node.scanUidValidity = "uidv-old";
+  node.newUidCursor = 99;
+  node.scanCursor = 4;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["1:2"]);
+  assert.equal(node.newUidCursor, null);
+  assert.equal(node.scanCursor, 3);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.scanCursorReset, true);
+  assert.equal(stats.newUidCursorReset, true);
 });
 
 test("imap email in handles transient connect, lock and fetch errors without node.error", async () => {
@@ -1017,8 +1241,8 @@ test("imap email in flag filters must not require unbounded mailbox scans", () =
   );
   assert.match(
     source,
-    /client\.fetch\(`\$\{windowStart\}:\$\{windowEnd\}`/,
-    "front fetch must stream one bounded cursor window"
+    /client\.fetch\(`\$\{window\.windowStart\}:\$\{window\.windowEnd\}`/,
+    "front fetch must stream bounded cursor windows"
   );
   assert.equal(source.includes("fetchAll"), false, "input node must not collect IMAP fetch results with fetchAll");
   assert.equal(/\bsearch\s*\(/i.test(source), false, "flag filtering must not introduce IMAP SEARCH");
