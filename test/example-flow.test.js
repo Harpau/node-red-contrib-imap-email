@@ -31,3 +31,22 @@ test("example flow uses only public imap email nodes", () => {
   assert.equal(text.includes("imap queue"), false);
   assert.equal(text.includes("imap-queue"), false);
 });
+
+test("example flow is passive and non-destructive by default", () => {
+  const root = path.resolve(__dirname, "..");
+  const flowPath = path.join(root, "examples", "basic-at-least-once-flow.json");
+  const flow = JSON.parse(fs.readFileSync(flowPath, "utf8"));
+  const tab = flow.find((node) => node.type === "tab");
+  const inject = flow.find((node) => node.type === "inject");
+  const input = flow.find((node) => node.type === "imap-email in");
+  const ack = flow.find((node) => node.type === "imap-email ack");
+
+  assert.equal(tab.disabled, true);
+  assert.equal(inject.once, false);
+  assert.equal(inject.repeat, "");
+  assert.equal(input.seenSelection, "exclude");
+  assert.equal(input.expungeDeletedFront, false);
+  assert.equal(ack.actionMode, "flag");
+  assert.equal(ack.seenAction, "set");
+  assert.notEqual(ack.actionMode, "delete");
+});

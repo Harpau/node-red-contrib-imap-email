@@ -61,3 +61,22 @@ test("release documentation exists", () => {
     assert.ok(fs.readFileSync(fullPath, "utf8").length > 100, `${file} should not be empty`);
   }
 });
+
+test("ack documentation describes copy and fail-closed capability rules", () => {
+  const root = path.resolve(__dirname, "..");
+  const docs = {
+    "README.md": fs.readFileSync(path.join(root, "README.md"), "utf8"),
+    "nodes/imap-email-ack.html": fs.readFileSync(path.join(root, "nodes", "imap-email-ack.html"), "utf8"),
+    "docs/design-decisions-imap-email.md": fs.readFileSync(path.join(root, "docs", "design-decisions-imap-email.md"), "utf8")
+  };
+
+  for (const [file, content] of Object.entries(docs)) {
+    assert.match(content, /\bcopy\b/, `${file} should document the copy ACK action`);
+    assert.match(content, /UIDPLUS/, `${file} should document the delete UIDPLUS requirement`);
+    assert.match(content, /\bMOVE\b/, `${file} should document the native MOVE requirement`);
+  }
+
+  assert.match(docs["nodes/imap-email-ack.html"], /<option value="copy">copy<\/option>/);
+  assert.match(docs["README.md"], /action fails closed on output 2/);
+  assert.match(docs["docs/design-decisions-imap-email.md"], /messageCopy/);
+});

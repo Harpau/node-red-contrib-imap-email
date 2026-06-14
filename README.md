@@ -37,7 +37,7 @@ Restart Node-RED after installation.
 
 ## Example Flow
 
-Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password. The visible palette labels use spaces; the stored Flow JSON types use the `imap-email ...` prefix.
+Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password. The example tab is disabled by default, the Inject node does not run automatically, and the ACK path only marks messages as seen. The visible palette labels use spaces; the stored Flow JSON types use the `imap-email ...` prefix.
 
 Minimal flow:
 
@@ -53,8 +53,9 @@ Only wire messages to `imap-email ack` after all processing that must succeed ha
 `imap-email ack` can be configured multiple times in one flow. Typical modes:
 
 ```text
-delete       delete the mail by UID and complete it
-move         create the target folder if needed, optionally update flags, move the mail and complete it
+delete       delete the mail by UID and complete it; requires IMAP UIDPLUS
+move         optionally update flags, move the mail and complete it; requires native IMAP MOVE
+copy         optionally update source flags, copy the mail to a target folder and complete it
 flag         set or clear flags, keep the mail and complete it
 set by msg.imap.ackAction
              read action, target folder and flags from the message
@@ -62,9 +63,10 @@ set by msg.imap.ackAction
 
 The ack node can set or clear `\Seen`, `\Answered`, `\Flagged`, other IMAP
 system flags such as `\Draft`, and custom keywords such as `$Processed` in
-`flag` and `move` mode. With `move`, flags are updated before the message is
-moved. Use `delete` to delete mail; setting `\Deleted` as a raw flag is an
-advanced flag operation and does not replace the delete action.
+`flag`, `move` and `copy` mode. With `move` and `copy`, flags are updated on the
+source message before it is moved or copied. Use `delete` to delete mail;
+setting `\Deleted` as a raw flag is an advanced flag operation and does not
+replace the delete action.
 
 ## Large Mailboxes
 
@@ -166,6 +168,11 @@ fails. In that case output 2 receives the original message with
 `msg.imapAck.ok = false`, and the inflight entry remains available for a later
 retry.
 
+To avoid unsafe IMAP fallback behavior, `delete` requires server support for
+`UIDPLUS` and `move` requires native `MOVE`. Without those capabilities the ACK
+action fails closed on output 2. `copy` keeps the source message and applies any
+configured flag changes before copying it to the target mailbox.
+
 ACK tokens are scoped to the configured IMAP account and must contain the
 account, mailbox, UID, UIDVALIDITY and ACK scope fields emitted by
 `imap-email in`. If a token is missing required scope fields or names a
@@ -178,7 +185,7 @@ For dynamic decisions, configure `imap-email ack` to
 
 ```js
 msg.imap.ackAction = {
-  action: "move",               // delete, move, flag
+  action: "move",               // delete, move, copy, flag
   targetMailbox: "Archive/Processed",
   flags: {
     seen: "set",                // ignore, set, clear

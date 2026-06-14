@@ -11,5 +11,6 @@ All notable changes to `@compeso/node-red-contrib-imap-email` are documented her
 - Added externally triggered IMAP input processing with bounded cursor-window fetch for large mailboxes.
 - Added Deleted, Seen, Answered and Flagged selection options.
 - Added at-least-once delivery support through volatile inflight tracking and ACK tokens.
-- Added ACK actions for delete, move, flag and message-driven action plans.
-- Added diagnostics, stats output, example flow and package consistency tests.
+- Added ACK actions for delete, move, copy, flag and message-driven action plans.
+- Added fail-closed ACK handling for unsafe delete and move capability fallbacks.
+- Added diagnostics, stats output, a disabled non-destructive example flow and package consistency tests.

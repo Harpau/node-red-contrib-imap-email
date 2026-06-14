@@ -66,10 +66,10 @@ module.exports = function registerImapEmailAck(RED) {
     if (node.actionMode !== "message") {
       try {
         const actionConfig = { action: node.actionMode };
-        if (node.actionMode === "move") {
+        if (node.actionMode === "move" || node.actionMode === "copy") {
           actionConfig.targetMailbox = node.targetMailbox;
         }
-        if (node.actionMode === "flag" || node.actionMode === "move") {
+        if (node.actionMode === "flag" || node.actionMode === "move" || node.actionMode === "copy") {
           actionConfig.seenAction = node.seenAction;
           actionConfig.answeredAction = node.answeredAction;
           actionConfig.flaggedAction = node.flaggedAction;
@@ -459,9 +459,9 @@ module.exports = function registerImapEmailAck(RED) {
                     plan,
                     range,
                     mailbox,
-                    ensureTargetMailbox: plan.action !== "move" || !targetMailboxEnsured
+                    ensureTargetMailbox: !["move", "copy"].includes(plan.action) || !targetMailboxEnsured
                   });
-                  if (plan.action === "move") {
+                  if (plan.action === "move" || plan.action === "copy") {
                     targetMailboxEnsured = true;
                   }
                   addTiming(stats.timings, `${plan.action}Ms`, t);

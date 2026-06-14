@@ -51,6 +51,10 @@ function createConnectionError(message, code) {
   return err;
 }
 
+function imapCaps(...names) {
+  return new Set(names);
+}
+
 function createAckNode(config = {}, clientFactory) {
   let AckCtor;
   const statuses = [];
@@ -149,7 +153,7 @@ test("imap email ack action helper module exposes the simplified API", () => {
   assert.equal(typeof actions.executeAckActionRange, "function");
 });
 
-test("normalizes delete, move and flag ack actions", () => {
+test("normalizes delete, move, copy and flag ack actions", () => {
   const { normalizeAckAction } = loadAckActions();
 
   assert.deepEqual(normalizeAckAction({ action: "delete" }), {
@@ -170,6 +174,18 @@ test("normalizes delete, move and flag ack actions", () => {
     disposition: "move",
     targetMailbox: "Archive/Processed",
     flags: { add: ["\\Seen", "$Processed"], remove: ["\\Draft"] }
+  });
+
+  assert.deepEqual(normalizeAckAction({
+    action: "copy",
+    targetMailbox: "Archive/Copied",
+    flaggedAction: "set",
+    flagRemove: "$Todo"
+  }), {
+    action: "copy",
+    disposition: "copy",
+    targetMailbox: "Archive/Copied",
+    flags: { add: ["\\Flagged"], remove: ["$Todo"] }
   });
 
   assert.deepEqual(normalizeAckAction({
@@ -212,6 +228,26 @@ test("normalizes set by msg. action objects", () => {
     flags: {
       add: ["\\Seen", "$Processed"],
       remove: ["\\Answered", "\\Draft"]
+    }
+  });
+
+  assert.deepEqual(normalizeAckActionFromMessage({
+    imap: {
+      ackAction: {
+        action: "copy",
+        targetMailbox: "Archive/Copied",
+        flags: {
+          seen: "set"
+        }
+      }
+    }
+  }), {
+    action: "copy",
+    disposition: "copy",
+    targetMailbox: "Archive/Copied",
+    flags: {
+      add: ["\\Seen"],
+      remove: []
     }
   });
 });
@@ -299,6 +335,7 @@ test("set by msg. uses the fixed msg.imap.ackAction path", () => {
     actionMode: "message",
     actionProperty: "custom.path"
   }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
     async getMailboxLock() {
@@ -324,6 +361,7 @@ test("rejects invalid simplified ack action combinations", () => {
   const { normalizeAckAction, validateAckActionPlan } = loadAckActions();
 
   assert.throws(() => normalizeAckAction({ action: "move" }), /target.*mailbox/i);
+  assert.throws(() => normalizeAckAction({ action: "copy" }), /target.*mailbox/i);
   assert.throws(() => normalizeAckAction({ action: "unknown" }), /unknown.*action/i);
   assert.throws(() => normalizeAckAction({
     action: "delete",
@@ -339,6 +377,17 @@ test("rejects invalid simplified ack action combinations", () => {
     disposition: "move",
     targetMailbox: "Archive",
     flags: { add: ["\\Seen"], remove: [] }
+  });
+
+  assert.deepEqual(normalizeAckAction({
+    action: "copy",
+    targetMailbox: "Copied",
+    flaggedAction: "clear"
+  }), {
+    action: "copy",
+    disposition: "copy",
+    targetMailbox: "Copied",
+    flags: { add: [], remove: ["\\Flagged"] }
   });
 
   assert.throws(() => validateAckActionPlan({
@@ -357,6 +406,7 @@ test("ack runtime normalizes numeric limits to integers", () => {
     maxBatchesPerFlush: "3.9",
     closeTimeoutMs: "7.9"
   }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
     async getMailboxLock() {
@@ -728,17 +778,21 @@ test("executes move with automatic target mailbox creation", async () => {
     flagRemove: "$Todo"
   });
   const client = {
+    capabilities: imapCaps("MOVE"),
     async mailboxCreate(path) {
       calls.push(["mailboxCreate", path]);
     },
     async messageFlagsAdd(range, flags, options) {
       calls.push(["messageFlagsAdd", range, flags, options]);
+      return true;
     },
     async messageFlagsRemove(range, flags, options) {
       calls.push(["messageFlagsRemove", range, flags, options]);
+      return true;
     },
     async messageMove(range, target, options) {
       calls.push(["messageMove", range, target, options]);
+      return { destination: target };
     }
   };
 
@@ -761,6 +815,7 @@ test("does not apply move flags when target mailbox creation fails", async () =>
     seenAction: "set"
   });
   const client = {
+    capabilities: imapCaps("MOVE"),
     async mailboxCreate(path) {
       calls.push(["mailboxCreate", path]);
       throw new Error("create failed");
@@ -789,6 +844,7 @@ test("does not move when move flag updates fail before any side effect", async (
     seenAction: "set"
   });
   const client = {
+    capabilities: imapCaps("MOVE"),
     async mailboxCreate(path) {
       calls.push(["mailboxCreate", path]);
     },
@@ -824,11 +880,13 @@ test("marks move failures after flag changes as partial", async () => {
     seenAction: "set"
   });
   const client = {
+    capabilities: imapCaps("MOVE"),
     async mailboxCreate(path) {
       calls.push(["mailboxCreate", path]);
     },
     async messageFlagsAdd(range, flags, options) {
       calls.push(["messageFlagsAdd", range, flags, options]);
+      return true;
     },
     async messageMove(range, target, options) {
       calls.push(["messageMove", range, target, options]);
@@ -855,6 +913,7 @@ test("does not report success when an IMAP action fails", async () => {
   const { executeAckActionRange, normalizeAckAction } = loadAckActions();
   const plan = normalizeAckAction({ action: "delete" });
   const client = {
+    capabilities: imapCaps("UIDPLUS"),
     async messageDelete() {
       throw new Error("delete failed");
     }
@@ -864,6 +923,205 @@ test("does not report success when an IMAP action fails", async () => {
     () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
     /delete failed/
   );
+});
+
+test("executes delete with UIDPLUS and confirmed success", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const calls = [];
+  const result = await executeAckActionRange({
+    client: {
+      capabilities: imapCaps("UIDPLUS"),
+      async messageDelete(range, options) {
+        calls.push(["messageDelete", range, options]);
+        return true;
+      }
+    },
+    plan: normalizeAckAction({ action: "delete" }),
+    range: "123",
+    mailbox: "INBOX"
+  });
+
+  assert.deepEqual(calls, [["messageDelete", "123", { uid: true }]]);
+  assert.equal(result.ok, true);
+  assert.equal(result.action, "delete");
+  assert.equal(result.disposition, "delete");
+});
+
+test("rejects unsafe delete and move capability fallbacks before acting", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const calls = [];
+
+  await assert.rejects(
+    () => executeAckActionRange({
+      client: {
+        capabilities: imapCaps(),
+        async messageDelete() {
+          calls.push("messageDelete");
+          return true;
+        }
+      },
+      plan: normalizeAckAction({ action: "delete" }),
+      range: "123",
+      mailbox: "INBOX"
+    }),
+    /UIDPLUS/
+  );
+
+  await assert.rejects(
+    () => executeAckActionRange({
+      client: {
+        capabilities: imapCaps(),
+        async mailboxCreate() {
+          calls.push("mailboxCreate");
+        },
+        async messageMove() {
+          calls.push("messageMove");
+          return { destination: "Archive" };
+        }
+      },
+      plan: normalizeAckAction({ action: "move", targetMailbox: "Archive" }),
+      range: "123",
+      mailbox: "INBOX"
+    }),
+    /MOVE/
+  );
+
+  assert.deepEqual(calls, []);
+});
+
+test("executes copy with automatic target mailbox creation and source flag updates", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const calls = [];
+  const plan = normalizeAckAction({
+    action: "copy",
+    targetMailbox: "Archive/Copied",
+    seenAction: "set",
+    flagRemove: "$Todo"
+  });
+  const client = {
+    async mailboxCreate(path) {
+      calls.push(["mailboxCreate", path]);
+    },
+    async messageFlagsAdd(range, flags, options) {
+      calls.push(["messageFlagsAdd", range, flags, options]);
+      return true;
+    },
+    async messageFlagsRemove(range, flags, options) {
+      calls.push(["messageFlagsRemove", range, flags, options]);
+      return true;
+    },
+    async messageCopy(range, target, options) {
+      calls.push(["messageCopy", range, target, options]);
+      return { destination: target };
+    }
+  };
+
+  await executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" });
+
+  assert.deepEqual(calls, [
+    ["mailboxCreate", "Archive/Copied"],
+    ["messageFlagsAdd", "123", ["\\Seen"], { uid: true }],
+    ["messageFlagsRemove", "123", ["$Todo"], { uid: true }],
+    ["messageCopy", "123", "Archive/Copied", { uid: true }]
+  ]);
+});
+
+test("rejects false and undefined IMAP action results", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const cases = [
+    ["delete false", normalizeAckAction({ action: "delete" }), {
+      capabilities: imapCaps("UIDPLUS"),
+      async messageDelete() { return false; }
+    }],
+    ["delete undefined", normalizeAckAction({ action: "delete" }), {
+      capabilities: imapCaps("UIDPLUS"),
+      async messageDelete() {}
+    }],
+    ["move false", normalizeAckAction({ action: "move", targetMailbox: "Archive" }), {
+      capabilities: imapCaps("MOVE"),
+      async mailboxCreate() {},
+      async messageMove() { return false; }
+    }],
+    ["move undefined", normalizeAckAction({ action: "move", targetMailbox: "Archive" }), {
+      capabilities: imapCaps("MOVE"),
+      async mailboxCreate() {},
+      async messageMove() {}
+    }],
+    ["copy false", normalizeAckAction({ action: "copy", targetMailbox: "Archive" }), {
+      async mailboxCreate() {},
+      async messageCopy() { return false; }
+    }],
+    ["copy undefined", normalizeAckAction({ action: "copy", targetMailbox: "Archive" }), {
+      async mailboxCreate() {},
+      async messageCopy() {}
+    }],
+    ["flag add false", normalizeAckAction({ action: "flag", seenAction: "set" }), {
+      async messageFlagsAdd() { return false; }
+    }],
+    ["flag add undefined", normalizeAckAction({ action: "flag", seenAction: "set" }), {
+      async messageFlagsAdd() {}
+    }],
+    ["flag remove false", normalizeAckAction({ action: "flag", seenAction: "clear" }), {
+      async messageFlagsRemove() { return false; }
+    }],
+    ["flag remove undefined", normalizeAckAction({ action: "flag", seenAction: "clear" }), {
+      async messageFlagsRemove() {}
+    }]
+  ];
+
+  for (const [label, plan, client] of cases) {
+    await assert.rejects(
+      () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
+      /failed/,
+      label
+    );
+  }
+});
+
+test("marks false and undefined results after flag changes as partial", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const cases = [
+    ["flag remove false", normalizeAckAction({ action: "flag", seenAction: "set", flaggedAction: "clear" }), {
+      async messageFlagsAdd() { return true; },
+      async messageFlagsRemove() { return false; }
+    }],
+    ["flag remove undefined", normalizeAckAction({ action: "flag", seenAction: "set", flaggedAction: "clear" }), {
+      async messageFlagsAdd() { return true; },
+      async messageFlagsRemove() {}
+    }],
+    ["move false", normalizeAckAction({ action: "move", targetMailbox: "Archive", seenAction: "set" }), {
+      capabilities: imapCaps("MOVE"),
+      async mailboxCreate() {},
+      async messageFlagsAdd() { return true; },
+      async messageMove() { return false; }
+    }],
+    ["move undefined", normalizeAckAction({ action: "move", targetMailbox: "Archive", seenAction: "set" }), {
+      capabilities: imapCaps("MOVE"),
+      async mailboxCreate() {},
+      async messageFlagsAdd() { return true; },
+      async messageMove() {}
+    }],
+    ["copy false", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set" }), {
+      async mailboxCreate() {},
+      async messageFlagsAdd() { return true; },
+      async messageCopy() { return false; }
+    }],
+    ["copy undefined", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set" }), {
+      async mailboxCreate() {},
+      async messageFlagsAdd() { return true; },
+      async messageCopy() {}
+    }]
+  ];
+
+  for (const [label, plan, client] of cases) {
+    await assert.rejects(
+      () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
+      (err) => {
+        assert.equal(err.partial, true, label);
+        return /failed/.test(err.message);
+      }
+    );
+  }
 });
 
 test("ack runtime handles chunk failures at chunk granularity", async () => {
@@ -881,6 +1139,7 @@ test("ack runtime handles chunk failures at chunk granularity", async () => {
     flushMs: 60000,
     diagnostics: "off"
   }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
     async getMailboxLock() {
@@ -891,6 +1150,7 @@ test("ack runtime handles chunk failures at chunk granularity", async () => {
       if (range === "3:4") {
         throw new Error("chunk failed");
       }
+      return true;
     },
     async logout() {}
   }));
@@ -926,6 +1186,175 @@ test("ack runtime handles chunk failures at chunk granularity", async () => {
   assert.equal(registry.isActiveInflight(key, "uidv-1", 2, 10000, 2000), false);
   assert.equal(registry.isActiveInflight(key, "uidv-1", 3, 10000, 2000), true);
   assert.equal(registry.isActiveInflight(key, "uidv-1", 4, 10000, 2000), true);
+});
+
+test("ack runtime rejects unsafe delete without UIDPLUS and keeps inflight", async () => {
+  const key = "queue-1";
+  registry.clearQueue(key);
+  registry.markInflight(key, sampleToken(1), { now: 1000 });
+  const clientCalls = [];
+
+  const { node } = createAckNode({
+    actionMode: "delete",
+    batchSize: 1,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    capabilities: imapCaps(),
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async messageDelete() {
+      clientCalls.push("messageDelete");
+      return true;
+    },
+    async logout() {}
+  }));
+
+  const itemOutputs = [];
+  node.pending.push({
+    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
+    send: sendWithCapture(itemOutputs),
+    done: () => {},
+    token: sampleToken(1),
+    plan: node.actionPlan,
+    enqueuedAt: Date.now()
+  });
+
+  await node.flush();
+
+  assert.deepEqual(clientCalls, []);
+  assert.equal(itemOutputs.length, 1);
+  assert.equal(itemOutputs[0][1].imapAck.ok, false);
+  assert.match(itemOutputs[0][1].imapAck.error, /UIDPLUS/);
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 1, 10000, 2000), true);
+});
+
+test("ack runtime completes copy actions and removes inflight", async () => {
+  const key = "queue-1";
+  registry.clearQueue(key);
+  registry.markInflight(key, sampleToken(1), { now: 1000 });
+  const clientCalls = [];
+
+  const { node } = createAckNode({
+    actionMode: "copy",
+    targetMailbox: "Archive/Copied",
+    seenAction: "set",
+    batchSize: 1,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async mailboxCreate(path) {
+      clientCalls.push(["mailboxCreate", path]);
+    },
+    async messageFlagsAdd(range, flags, options) {
+      clientCalls.push(["messageFlagsAdd", range, flags, options]);
+      return true;
+    },
+    async messageCopy(range, target, options) {
+      clientCalls.push(["messageCopy", range, target, options]);
+      return { destination: target };
+    },
+    async logout() {}
+  }));
+
+  const itemOutputs = [];
+  node.pending.push({
+    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
+    send: sendWithCapture(itemOutputs),
+    done: () => {},
+    token: sampleToken(1),
+    plan: node.actionPlan,
+    enqueuedAt: Date.now()
+  });
+
+  await node.flush();
+
+  assert.deepEqual(clientCalls, [
+    ["mailboxCreate", "Archive/Copied"],
+    ["messageFlagsAdd", "1", ["\\Seen"], { uid: true }],
+    ["messageCopy", "1", "Archive/Copied", { uid: true }]
+  ]);
+  assert.equal(itemOutputs.length, 1);
+  assert.equal(itemOutputs[0][0].imapAck.ok, true);
+  assert.equal(itemOutputs[0][0].imapAck.action, "copy");
+  assert.equal(registry.isActiveInflight(key, "uidv-1", 1, 10000, 2000), false);
+});
+
+test("ack runtime completes message-driven copy actions and removes inflight", async () => {
+  const token = inputToken(1);
+  registry.clearQueue(token.queueKey);
+  registry.markInflight(token.queueKey, token, { now: 1000 });
+  const clientCalls = [];
+
+  const { node, handlers } = createAckNode({
+    actionMode: "message",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async mailboxCreate(path) {
+      clientCalls.push(["mailboxCreate", path]);
+    },
+    async messageFlagsAdd(range, flags, options) {
+      clientCalls.push(["messageFlagsAdd", range, flags, options]);
+      return true;
+    },
+    async messageCopy(range, target, options) {
+      clientCalls.push(["messageCopy", range, target, options]);
+      return { destination: target };
+    },
+    async logout() {}
+  }));
+
+  const outputs = [];
+  let doneCount = 0;
+  handlers.input({
+    payload: 1,
+    imap: {
+      ackToken: token,
+      ackAction: {
+        action: "copy",
+        targetMailbox: "Archive/Copied",
+        flags: { seen: "set" }
+      }
+    }
+  }, (output) => outputs.push(output), () => {
+    doneCount += 1;
+  });
+
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+
+  assert.equal(node.pending.length, 1);
+  assert.equal(node.pending[0].plan.action, "copy");
+
+  await node.flush();
+
+  assert.deepEqual(clientCalls, [
+    ["mailboxCreate", "Archive/Copied"],
+    ["messageFlagsAdd", "1", ["\\Seen"], { uid: true }],
+    ["messageCopy", "1", "Archive/Copied", { uid: true }]
+  ]);
+  assert.equal(doneCount, 1);
+  assert.equal(outputs.length, 1);
+  assert.equal(outputs[0][0].imapAck.ok, true);
+  assert.equal(outputs[0][0].imapAck.action, "copy");
+  assert.equal(registry.isActiveInflight(token.queueKey, "uidv-1", 1, 10000, 2000), false);
 });
 
 test("ack runtime handles transient connect failures without node.error", async () => {
@@ -981,6 +1410,7 @@ test("ack runtime fails remaining chunks after a transient action connection los
     flushMs: 60000,
     diagnostics: "off"
   }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
     usable: true,
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
@@ -1034,6 +1464,7 @@ test("ack runtime stops remaining chunks after a partial move side effect", asyn
     flushMs: 60000,
     diagnostics: "off"
   }, () => ({
+    capabilities: imapCaps("MOVE"),
     usable: true,
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
@@ -1045,6 +1476,7 @@ test("ack runtime stops remaining chunks after a partial move side effect", asyn
     },
     async messageFlagsAdd(range, flags, options) {
       clientCalls.push(["messageFlagsAdd", range, flags, options]);
+      return true;
     },
     async messageMove(range, target, options) {
       clientCalls.push(["messageMove", range, target, options]);
@@ -1092,6 +1524,7 @@ test("ack runtime ignores transient logout failures after successful actions", a
     flushMs: 60000,
     diagnostics: "off"
   }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
     usable: true,
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
@@ -1100,6 +1533,7 @@ test("ack runtime ignores transient logout failures after successful actions", a
     },
     async messageDelete(range) {
       clientCalls.push(range);
+      return true;
     },
     async logout() {
       throw err;
@@ -1149,6 +1583,7 @@ test("ack close fails remaining pending items after a running bounded flush", as
     flushMs: 60000,
     diagnostics: "off"
   }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
     usable: true,
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
@@ -1176,7 +1611,7 @@ test("ack close fails remaining pending items after a running bounded flush", as
     closeDoneCount += 1;
   });
 
-  resolveAction();
+  resolveAction(true);
   await flushPromise;
 
   assert.equal(closeDoneCount, 1);
@@ -1204,6 +1639,7 @@ test("ack close drains one bounded flush and fails excess pending without removi
     flushMs: 60000,
     diagnostics: "off"
   }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
     usable: true,
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},
@@ -1212,6 +1648,7 @@ test("ack close drains one bounded flush and fails excess pending without removi
     },
     async messageDelete(range) {
       clientCalls.push(range);
+      return true;
     },
     async logout() {}
   }));
@@ -1253,6 +1690,7 @@ test("ack close deadline aborts active clients and does not escalate transient a
   });
   let closeCalls = 0;
   const client = {
+    capabilities: imapCaps("UIDPLUS"),
     usable: true,
     mailbox: { uidValidity: "uidv-1" },
     async connect() {},

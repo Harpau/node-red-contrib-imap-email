@@ -403,7 +403,12 @@ test("example flow serializes imap email in selection fields", () => {
 
   assert.ok(inputNode, "example flow must contain an imap-email in node");
 
-  for (const [field, expected] of Object.entries(selectionDefaults)) {
+  const exampleSelection = {
+    ...selectionDefaults,
+    seenSelection: "exclude"
+  };
+
+  for (const [field, expected] of Object.entries(exampleSelection)) {
     assert.equal(inputNode[field], expected, `example flow must serialize ${field}`);
   }
 

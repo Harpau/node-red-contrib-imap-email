@@ -260,6 +260,7 @@ Die Modi werden neutral und aktionsorientiert benannt:
 ```text
 delete
 move
+copy
 flag
 set by msg.imap.ackAction
 ```
@@ -269,6 +270,7 @@ Empfohlene interne Werte:
 ```text
 delete      delete
 move        move
+copy        copy
 flag        flag
 set by msg.imap.ackAction message
 ```
@@ -279,6 +281,8 @@ set by msg.imap.ackAction message
 
 - Loescht die Mail per UID.
 - Ist die Default-Aktion fuer erfolgreich verarbeitete Mails.
+- Wird nur ausgefuehrt, wenn der Server `UIDPLUS` unterstuetzt, damit kein
+  unsicheres plain `EXPUNGE` verwendet wird.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
 
 `move`
@@ -286,7 +290,17 @@ set by msg.imap.ackAction message
 - Verschiebt die Mail per UID in einen Zielordner.
 - Der Zielordner wird automatisch angelegt, falls der Server ihn als fehlend
   meldet.
+- Wird nur ausgefuehrt, wenn der Server native `MOVE`-Capability unterstuetzt.
 - Kann vor dem Verschieben Flags setzen oder entfernen.
+- Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
+
+`copy`
+
+- Kopiert die Mail per UID in einen Zielordner.
+- Der Zielordner wird automatisch angelegt, falls der Server ihn als fehlend
+  meldet.
+- Kann vor dem Kopieren Flags auf der Quellmail setzen oder entfernen.
+- Behaelt die Quellmail im Postfach.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
 
 `flag`
@@ -331,8 +345,8 @@ Struktur normalisiert:
 
 ```js
 {
-  action: "delete" | "move" | "flag",
-  disposition: "delete" | "move" | "keep",
+  action: "delete" | "move" | "copy" | "flag",
+  disposition: "delete" | "move" | "copy" | "keep",
   targetMailbox: "Archive",
   flags: {
     add: ["\\Seen"],
@@ -349,6 +363,8 @@ Erlaubt:
 - `flag` mit Flag-Aenderungen.
 - `move` ohne Flag-Aenderungen.
 - `move` mit Flag-Aenderungen.
+- `copy` ohne Flag-Aenderungen.
+- `copy` mit Flag-Aenderungen.
 - `delete` ohne Flag-Aenderungen.
 
 Nicht erlaubt:
@@ -356,6 +372,7 @@ Nicht erlaubt:
 - `delete` mit Flag-Aenderungen.
 - `set` und `clear` fuer dasselbe Flag gleichzeitig.
 - `move` ohne gueltigen Zielordner.
+- `copy` ohne gueltigen Zielordner.
 - `message`-Modus ohne gueltiges Action-Objekt.
 
 `flag` ohne Flag-Aenderung ist technisch erlaubt, muss aber dokumentiert
@@ -368,12 +385,13 @@ Bei erfolgreicher Tokenvalidierung und Mailbox-Sperre:
 
 1. UIDVALIDITY pruefen.
 2. UID-Mengen in handhabbare Chunks aufteilen.
-3. Bei `move`: Zielordner bei Bedarf anlegen.
-4. Bei `flag` und `move`: Flags fuer den Chunk setzen oder entfernen.
+3. Bei `move` und `copy`: Zielordner bei Bedarf anlegen.
+4. Bei `flag`, `move` und `copy`: Flags fuer den Chunk setzen oder entfernen.
 5. Bei `move`: den Chunk verschieben.
-6. Bei `delete`: den Chunk loeschen.
-7. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
-8. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
+6. Bei `copy`: den Chunk kopieren.
+7. Bei `delete`: den Chunk loeschen.
+8. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
+9. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
 
 Chunks bleiben die Performance-Grenze. Innerhalb eines fehlgeschlagenen Chunks
 wird nicht auf einzelne UIDs heruntergebrochen.
@@ -432,14 +450,14 @@ Boolean-Objekt bildet nur die vom Node unterstuetzten Standardflags ab.
 Im Modus `set by msg.imap.ackAction` wird fest `msg.imap.ackAction` gelesen. Der
 Property-Pfad ist nicht konfigurierbar.
 
-Das Objekt beschreibt die Aktion, den Zielordner fuer `move` und Flags fuer
-`flag` und `move`. Die benannten Flag-Aktionen sind auf `seen`, `answered` und
-`flagged` begrenzt; freie Flags koennen ueber `add` und `remove` gesetzt
-werden:
+Das Objekt beschreibt die Aktion, den Zielordner fuer `move` und `copy` und
+Flags fuer `flag`, `move` und `copy`. Die benannten Flag-Aktionen sind auf
+`seen`, `answered` und `flagged` begrenzt; freie Flags koennen ueber `add` und
+`remove` gesetzt werden:
 
 ```js
 {
-  action: "delete" | "move" | "flag",
+  action: "delete" | "move" | "copy" | "flag",
   targetMailbox: "Archive",
   flags: {
     seen: "ignore" | "set" | "clear",
@@ -547,6 +565,7 @@ Optionen:
 ```text
 delete
 move
+copy
 flag
 set by msg.imap.ackAction
 ```
@@ -554,12 +573,12 @@ set by msg.imap.ackAction
 Zusaetzliche Felder:
 
 ```text
-Target folder              sichtbar bei move
-Seen action                sichtbar bei flag und move, ignore | set | clear
-Answered action            sichtbar bei flag und move, ignore | set | clear
-Flagged action             sichtbar bei flag und move, ignore | set | clear
-Flags to set               sichtbar bei flag und move
-Flags to clear             sichtbar bei flag und move
+Target folder              sichtbar bei move und copy
+Seen action                sichtbar bei flag, move und copy, ignore | set | clear
+Answered action            sichtbar bei flag, move und copy, ignore | set | clear
+Flagged action             sichtbar bei flag, move und copy, ignore | set | clear
+Flags to set               sichtbar bei flag, move und copy
+Flags to clear             sichtbar bei flag, move und copy
 ```
 
 Bei `set by msg.imap.ackAction` ersetzt die Message-Aktion die statische Aktion
@@ -587,6 +606,13 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Nachrichten werden nach Mailbox, UIDVALIDITY und Action-Plan gruppiert.
 - Grosse UID-Mengen werden in handhabbare IMAP-Kommandos
   aufgeteilt.
+- `delete` wird nur mit Server-Capability `UIDPLUS` ausgefuehrt.
+- `move` wird nur mit nativer Server-Capability `MOVE` ausgefuehrt.
+- `copy` behaelt die Quellmail und fuehrt optionale Flag-Aenderungen vor dem
+  Kopieren aus.
+- Rueckgaben `false` oder `undefined` von `messageFlagsAdd`,
+  `messageFlagsRemove`, `messageMove`, `messageCopy` und `messageDelete`
+  zaehlen als fehlgeschlagene IMAP-Aktion.
 - Erfolgreiche Chunks entfernen Inflight fuer die enthaltenen Mails.
 - Fehlgeschlagene Chunks behalten Inflight fuer die enthaltenen Mails.
 
@@ -613,10 +639,13 @@ Fehlerfaelle:
 
 - Fehlender oder ungueltiger ACK-Token.
 - ACK-Token passt nicht zur konfigurierten Account-Node oder zum ACK-Scope.
-- Fehlende Zielmailbox bei `move`.
+- Fehlende Zielmailbox bei `move` oder `copy`.
 - Ungueltiges Message-Action-Objekt.
 - UIDVALIDITY mismatch.
-- IMAP-Fehler bei Flag-Aenderung, Move oder Delete.
+- Fehlende `UIDPLUS`-Capability bei `delete`.
+- Fehlende native `MOVE`-Capability bei `move`.
+- IMAP-Fehler bei Flag-Aenderung, Move, Copy oder Delete.
+- `false` oder `undefined` als Rueckgabe einer ACK-IMAP-Aktion.
 
 Bei Fehlern:
 
@@ -713,14 +742,24 @@ imap-email ack:
 
 ### 10.2 `imap-email ack`
 
-- Default-Modus `delete` schliesst Mails mit der Delete-Aktion ab.
+- Default-Modus `delete` schliesst Mails mit der Delete-Aktion ab, wenn der
+  Server `UIDPLUS` unterstuetzt.
+- `delete` ohne `UIDPLUS` ruft `messageDelete` nicht auf, geht auf Output 2 und
+  behaelt Inflight.
 - `move` ruft Zielordner-Erstellung, optionale Flag-Aenderungen und
   `messageMove` in dieser Reihenfolge.
+- `move` ohne native `MOVE`-Capability ruft `messageMove` nicht auf, geht auf
+  Output 2 und behaelt Inflight.
+- `copy` ruft Zielordner-Erstellung, optionale Flag-Aenderungen auf der
+  Quellmail und `messageCopy` in dieser Reihenfolge.
 - `flag` ruft `messageFlagsAdd` und `messageFlagsRemove`.
 - `delete` kann nicht mit Flag-Aenderungen kombiniert werden.
+- `copy` verlangt eine Zielmailbox und kann mit Flag-Aenderungen kombiniert
+  werden.
 - Ungueltige Kombinationen werden abgelehnt.
 - `set by msg.imap.ackAction` liest Aktion und Flags aus der festen
   Message-Property.
+- `set by msg.imap.ackAction` akzeptiert `copy`.
 - Ungueltiges Message-Action-Objekt geht auf Output 2.
 - Ungueltige Flag-Aktionswerte werden nicht still zu `ignore` normalisiert.
 - Freie IMAP-Flags und Custom Keywords koennen gesetzt oder geloescht werden.
@@ -729,9 +768,11 @@ imap-email ack:
 - Fehlende ACK-Token-Scope-Felder und nicht unterstuetzte Aliasse wie `inflightKey` werden
   abgelehnt.
 - UIDVALIDITY mismatch geht auf Output 2.
-- IMAP-Fehler bei Flags, Move oder Delete entfernt Inflight nicht.
-- Partielle Move-/Flag-Seiteneffekte werden in `msg.imapAck.partial` und Stats
-  sichtbar.
+- IMAP-Fehler bei Flags, Move, Copy oder Delete entfernt Inflight nicht.
+- Rueckgaben `false` oder `undefined` von Flags, Move, Copy oder Delete werden
+  als Fehler behandelt.
+- Partielle Move-/Copy-/Flag-Seiteneffekte werden in `msg.imapAck.partial` und
+  Stats sichtbar.
 - Grosse UID-Mengen werden gechunkt.
 - Erfolgreiche Chunks entfernen Inflight und gehen auf Output 1.
 - Fehlgeschlagene Chunks behalten Inflight und gehen auf Output 2.

@@ -69,7 +69,7 @@ In Node-RED:
 Menu -> Import -> examples/basic-at-least-once-flow.json
 ```
 
-Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen.
+Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen. Der Beispiel-Tab ist absichtlich deaktiviert, der Inject-Node startet nicht automatisch und der ACK-Pfad markiert Nachrichten nur als gesehen.
 Die sichtbaren Palette-Namen verwenden Leerzeichen; in der Flow-JSON werden die technischen Typen mit `imap-email ...` gespeichert.
 
 ## 7. Produktiver Minimal-Flow
