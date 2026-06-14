@@ -1,16 +1,14 @@
 # Installation und lokaler Test
 
-Diese Anleitung gilt fuer das neue eigenstaendige Paket `@compeso/node-red-contrib-imap-email`.
+Diese Anleitung gilt fuer das eigenstaendige Paket `@compeso/node-red-contrib-imap-email`.
 
 ## 1. Paketordner
 
-Arbeite im neuen Repository:
+Arbeite im Repository:
 
 ```powershell
 C:\Users\<dein-user>\src\node-red-contrib-imap-email
 ```
-
-Das alte Repository `node-red-contrib-imap-queue` bleibt unveraendert.
 
 ## 2. Abhaengigkeiten und Tests
 
@@ -87,7 +85,7 @@ Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node fuehren. Wenn die Verar
 
 ## 8. Node-RED-Typen
 
-Dieses Paket registriert nur die neuen Typen:
+Dieses Paket registriert diese Node-RED-Typen:
 
 ```text
 imap-email account
@@ -95,32 +93,9 @@ imap-email in
 imap-email ack
 ```
 
-Die Palette-Labels duerfen weiterhin als `imap email account`, `imap email in`
-und `imap email ack` angezeigt werden.
+Die Palette-Labels werden als `imap email account`, `imap email in`
+und `imap email ack` angezeigt.
 
-Die alten Typen aus `@compeso/node-red-contrib-imap-queue` werden hier nicht registriert:
-
-```text
-imap queue account
-imap queue in
-imap queue ack
-imap queue nack
-```
-
-## 9. Migration
-
-Bestehende Flow-JSONs aus dem alten Paket muessen mindestens diese Typen umstellen:
-
-```text
-imap queue account -> imap-email account
-imap queue in      -> imap-email in
-imap queue ack     -> imap-email ack
-```
-
-Flows mit `imap queue nack` benoetigen eine spaetere fachliche Migration auf die geplanten Abschlussaktionen von `imap-email ack`.
-Fruehe Entwicklungsflows mit `imap email ...` als gespeichertem Typ muessen auf
-`imap-email ...` aktualisiert werden.
-
-## 10. Keine Veroeffentlichung ohne Freigabe
+## 9. Keine Veroeffentlichung ohne Freigabe
 
 Dieses Paket darf nicht auf npm oder flows.nodered.org veroeffentlicht werden, solange keine ausdrueckliche menschliche Freigabe vorliegt.

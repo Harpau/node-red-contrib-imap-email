@@ -1,27 +1,16 @@
 # @compeso/node-red-contrib-imap-email
 
-Development version: `0.1.0`
-
 Node-RED nodes for externally triggered IMAP email processing with bounded cursor-window fetch and at-least-once ACK handling.
 
-This package is independent from `@compeso/node-red-contrib-imap-queue`. It uses new Node-RED type names so both packages can be installed side by side without registering the same public node types.
-
 ## Nodes
+
+The package registers these Node-RED types:
 
 ```text
 Flow type           Palette label        Purpose
 imap-email account  imap email account   shared IMAP account configuration
 imap-email in       imap email in        externally triggered bounded cursor-window fetch
 imap-email ack      imap email ack       batched acknowledgement and UID actions
-```
-
-The previous public node types from the predecessor package are not registered by this package:
-
-```text
-imap queue account
-imap queue in
-imap queue ack
-imap queue nack
 ```
 
 ## Installation
@@ -178,11 +167,11 @@ fails. In that case output 2 receives the original message with
 retry.
 
 ACK tokens are scoped to the configured IMAP account and must contain the
-account, mailbox, UID, UIDVALIDITY and queue scope fields emitted by
+account, mailbox, UID, UIDVALIDITY and ACK scope fields emitted by
 `imap-email in`. If a token is missing required scope fields or names a
-different account, host, port, TLS setting, user or queue key, the ACK node
-rejects it on output 2 instead of running an IMAP action against the wrong
-account.
+different account, host, port, TLS setting, user or internal scope identifier,
+the ACK node rejects it on output 2 instead of running an IMAP action against
+the wrong account.
 
 For dynamic decisions, configure `imap-email ack` to
 `set by msg.imap.ackAction` and set `msg.imap.ackAction`:
@@ -209,34 +198,7 @@ later IMAP command failed.
 
 ## Current Limits
 
-- The predecessor's separate NACK node is not registered in this package.
 - OAuth2 token acquisition and refresh are not implemented. The account node supports username/password and an optional static access token field.
-
-## Migration Notes
-
-This repository was derived from `@compeso/node-red-contrib-imap-queue`, but it is a new package:
-
-```text
-Old npm package:     @compeso/node-red-contrib-imap-queue
-New npm package:     @compeso/node-red-contrib-imap-email
-Old GitHub repo:     https://github.com/Harpau/node-red-contrib-imap-queue
-New GitHub repo:     https://github.com/Harpau/node-red-contrib-imap-email
-```
-
-Existing flows from the old package need new node types before they can run with this package:
-
-```text
-imap queue account -> imap-email account
-imap queue in      -> imap-email in
-imap queue ack     -> imap-email ack
-```
-
-Flows that use `imap queue nack` need a later migration step once the planned unified `imap-email ack` actions are implemented.
-
-Development flows created before the `imap-email ...` prefix was aligned may
-still contain `imap email account`, `imap email in` or `imap email ack` as Flow
-JSON types. Update those `type` fields to `imap-email account`,
-`imap-email in` and `imap-email ack`.
 
 ## Development Checks
 

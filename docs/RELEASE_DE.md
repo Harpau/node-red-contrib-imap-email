@@ -56,7 +56,7 @@ Danach Node-RED neu starten und den Beispiel-Flow importieren.
 ```bash
 npm pack
 cd ~/.node-red
-npm install /path/to/compeso-node-red-contrib-imap-email-0.1.0.tgz
+npm install /path/to/compeso-node-red-contrib-imap-email-<version>.tgz
 ```
 
 Danach Node-RED neu starten.
@@ -65,6 +65,6 @@ Danach Node-RED neu starten.
 
 - Lokalen Node-RED-Test mit einem dedizierten Testpostfach durchfuehren.
 - ACK-Loeschverhalten gegen das Testpostfach pruefen.
-- README, Beispiele und Hilfetexte auf alte oeffentliche Typnamen pruefen.
+- README, Beispiele und Hilfetexte verwenden ausschliesslich aktuelle Paket- und Node-Namen.
 - Sicherstellen, dass keine Zugangsdaten, Tokens oder privaten Endpunkte enthalten sind.
 - Erst danach eine Version und einen Release-Commit planen.

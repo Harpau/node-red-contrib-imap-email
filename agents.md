@@ -2,28 +2,14 @@
 
 ## Projektziel
 
-Dieses Repository ist ein neues, eigenständiges Node-RED npm-Paket.
+Dieses Repository ist ein eigenständiges Node-RED npm-Paket.
 
-Es wurde aus dem bestehenden Paket `@compeso/node-red-contrib-imap-queue` abgeleitet, soll aber unabhängig weiterentwickelt, versioniert und veröffentlicht werden.
+## Paket
 
-Das ursprüngliche Paket darf nicht verändert, überschrieben oder versehentlich erneut veröffentlicht werden.
-
-## Altes Paket
-
-- Altes GitHub-Repository: Harpau/node-red-contrib-imap-queue
-- Alter npm-Paketname: @compeso/node-red-contrib-imap-queue
-- Alte Node-RED-Typen:
-  - imap queue account
-  - imap queue in
-  - imap queue ack
-  - imap queue nack
-
-## Neues Paket
-
-- Neues GitHub-Repository: Harpau/node-red-contrib-imap-email
-- Neuer npm-Paketname: @compeso/node-red-contrib-imap-email
-- Neues internes Node-RED-Typpräfix: imap-email
-- Neue sichtbare Node-Namen:
+- GitHub-Repository: Harpau/node-red-contrib-imap-email
+- npm-Paketname: @compeso/node-red-contrib-imap-email
+- Internes Node-RED-Typpräfix: imap-email
+- Sichtbare Node-Namen:
   - imap email account
   - imap email in
   - imap email ack
@@ -32,7 +18,7 @@ Das ursprüngliche Paket darf nicht verändert, überschrieben oder versehentlic
 
 Das neue Paket stellt flexible IMAP-Nodes für Node-RED bereit.
 
-Die Verarbeitung muss weiterhin für sehr große Postfächer geeignet sein. Der Eingangsnode darf nicht unbeschränkt das gesamte Postfach durchsuchen. Die bestehende bounded-front-window-Logik muss erhalten bleiben oder durch eine gleichwertig sichere, begrenzte Strategie ersetzt werden.
+Die Verarbeitung muss für sehr große Postfächer geeignet sein. Der Eingangsnode darf nicht unbeschränkt das gesamte Postfach durchsuchen. Eine bounded-front-window-Logik oder eine gleichwertig sichere, begrenzte Strategie ist verbindlich.
 
 ## Ziel-Nodes für die öffentliche Version
 
@@ -64,13 +50,13 @@ Zweck:
 - geeignet für große Postfächer
 - Ausgabe von msg.imap.ackToken zur späteren Verarbeitung mit imap-email ack
 
-Neue Selektionsoptionen:
+Selektionsoptionen:
 - Deleted: ignore / only deleted / not deleted
 - Seen: ignore / only seen / not seen
 - Answered: ignore / only answered / not answered
 - Flagged: ignore / only flagged / not flagged
 
-Bestehende Konzepte beibehalten:
+Konfigurationskonzepte:
 - Batch size
 - Front window
 - Max inflight
@@ -90,7 +76,6 @@ Sichtbarer Name:
 
 Zweck:
 - einheitlicher Abschlussnode für erfolgreich oder fehlerhaft verarbeitete Mails
-- ersetzt perspektivisch die getrennten alten Nodes imap queue ack und imap queue nack
 - mehrere unterschiedlich konfigurierte imap email ack Nodes sollen in einem Flow parallel einsetzbar sein
 
 Mögliche Aktionen:
@@ -109,19 +94,18 @@ Konfigurierbare Flags:
 
 ## Nicht-Ziele
 
-- Keine Änderung am alten GitHub-Repository.
-- Keine Veröffentlichung unter @compeso/node-red-contrib-imap-queue.
-- Keine Wiederverwendung der alten Node-RED-Typen im neuen Paket.
-- Keine öffentliche Veröffentlichung, solange die neue Dokumentation, Tests und Beispiele nicht konsistent sind.
+- Keine Registrierung anderer öffentlicher Node-RED-Typen als imap-email account, imap-email in und imap-email ack.
+- Keine Veröffentlichung unter einem anderen Paketnamen als @compeso/node-red-contrib-imap-email.
+- Keine öffentliche Veröffentlichung, solange Dokumentation, Tests und Beispiele nicht konsistent sind.
 - Keine unbeschränkte Suche über sehr große Postfächer.
 - Keine Speicherung von Zugangsdaten, Tokens oder privaten Endpunkten in Tests, Beispielen oder Dokumentation.
 
 ## Versions- und Kompatibilitätsregeln
 
-- Node.js-Mindestversion zunächst beibehalten: >=18.0.0
-- Node-RED-Mindestversion zunächst beibehalten: >=3.0.0
+- Node.js-Mindestversion: >=18.0.0
+- Node-RED-Mindestversion: >=3.0.0
 - Neue Major-Anforderungen nur nach Begründung einführen.
-- Die erste Entwicklungsfassung soll mit Version 0.1.0 beginnen.
+- Die Entwicklungsfassung beginnt mit Version 0.1.0.
 - Eine öffentliche Version 1.0.0 erst nach erfolgreichem lokalen Node-RED-Test und Dokumentationsprüfung vorbereiten.
 
 ## package.json-Regeln
@@ -136,13 +120,13 @@ Konfigurierbare Flags:
 
 ## Node-RED-Regeln
 
-- RED.nodes.registerType(...) darf keine alten Typnamen verwenden.
+- RED.nodes.registerType(...) darf nur die öffentlichen Typen dieses Pakets verwenden.
 - HTML-Dateien müssen dieselben Typnamen verwenden wie die passenden JavaScript-Dateien.
 - data-template-name, data-help-name und RED.nodes.registerType(...) müssen konsistent sein.
 - Palette-Labels dürfen benutzerfreundlich imap email account, imap email in und imap email ack heißen.
 - Interne Typen sollen imap-email account, imap-email in und imap-email ack heißen.
 - Beispiel-Flows gehören in examples.
-- README.md muss Installation, Konfiguration, Beispiel-Flows, Delivery-Semantik, große Postfächer, Grenzen und Migrationshinweise dokumentieren.
+- README.md muss Installation, Konfiguration, Beispiel-Flows, Delivery-Semantik, große Postfächer und Grenzen dokumentieren.
 
 ## Testregeln
 

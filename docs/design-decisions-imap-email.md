@@ -1,6 +1,6 @@
 # Design Decisions: imap email
 
-Status: Spezifikation fuer die naechste Implementierungsphase.
+Status: Architektur- und Verhaltensdokumentation.
 
 Diese Datei beschreibt die getroffenen Designentscheidungen fuer das neue Paket
 `@compeso/node-red-contrib-imap-email`. Sie ist absichtlich eine technische
@@ -11,10 +11,6 @@ Entscheidungsvorlage und keine Release-Ankuendigung.
 Das Paket `@compeso/node-red-contrib-imap-email` ist ein eigenstaendiges
 Node-RED npm-Paket fuer IMAP-basierte E-Mail-Verarbeitung.
 
-Es wurde aus dem frueheren Paket `@compeso/node-red-contrib-imap-queue`
-abgeleitet, soll aber unabhaengig weiterentwickelt, versioniert und
-veroeffentlicht werden.
-
 Die gespeicherten Node-RED-Flow-Typen des neuen Pakets sind:
 
 ```text
@@ -23,24 +19,21 @@ imap-email in
 imap-email ack
 ```
 
-Die sichtbaren Palette-Labels bleiben benutzerfreundlich `imap email account`,
+Die sichtbaren Palette-Labels sind benutzerfreundlich `imap email account`,
 `imap email in` und `imap email ack`.
 
-Das Paket soll weiterhin fuer grosse Postfaecher geeignet sein. Der
-Eingangsnode darf keine unbeschraenkten Mailbox-Scans ausfuehren. Die
-bestehende bounded-window-Strategie bleibt ein zentrales Architekturprinzip.
+Das Paket ist fuer grosse Postfaecher geeignet. Der Eingangsnode darf keine
+unbeschraenkten Mailbox-Scans ausfuehren. Die bounded-window-Strategie ist ein
+zentrales Architekturprinzip.
 
-Der Node `imap-email ack` soll die bisher getrennten positiven und negativen
-Abschlussaktionen in einem Node zusammenfuehren. Nutzer sollen mehrere
-unterschiedlich konfigurierte `imap-email ack` Nodes parallel in einem Flow
-verwenden koennen.
+Der Node `imap-email ack` ist ein einheitlicher Abschlussnode fuer erfolgreiche
+oder fachlich behandelte Mails. Nutzer koennen mehrere unterschiedlich
+konfigurierte `imap-email ack` Nodes parallel in einem Flow verwenden.
 
 ## 2. Nicht-Ziele
 
 Nicht Teil dieser Spezifikation:
 
-- Keine Aenderung am alten Paket `@compeso/node-red-contrib-imap-queue`.
-- Keine Registrierung alter Node-RED-Typen im neuen Paket.
 - Keine unbeschraenkte IMAP-Suche ueber ganze Postfaecher.
 - Kein automatisches Auffuellen eines Batches durch Scannen immer weiterer
   Mailbox-Fenster.
@@ -74,8 +67,7 @@ Mailbox-Scan aus.
 
 ### 3.2 Flag-Filter
 
-Die erste Version der erweiterten Selektion verwendet pro Flag eine
-Tri-State-Auswahl:
+Die Flag-Selektion verwendet pro Flag eine Tri-State-Auswahl:
 
 ```text
 ignore   Flag-Zustand ist egal
@@ -147,12 +139,12 @@ ausgabefaehige Kandidaten als in die verbleibende Batch-/Inflight-Kapazitaet
 passen, bleibt der Cursor auf `windowStart`. Bei leerer Mailbox, ungueltigem
 Cursor oder geaenderter UIDVALIDITY wird er ebenfalls auf `1` zurueckgesetzt.
 
-Der Cursor bleibt in Version 0.1 bewusst volatil. Nach einem Node-RED-Neustart
-beginnt der Scan-Cursor wieder bei Sequenz `1`. Eine Persistenz ueber
-Node-RED Context ist kein Ziel fuer Version 0.1.
+Der Cursor ist bewusst volatil. Nach einem Node-RED-Neustart beginnt der
+Scan-Cursor wieder bei Sequenz `1`. Eine Persistenz ueber Node-RED Context ist
+nicht vorgesehen.
 
-Die `cursor-window` Phase bleibt speicherbegrenzt: Es wird immer nur ein
-Fenster gestreamt und verworfen, bevor das naechste Fenster gelesen wird.
+Die `cursor-window` Phase ist speicherbegrenzt: Es wird immer nur ein Fenster
+gestreamt und verworfen, bevor das naechste Fenster gelesen wird.
 Gespeichert werden nur Kandidaten bis `batchSize` bzw. bis zur verfuegbaren
 `maxInflight`-Kapazitaet. Die Phase nutzt die volle `frontWindowSize`:
 
@@ -219,7 +211,7 @@ Die Kandidatenbildung soll in dieser Reihenfolge erfolgen:
 
 1. Cursor-Fenster lesen.
 2. Ungueltige UIDs verwerfen.
-3. Deleted-Tracking und optionale Expunge-Logik beibehalten.
+3. Deleted-Tracking und optionale Expunge-Logik anwenden.
 4. Flag-Selection auf die im Cursor-Fenster gelesenen Flags anwenden.
 5. Aktive Inflight-Nachrichten verwerfen.
 6. Kandidaten auf `batchSize` und verfuegbare `capacity` begrenzen.
@@ -229,7 +221,7 @@ Die Kandidatenbildung soll in dieser Reihenfolge erfolgen:
 
 ### 3.7 Stats
 
-Die bestehenden Stats bleiben erhalten. Sinnvolle Erweiterungen:
+Stats enthalten insbesondere:
 
 ```text
 selection
@@ -286,7 +278,7 @@ set by msg.imap.ackAction message
 `delete`
 
 - Loescht die Mail per UID.
-- Entspricht der bisherigen positiven ACK-Semantik.
+- Ist die Default-Aktion fuer erfolgreich verarbeitete Mails.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
 
 `move`
@@ -390,7 +382,7 @@ wird nicht auf einzelne UIDs heruntergebrochen.
 
 ### 5.1 `msg.imap.ackToken`
 
-`msg.imap.ackToken` bleibt der zentrale Vertrag zwischen `imap-email in` und
+`msg.imap.ackToken` ist der zentrale Vertrag zwischen `imap-email in` und
 `imap-email ack`.
 
 Erwartete Felder:
@@ -410,12 +402,12 @@ Erwartete Felder:
 ```
 
 Es gibt keinen Fallback auf `msg.imap.uid`, `msg.imap.mailbox`,
-`msg.imap.uidValidity` oder alte Queue-Key-Aliasse. Das ACK-Token ist der
+`msg.imap.uidValidity` oder alternative Scope-Aliasse. Das ACK-Token ist der
 verbindliche Vertrag.
 
 ### 5.2 `msg.imap.flags`
 
-`msg.imap.flags` bleibt in Version 0.1 ein Array von IMAP-Flag-Strings:
+`msg.imap.flags` ist ein Array von IMAP-Flag-Strings:
 
 ```js
 msg.imap.flags = ["\\Seen", "\\Flagged"];
@@ -432,7 +424,7 @@ msg.imap.flagState = {
 };
 ```
 
-`msg.imap.flags` bleibt dabei die vollstaendige Server-Flag-Liste. Das
+`msg.imap.flags` enthaelt dabei die vollstaendige Server-Flag-Liste. Das
 Boolean-Objekt bildet nur die vom Node unterstuetzten Standardflags ab.
 
 ### 5.3 `msg.imap.ackAction`
@@ -460,7 +452,7 @@ werden:
 ```
 
 Das Objekt wird durch den internen Normalizer validiert. Eine externe
-JSON-Schema-Validierung ist in Version 0.1 nicht vorgesehen.
+JSON-Schema-Validierung ist nicht vorgesehen.
 
 ### 5.4 `msg.imapAck`
 
@@ -539,7 +531,7 @@ Flagged   Any
 ```
 
 `Expunge window` und `Expunge limit` werden nur angezeigt, wenn `Deleted =
-Only without flag` gesetzt ist. Runtime-seitig bleibt Expunge ebenfalls auf
+Only without flag` gesetzt ist. Runtime-seitig ist Expunge ebenfalls auf
 `deletedSelection=exclude` beschraenkt.
 
 ### 6.2 `imap-email ack`
@@ -587,7 +579,7 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 
 ### 7.2 `imap-email ack`
 
-- Eingehende Nachrichten werden wie bisher gebatcht.
+- Eingehende Nachrichten werden intern gebatcht.
 - Token werden aus `msg.imap.ackToken` extrahiert.
 - Alle Token-Scope-Felder (`accountId`, `host`, `port`, `secure`, `user` und
   `queueKey`) muessen vorhanden sein und zur konfigurierten Account-Node und zur
@@ -620,7 +612,7 @@ sichtbar gemacht.
 Fehlerfaelle:
 
 - Fehlender oder ungueltiger ACK-Token.
-- ACK-Token passt nicht zur konfigurierten Account-Node oder Queue.
+- ACK-Token passt nicht zur konfigurierten Account-Node oder zum ACK-Scope.
 - Fehlende Zielmailbox bei `move`.
 - Ungueltiges Message-Action-Objekt.
 - UIDVALIDITY mismatch.
@@ -669,7 +661,7 @@ Bei Fehlern:
 - Chunk-Erfolge und Chunk-Fehler werden getrennt behandelt. Innerhalb eines
   fehlgeschlagenen Chunks wird nicht weiter auf einzelne UIDs heruntergebrochen.
 
-Empfohlene Defaults bleiben:
+Empfohlene Defaults:
 
 ```text
 imap-email in:
@@ -721,7 +713,7 @@ imap-email ack:
 
 ### 10.2 `imap-email ack`
 
-- Default-Modus `delete` verhaelt sich wie bisheriges ACK.
+- Default-Modus `delete` schliesst Mails mit der Delete-Aktion ab.
 - `move` ruft Zielordner-Erstellung, optionale Flag-Aenderungen und
   `messageMove` in dieser Reihenfolge.
 - `flag` ruft `messageFlagsAdd` und `messageFlagsRemove`.
@@ -732,9 +724,9 @@ imap-email ack:
 - Ungueltiges Message-Action-Objekt geht auf Output 2.
 - Ungueltige Flag-Aktionswerte werden nicht still zu `ignore` normalisiert.
 - Freie IMAP-Flags und Custom Keywords koennen gesetzt oder geloescht werden.
-- ACK-Token mit falschem Account-/Queue-Scope gehen auf Output 2 und starten
+- ACK-Token mit falschem Account-/ACK-Scope gehen auf Output 2 und starten
   keine IMAP-Aktion.
-- Fehlende ACK-Token-Scope-Felder und alte Aliasse wie `inflightKey` werden
+- Fehlende ACK-Token-Scope-Felder und nicht unterstuetzte Aliasse wie `inflightKey` werden
   abgelehnt.
 - UIDVALIDITY mismatch geht auf Output 2.
 - IMAP-Fehler bei Flags, Move oder Delete entfernt Inflight nicht.
@@ -758,16 +750,16 @@ imap-email ack:
 
 ## 11. Entschiedene Folgefragen
 
-- Der Scan-Cursor bleibt volatil. Nach einem Node-RED-Neustart beginnt der
+- Der Scan-Cursor ist volatil. Nach einem Node-RED-Neustart beginnt der
   Cursor wieder bei Sequenz `1`.
-- `msg.imap.flags` bleibt als vollstaendiges Array der IMAP-Flags erhalten.
+- `msg.imap.flags` wird als vollstaendiges Array der IMAP-Flags ausgegeben.
   Zusaetzlich wird `msg.imap.flagState` als Convenience-Objekt mit `deleted`,
   `seen`, `answered` und `flagged` vorgesehen.
 - `set by msg.imap.ackAction` liest fest `msg.imap.ackAction`. Der
   Property-Pfad wird nicht konfigurierbar gemacht.
 - `Expunge window` und `Expunge limit` werden in der UI nur angezeigt, wenn
-  `Deleted = Only without flag` gesetzt ist. Runtime-seitig bleibt Expunge auf
+  `Deleted = Only without flag` gesetzt ist. Runtime-seitig ist Expunge auf
   `deletedSelection=exclude` beschraenkt.
 - Es gibt keine externe JSON-Schema-Validierung fuer dynamische
-  Message-Actions in Version 0.1. `msg.imap.ackAction` wird durch den internen
-  Normalizer validiert.
+  Message-Actions. `msg.imap.ackAction` wird durch den internen Normalizer
+  validiert.
