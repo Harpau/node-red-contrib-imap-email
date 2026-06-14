@@ -71,7 +71,8 @@ set by msg.  read action, target folder and flags from the message
 ```
 
 The ack node can set or clear `\Seen`, `\Answered` and `\Flagged` in `flag`
-mode. `delete` and `move` are intentionally not combined with flag changes.
+mode. Use `delete` to delete mail; `\Deleted` is not exposed as a separate flag
+action. `delete` and `move` are intentionally not combined with flag changes.
 
 ## Large Mailboxes
 
@@ -172,6 +173,11 @@ No message is reported as successfully completed if the configured IMAP action
 fails. In that case output 2 receives the original message with
 `msg.imapAck.ok = false`, and the inflight entry remains available for a later
 retry.
+
+ACK tokens are scoped to the configured IMAP account. If a token explicitly
+names a different account, host, port, TLS setting, user or queue key, the ACK
+node rejects it on output 2 instead of running an IMAP action against the wrong
+account.
 
 For dynamic decisions, configure `imap-email ack` to `set by msg.` and set
 `msg.imap.ackAction`:

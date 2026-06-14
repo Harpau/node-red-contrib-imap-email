@@ -300,6 +300,9 @@ set by msg. message
 `flag`
 
 - Setzt oder entfernt IMAP-Flags per UID.
+- Unterstuetzt in der oeffentlichen Konfiguration bewusst nur `\Seen`,
+  `\Answered` und `\Flagged`; zum Loeschen einer Mail ist der Modus `delete`
+  vorgesehen.
 - Behaelt die Mail im Postfach.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher Flag-Aktion.
 - Wenn keine Flag-Aenderung konfiguriert ist, wird die Mail unveraendert im
@@ -435,7 +438,8 @@ Im Modus `set by msg.` wird fest `msg.imap.ackAction` gelesen. Der
 Property-Pfad ist nicht konfigurierbar.
 
 Das Objekt beschreibt die Aktion, den Zielordner fuer `move` und Flags fuer
-`flag`:
+`flag`. Die benannten Flag-Aktionen sind auf `seen`, `answered` und `flagged`
+begrenzt:
 
 ```js
 {
@@ -576,6 +580,10 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 
 - Eingehende Nachrichten werden wie bisher gebatcht.
 - Token werden aus `msg.imap.ackToken` extrahiert.
+- Explizite Token-Scope-Felder (`accountId`, `host`, `port`, `secure`, `user`
+  und `queueKey`/`inflightKey`) muessen zur konfigurierten Account-Node und zur
+  Token-Mailbox passen. Fehlende Legacy-Felder duerfen weiterhin aus der
+  Account-Konfiguration ergaenzt werden.
 - Nachrichten werden nach Mailbox, UIDVALIDITY und Action-Plan gruppiert.
 - Grosse UID-Mengen werden in handhabbare IMAP-Kommandos
   aufgeteilt.
@@ -604,6 +612,7 @@ sichtbar gemacht.
 Fehlerfaelle:
 
 - Fehlender oder ungueltiger ACK-Token.
+- ACK-Token passt nicht zur konfigurierten Account-Node oder Queue.
 - Fehlende Zielmailbox bei `move`.
 - Ungueltiges Message-Action-Objekt.
 - UIDVALIDITY mismatch.
@@ -712,6 +721,9 @@ imap-email ack:
 - `set by msg.` liest Aktion und Flags aus der konfigurierten
   Message-Property.
 - Ungueltiges Message-Action-Objekt geht auf Output 2.
+- Ungueltige Flag-Aktionswerte werden nicht still zu `ignore` normalisiert.
+- ACK-Token mit falschem Account-/Queue-Scope gehen auf Output 2 und starten
+  keine IMAP-Aktion.
 - UIDVALIDITY mismatch geht auf Output 2.
 - IMAP-Fehler bei Flags, Move oder Delete entfernt Inflight nicht.
 - Grosse UID-Mengen werden gechunkt.

@@ -24,6 +24,15 @@ function sampleToken(uid = 123) {
   };
 }
 
+function expectedQueueKey(mailbox = "INBOX") {
+  return registry.makeQueueKey({
+    accountId: "account-1",
+    host: "imap.example.test",
+    user: "user@example.test",
+    mailbox
+  });
+}
+
 function createConnectionError(message, code) {
   const err = new Error(message);
   err.code = code;
@@ -89,6 +98,15 @@ function createAckNode(config = {}, clientFactory) {
 
 function sendWithCapture(itemOutputs) {
   return (output) => itemOutputs.push(output);
+}
+
+function invokeInput(handlers, msg) {
+  const outputs = [];
+  let doneCount = 0;
+  handlers.input(msg, (output) => outputs.push(output), () => {
+    doneCount += 1;
+  });
+  return { outputs, doneCount };
 }
 
 function pushPendingAckItems(node, uids, itemOutputs, onDone) {
@@ -181,6 +199,69 @@ test("normalizes set by msg. action objects", () => {
   });
 });
 
+test("rejects invalid named flag actions instead of silently ignoring them", () => {
+  const { normalizeAckAction, normalizeAckActionFromMessage } = loadAckActions();
+
+  assert.throws(() => normalizeAckAction({
+    action: "flag",
+    seenAction: "typo"
+  }), /invalid.*flag.*action/i);
+
+  assert.throws(() => normalizeAckActionFromMessage({
+    imap: {
+      ackAction: {
+        action: "flag",
+        flags: {
+          seen: "typo"
+        }
+      }
+    }
+  }), /invalid.*flag.*action/i);
+});
+
+test("normalizes and validates raw add/remove flag arrays", () => {
+  const { normalizeAckAction } = loadAckActions();
+
+  assert.deepEqual(normalizeAckAction({
+    action: "flag",
+    flags: {
+      add: ["Seen"],
+      remove: ["\\Flagged"]
+    }
+  }), {
+    action: "flag",
+    disposition: "keep",
+    targetMailbox: "",
+    flags: {
+      add: ["\\Seen"],
+      remove: ["\\Flagged"]
+    }
+  });
+
+  assert.throws(() => normalizeAckAction({
+    action: "flag",
+    flags: {
+      add: ["\\Deleted"]
+    }
+  }), /unsupported.*flag/i);
+
+  assert.throws(() => normalizeAckAction({
+    action: "flag",
+    flags: {
+      add: [" Seen "],
+      remove: ["\\Seen"]
+    }
+  }), /conflict|contradict|seen/i);
+
+  assert.throws(() => normalizeAckAction({
+    action: "flag",
+    flags: {
+      add: ["\\Seen"],
+      seen: "typo"
+    }
+  }), /cannot be combined/i);
+});
+
 test("set by msg. uses the fixed msg.imap.ackAction path", () => {
   const { normalizeAckActionFromMessage } = loadAckActions();
   const { node } = createAckNode({
@@ -230,11 +311,263 @@ test("rejects invalid simplified ack action combinations", () => {
   }), /conflict|contradict|seen/i);
 });
 
+test("ack runtime normalizes numeric limits to integers", () => {
+  const { node } = createAckNode({
+    batchSize: "2.9",
+    flushMs: "10.8",
+    maxUidPerCommand: "5.9",
+    maxBatchesPerFlush: "3.9",
+    closeTimeoutMs: "7.9"
+  }, () => ({
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async logout() {}
+  }));
+
+  assert.equal(node.batchSize, 2);
+  assert.equal(node.flushMs, 10);
+  assert.equal(node.maxUidPerCommand, 5);
+  assert.equal(node.maxBatchesPerFlush, 3);
+  assert.equal(node.closeTimeoutMs, 7);
+});
+
 test("continues to use msg.imap.ackToken as the delivery contract", () => {
   const token = sampleToken();
   const extracted = extractAckToken({ imap: { ackToken: token } });
 
   assert.deepEqual(extracted, token);
+});
+
+test("ack runtime accepts legacy tokens with missing or blank scope fields", () => {
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000
+  }, () => {
+    throw new Error("client should not be created before a pending flush");
+  });
+
+  const { outputs, doneCount } = invokeInput(handlers, {
+    payload: "legacy",
+    imap: {
+      ackToken: {
+        accountId: "",
+        host: "",
+        port: "",
+        secure: "",
+        user: "",
+        queueKey: "",
+        uid: 1,
+        uidValidity: "uidv-1",
+        mailbox: "Archive"
+      }
+    }
+  });
+
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+
+  assert.equal(outputs.length, 0);
+  assert.equal(doneCount, 0);
+  assert.equal(node.pending.length, 1);
+  assert.equal(node.pending[0].token.accountId, "account-1");
+  assert.equal(node.pending[0].token.host, "imap.example.test");
+  assert.equal(node.pending[0].token.user, "user@example.test");
+  assert.equal(node.pending[0].token.mailbox, "Archive");
+});
+
+test("ack runtime validates explicit token account scope before queueing", () => {
+  const cases = [
+    ["accountId", "account-2", /accountId/i],
+    ["host", "imap.other.test", /host/i],
+    ["host", "IMAP.EXAMPLE.TEST", null],
+    ["port", "994", /port/i],
+    ["port", "993.9", /port.*invalid/i],
+    ["secure", "false", /secure/i],
+    ["secure", "typo", /secure.*invalid/i],
+    ["user", "User@example.test", /user/i],
+    ["queueKey", "other-queue", /queueKey/i],
+    ["inflightKey", "other-queue", /queueKey/i]
+  ];
+
+  for (const [field, value, expectedError] of cases) {
+    let clientCalls = 0;
+    const { node, handlers } = createAckNode({
+      actionMode: "delete",
+      batchSize: 100,
+      flushMs: 60000
+    }, () => {
+      clientCalls += 1;
+      throw new Error("client should not be created");
+    });
+    const token = {
+      uid: 1,
+      uidValidity: "uidv-1",
+      mailbox: "INBOX"
+    };
+    token[field] = value;
+
+    const { outputs, doneCount } = invokeInput(handlers, {
+      payload: field,
+      imap: { ackToken: token }
+    });
+
+    if (node.timer) {
+      clearTimeout(node.timer);
+      node.timer = null;
+    }
+
+    if (expectedError) {
+      assert.equal(node.pending.length, 0, `${field} mismatch must not be queued`);
+      assert.equal(doneCount, 1, `${field} mismatch must call done`);
+      assert.equal(clientCalls, 0, `${field} mismatch must not create a client`);
+      assert.equal(outputs.length, 1, `${field} mismatch must emit one error`);
+      assert.equal(outputs[0][0], null);
+      assert.equal(outputs[0][1].imapAck.ok, false);
+      assert.match(outputs[0][1].imapAck.error, expectedError);
+    } else {
+      assert.equal(outputs.length, 0, `${field} match should be accepted`);
+      assert.equal(doneCount, 0, `${field} match should wait for flush`);
+      assert.equal(clientCalls, 0, `${field} match should not flush yet`);
+      assert.equal(node.pending.length, 1, `${field} match should be queued`);
+    }
+  }
+});
+
+test("ack runtime validates queue keys against the token mailbox", () => {
+  const { node: okNode, handlers: okHandlers } = createAckNode({
+    actionMode: "delete",
+    mailbox: "INBOX",
+    batchSize: 100,
+    flushMs: 60000
+  }, () => {
+    throw new Error("client should not be created before flush");
+  });
+  const accepted = invokeInput(okHandlers, {
+    imap: {
+      ackToken: {
+        uid: 1,
+        uidValidity: "uidv-1",
+        mailbox: "Archive",
+        queueKey: expectedQueueKey("Archive")
+      }
+    }
+  });
+  if (okNode.timer) {
+    clearTimeout(okNode.timer);
+    okNode.timer = null;
+  }
+
+  assert.equal(accepted.outputs.length, 0);
+  assert.equal(okNode.pending.length, 1);
+  assert.equal(okNode.pending[0].token.mailbox, "Archive");
+
+  let clientCalls = 0;
+  const { node: badNode, handlers: badHandlers } = createAckNode({
+    actionMode: "delete",
+    mailbox: "INBOX",
+    batchSize: 100,
+    flushMs: 60000
+  }, () => {
+    clientCalls += 1;
+    throw new Error("client should not be created");
+  });
+  const rejected = invokeInput(badHandlers, {
+    imap: {
+      ackToken: {
+        uid: 2,
+        uidValidity: "uidv-1",
+        mailbox: "Archive",
+        queueKey: expectedQueueKey("INBOX")
+      }
+    }
+  });
+  if (badNode.timer) {
+    clearTimeout(badNode.timer);
+    badNode.timer = null;
+  }
+
+  assert.equal(badNode.pending.length, 0);
+  assert.equal(clientCalls, 0);
+  assert.equal(rejected.doneCount, 1);
+  assert.equal(rejected.outputs.length, 1);
+  assert.equal(rejected.outputs[0][1].imapAck.ok, false);
+  assert.match(rejected.outputs[0][1].imapAck.error, /queueKey/i);
+});
+
+test("ack runtime sends invalid message actions to output 2 without queueing", () => {
+  let clientCalls = 0;
+  const { node, handlers } = createAckNode({
+    actionMode: "message",
+    batchSize: 100,
+    flushMs: 60000
+  }, () => {
+    clientCalls += 1;
+    throw new Error("client should not be created");
+  });
+
+  const result = invokeInput(handlers, {
+    imap: {
+      uid: 1,
+      uidValidity: "uidv-1",
+      mailbox: "INBOX",
+      ackAction: {
+        action: "flag",
+        flags: {
+          seen: "typo"
+        }
+      }
+    }
+  });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+
+  assert.equal(node.pending.length, 0);
+  assert.equal(clientCalls, 0);
+  assert.equal(result.doneCount, 1);
+  assert.equal(result.outputs.length, 1);
+  assert.equal(result.outputs[0][1].imapAck.ok, false);
+  assert.match(result.outputs[0][1].imapAck.error, /invalid.*flag.*action/i);
+});
+
+test("ack runtime sends invalid static action config to output 2 without queueing", () => {
+  let clientCalls = 0;
+  const { node, handlers, errors } = createAckNode({
+    actionMode: "flag",
+    seenAction: "typo",
+    batchSize: 100,
+    flushMs: 60000
+  }, () => {
+    clientCalls += 1;
+    throw new Error("client should not be created");
+  });
+
+  const result = invokeInput(handlers, {
+    imap: {
+      uid: 1,
+      uidValidity: "uidv-1",
+      mailbox: "INBOX"
+    }
+  });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+
+  assert.equal(errors.length, 1);
+  assert.equal(node.pending.length, 0);
+  assert.equal(clientCalls, 0);
+  assert.equal(result.doneCount, 1);
+  assert.equal(result.outputs.length, 1);
+  assert.equal(result.outputs[0][1].imapAck.ok, false);
+  assert.match(result.outputs[0][1].imapAck.error, /invalid.*flag.*action/i);
 });
 
 test("builds simplified msg.imapAck success and error structures", () => {

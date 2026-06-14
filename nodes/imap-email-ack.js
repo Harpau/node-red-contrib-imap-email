@@ -3,7 +3,7 @@
 const { extractAckToken } = require("../lib/ack-token");
 const registry = require("../lib/runtime-registry");
 const { chunkUids, compressUids } = require("../lib/uid-range");
-const { parseNumber } = require("../lib/imap-utils");
+const { parseInteger } = require("../lib/imap-utils");
 const {
   isTransientImapConnectionError,
   safeClose,
@@ -29,11 +29,11 @@ module.exports = function registerImapEmailAck(RED) {
     node.account = RED.nodes.getNode(config.account);
     node.name = config.name || "";
     node.mailbox = config.mailbox || "";
-    node.batchSize = parseNumber(config.batchSize, 100, 1, 10000);
-    node.flushMs = parseNumber(config.flushMs, 500, 1, 60000);
-    node.maxUidPerCommand = parseNumber(config.maxUidPerCommand, 500, 1, 5000);
-    node.maxBatchesPerFlush = parseNumber(config.maxBatchesPerFlush, 20, 1, 1000);
-    node.closeTimeoutMs = parseNumber(config.closeTimeoutMs, DEFAULT_CLOSE_TIMEOUT_MS, 1, 14000);
+    node.batchSize = parseInteger(config.batchSize, 100, 1, 10000);
+    node.flushMs = parseInteger(config.flushMs, 500, 1, 60000);
+    node.maxUidPerCommand = parseInteger(config.maxUidPerCommand, 500, 1, 5000);
+    node.maxBatchesPerFlush = parseInteger(config.maxBatchesPerFlush, 20, 1, 1000);
+    node.closeTimeoutMs = parseInteger(config.closeTimeoutMs, DEFAULT_CLOSE_TIMEOUT_MS, 1, 14000);
     node.actionMode = config.actionMode || config.action || "delete";
     node.targetMailbox = config.targetMailbox || "";
     node.actionProperty = "imap.ackAction";
@@ -89,6 +89,102 @@ module.exports = function registerImapEmailAck(RED) {
         user: node.account.getUsername(),
         mailbox: node.mailbox || "INBOX"
       };
+    }
+
+    function hasScopeValue(value) {
+      return value !== undefined && value !== null && String(value).trim() !== "";
+    }
+
+    function getRawAckTokenSource(msg) {
+      if (msg && msg.imap && msg.imap.ackToken && typeof msg.imap.ackToken === "object") {
+        return msg.imap.ackToken;
+      }
+      if (msg && msg.imap && typeof msg.imap === "object") {
+        return msg.imap;
+      }
+      return {};
+    }
+
+    function parseScopePort(value, label) {
+      if (!hasScopeValue(value)) {
+        return null;
+      }
+      if (typeof value === "number") {
+        if (Number.isSafeInteger(value) && value > 0) {
+          return value;
+        }
+        throw new Error(`ACK token ${label} is invalid`);
+      }
+
+      const text = String(value).trim();
+      if (!/^[0-9]+$/.test(text)) {
+        throw new Error(`ACK token ${label} is invalid`);
+      }
+
+      const port = Number(text);
+      if (!Number.isSafeInteger(port) || port < 1) {
+        throw new Error(`ACK token ${label} is invalid`);
+      }
+      return port;
+    }
+
+    function parseScopeBoolean(value, label) {
+      if (!hasScopeValue(value)) {
+        return null;
+      }
+      if (typeof value === "boolean") {
+        return value;
+      }
+
+      const text = String(value).trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(text)) {
+        return true;
+      }
+      if (["false", "0", "no", "off"].includes(text)) {
+        return false;
+      }
+      throw new Error(`ACK token ${label} is invalid`);
+    }
+
+    function expectedQueueKey(mailbox) {
+      return registry.makeQueueKey({
+        accountId: node.account.id,
+        host: node.account.host,
+        user: node.account.getUsername(),
+        mailbox: mailbox || node.mailbox || "INBOX"
+      });
+    }
+
+    function validateAckTokenScope(rawToken, token) {
+      const expected = defaultTokenValues();
+
+      if (hasScopeValue(rawToken.accountId) && String(rawToken.accountId) !== String(expected.accountId)) {
+        throw new Error("ACK token accountId does not match configured account");
+      }
+
+      if (hasScopeValue(rawToken.host)
+        && String(rawToken.host).trim().toLowerCase() !== String(expected.host || "").trim().toLowerCase()) {
+        throw new Error("ACK token host does not match configured account");
+      }
+
+      if (hasScopeValue(rawToken.port)
+        && parseScopePort(rawToken.port, "port") !== parseScopePort(expected.port, "account port")) {
+        throw new Error("ACK token port does not match configured account");
+      }
+
+      if (hasScopeValue(rawToken.secure)
+        && parseScopeBoolean(rawToken.secure, "secure") !== !!expected.secure) {
+        throw new Error("ACK token secure setting does not match configured account");
+      }
+
+      if (hasScopeValue(rawToken.user) && String(rawToken.user) !== String(expected.user || "")) {
+        throw new Error("ACK token user does not match configured account");
+      }
+
+      const rawQueueKey = hasScopeValue(rawToken.queueKey) ? rawToken.queueKey : rawToken.inflightKey;
+      if (hasScopeValue(rawQueueKey) && String(rawQueueKey) !== expectedQueueKey(token.mailbox)) {
+        throw new Error("ACK token queueKey does not match configured account and mailbox");
+      }
     }
 
     function addTiming(timings, name, startedAt) {
@@ -524,11 +620,14 @@ module.exports = function registerImapEmailAck(RED) {
 
       let token;
       try {
+        const rawToken = getRawAckTokenSource(msg);
         token = extractAckToken(msg, defaultTokenValues());
+        validateAckTokenScope(rawToken, token);
       } catch (err) {
         msg.imapAck = buildImapAckError({
+          token,
           plan: node.actionPlan || normalizeAckAction({ action: "delete" }),
-          mailbox: node.mailbox || "INBOX",
+          mailbox: token && token.mailbox || node.mailbox || "INBOX",
           error: err
         });
         send([null, msg, null]);
