@@ -13,4 +13,5 @@ All notable changes to `@compeso/node-red-contrib-imap-email` are documented her
 - Added at-least-once delivery support through volatile inflight tracking and ACK tokens.
 - Added ACK actions for delete, move, copy, flag and message-driven action plans.
 - Added fail-closed ACK handling for unsafe delete and move capability fallbacks.
+- Pinned production dependencies to an installable Node.js 18-compatible set.
 - Added diagnostics, stats output, a disabled non-destructive example flow and package consistency tests.

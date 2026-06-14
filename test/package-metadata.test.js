@@ -5,6 +5,36 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
+function comparatorAllowsNode18(operator, major) {
+  if (operator === ">=") {
+    return major <= 18;
+  }
+  if (operator === ">") {
+    return major < 18;
+  }
+  if (operator === "<") {
+    return major > 18;
+  }
+  if (operator === "<=") {
+    return major >= 18;
+  }
+  return true;
+}
+
+function engineAlternativeAllowsNode18(alternative) {
+  const comparators = [...String(alternative).matchAll(/(>=|>|<=|<)\s*(\d+)/g)];
+  if (comparators.length === 0) {
+    return true;
+  }
+  return comparators.every((match) => comparatorAllowsNode18(match[1], Number(match[2])));
+}
+
+function engineRangeAllowsNode18(range) {
+  return String(range || "")
+    .split("||")
+    .some((alternative) => engineAlternativeAllowsNode18(alternative.trim()));
+}
+
 test("stable package metadata is complete", () => {
   const root = path.resolve(__dirname, "..");
   const pkg = require(path.join(root, "package.json"));
@@ -15,8 +45,9 @@ test("stable package metadata is complete", () => {
   assert.equal(pkg.publishConfig && pkg.publishConfig.access, "public");
   assert.ok(pkg.keywords.includes("node-red"));
   assert.ok(pkg.keywords.includes("imap-email"));
-  assert.ok(pkg.dependencies.imapflow);
-  assert.ok(pkg.dependencies.mailparser);
+  assert.equal(pkg.dependencies.imapflow, "1.0.76");
+  assert.equal(pkg.dependencies.mailparser, "3.9.8");
+  assert.equal(Object.prototype.hasOwnProperty.call(pkg, "overrides"), false);
   assert.ok(pkg.files.includes("CHANGELOG.md"));
   assert.equal(pkg.homepage, "https://github.com/Harpau/node-red-contrib-imap-email#readme");
   assert.equal(pkg.repository.url, "git+https://github.com/Harpau/node-red-contrib-imap-email.git");
@@ -27,6 +58,43 @@ test("stable package metadata is complete", () => {
     "imap-email in",
     "imap-email ack"
   ]);
+});
+
+test("locked production dependencies remain compatible with Node 18", () => {
+  const root = path.resolve(__dirname, "..");
+  const lock = require(path.join(root, "package-lock.json"));
+  const incompatible = [];
+
+  for (const [name, meta] of Object.entries(lock.packages || {})) {
+    if (!name || !name.startsWith("node_modules/") || !meta.engines || !meta.engines.node) {
+      continue;
+    }
+    if (!engineRangeAllowsNode18(meta.engines.node)) {
+      incompatible.push(`${name}: ${meta.engines.node}`);
+    }
+  }
+
+  assert.deepEqual(incompatible, []);
+});
+
+test("installed imapflow exposes the IMAP methods used by the nodes", () => {
+  const { ImapFlow } = require("imapflow");
+  const requiredMethods = [
+    "connect",
+    "getMailboxLock",
+    "mailboxCreate",
+    "messageDelete",
+    "messageMove",
+    "messageCopy",
+    "messageFlagsAdd",
+    "messageFlagsRemove",
+    "fetchOne",
+    "fetch"
+  ];
+
+  for (const method of requiredMethods) {
+    assert.equal(typeof ImapFlow.prototype[method], "function", `ImapFlow must expose ${method}`);
+  }
 });
 
 test("project documentation does not contain stale GitHub repository URLs for this package", () => {
