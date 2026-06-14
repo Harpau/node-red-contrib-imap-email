@@ -33,6 +33,18 @@ function expectedQueueKey(mailbox = "INBOX") {
   });
 }
 
+function inputToken(uid = 123, overrides = {}) {
+  const token = {
+    ...sampleToken(uid),
+    queueKey: expectedQueueKey("INBOX"),
+    ...overrides
+  };
+  if (!Object.prototype.hasOwnProperty.call(overrides, "queueKey")) {
+    token.queueKey = expectedQueueKey(token.mailbox);
+  }
+  return token;
+}
+
 function createConnectionError(message, code) {
   const err = new Error(message);
   err.code = code;
@@ -149,12 +161,15 @@ test("normalizes delete, move and flag ack actions", () => {
 
   assert.deepEqual(normalizeAckAction({
     action: "move",
-    targetMailbox: "Archive/Processed"
+    targetMailbox: "Archive/Processed",
+    seenAction: "set",
+    flagAdd: "$Processed",
+    flagRemove: "\\Draft"
   }), {
     action: "move",
     disposition: "move",
     targetMailbox: "Archive/Processed",
-    flags: { add: [], remove: [] }
+    flags: { add: ["\\Seen", "$Processed"], remove: ["\\Draft"] }
   });
 
   assert.deepEqual(normalizeAckAction({
@@ -182,7 +197,9 @@ test("normalizes set by msg. action objects", () => {
         flags: {
           seen: "set",
           answered: "clear",
-          flagged: "ignore"
+          flagged: "ignore",
+          add: "$Processed",
+          remove: ["\\Draft"]
         }
       }
     }
@@ -193,8 +210,8 @@ test("normalizes set by msg. action objects", () => {
     disposition: "keep",
     targetMailbox: "",
     flags: {
-      add: ["\\Seen"],
-      remove: ["\\Answered"]
+      add: ["\\Seen", "$Processed"],
+      remove: ["\\Answered", "\\Draft"]
     }
   });
 });
@@ -225,25 +242,39 @@ test("normalizes and validates raw add/remove flag arrays", () => {
   assert.deepEqual(normalizeAckAction({
     action: "flag",
     flags: {
-      add: ["Seen"],
-      remove: ["\\Flagged"]
+      add: ["Seen", "\\Deleted", "$Processed", "custom-keyword"],
+      remove: ["\\Flagged", "\\Draft"]
     }
   }), {
     action: "flag",
     disposition: "keep",
     targetMailbox: "",
     flags: {
-      add: ["\\Seen"],
-      remove: ["\\Flagged"]
+      add: ["\\Seen", "\\Deleted", "$Processed", "custom-keyword"],
+      remove: ["\\Flagged", "\\Draft"]
     }
   });
 
   assert.throws(() => normalizeAckAction({
     action: "flag",
     flags: {
-      add: ["\\Deleted"]
+      add: ["\\Recent"]
     }
   }), /unsupported.*flag/i);
+
+  assert.throws(() => normalizeAckAction({
+    action: "flag",
+    flags: {
+      add: ["\\*"]
+    }
+  }), /unsupported.*flag/i);
+
+  assert.throws(() => normalizeAckAction({
+    action: "flag",
+    flags: {
+      add: ["bad flag"]
+    }
+  }), /invalid.*flag/i);
 
   assert.throws(() => normalizeAckAction({
     action: "flag",
@@ -259,7 +290,7 @@ test("normalizes and validates raw add/remove flag arrays", () => {
       add: ["\\Seen"],
       seen: "typo"
     }
-  }), /cannot be combined/i);
+  }), /invalid.*flag.*action/i);
 });
 
 test("set by msg. uses the fixed msg.imap.ackAction path", () => {
@@ -298,11 +329,18 @@ test("rejects invalid simplified ack action combinations", () => {
     action: "delete",
     seenAction: "set"
   }), /delete.*flag/i);
-  assert.throws(() => normalizeAckAction({
+
+  assert.deepEqual(normalizeAckAction({
     action: "move",
     targetMailbox: "Archive",
     seenAction: "set"
-  }), /move.*flag/i);
+  }), {
+    action: "move",
+    disposition: "move",
+    targetMailbox: "Archive",
+    flags: { add: ["\\Seen"], remove: [] }
+  });
+
   assert.throws(() => validateAckActionPlan({
     action: "flag",
     disposition: "keep",
@@ -334,6 +372,23 @@ test("ack runtime normalizes numeric limits to integers", () => {
   assert.equal(node.closeTimeoutMs, 7);
 });
 
+test("ack runtime no longer falls back to legacy config.action", () => {
+  const { node } = createAckNode({
+    action: "move",
+    targetMailbox: "Archive/Legacy"
+  }, () => {
+    throw new Error("client should not be created");
+  });
+
+  assert.equal(node.actionMode, "delete");
+  assert.deepEqual(node.actionPlan, {
+    action: "delete",
+    disposition: "delete",
+    targetMailbox: "",
+    flags: { add: [], remove: [] }
+  });
+});
+
 test("continues to use msg.imap.ackToken as the delivery contract", () => {
   const token = sampleToken();
   const extracted = extractAckToken({ imap: { ackToken: token } });
@@ -341,7 +396,64 @@ test("continues to use msg.imap.ackToken as the delivery contract", () => {
   assert.deepEqual(extracted, token);
 });
 
-test("ack runtime accepts legacy tokens with missing or blank scope fields", () => {
+test("ack runtime rejects legacy or incomplete ACK tokens before queueing", () => {
+  const cases = [
+    ["missing token", { imap: { uid: 1, uidValidity: "uidv-1", mailbox: "INBOX" } }, /ackToken.*fehlt/i],
+    ["blank scope", {
+      imap: {
+        ackToken: {
+          accountId: "",
+          host: "",
+          port: "",
+          secure: "",
+          user: "",
+          queueKey: "",
+          uid: 1,
+          uidValidity: "uidv-1",
+          mailbox: "Archive"
+        }
+      }
+    }, /ackToken\.accountId.*fehlt/i],
+    ["inflightKey alias", {
+      imap: {
+        ackToken: {
+          ...inputToken(1),
+          queueKey: undefined,
+          inflightKey: expectedQueueKey("INBOX")
+        }
+      }
+    }, /ackToken\.queueKey.*fehlt/i]
+  ];
+
+  for (const [label, msg, expectedError] of cases) {
+    const { node, handlers } = createAckNode({
+      actionMode: "delete",
+      batchSize: 100,
+      flushMs: 60000
+    }, () => {
+      throw new Error("client should not be created before a pending flush");
+    });
+
+    const { outputs, doneCount } = invokeInput(handlers, {
+      payload: label,
+      ...msg
+    });
+
+    if (node.timer) {
+      clearTimeout(node.timer);
+      node.timer = null;
+    }
+
+    assert.equal(outputs.length, 1, label);
+    assert.equal(outputs[0][0], null, label);
+    assert.equal(outputs[0][1].imapAck.ok, false, label);
+    assert.match(outputs[0][1].imapAck.error, expectedError, label);
+    assert.equal(doneCount, 1, label);
+    assert.equal(node.pending.length, 0, label);
+  }
+});
+
+test("ack runtime accepts complete scoped ACK tokens", () => {
   const { node, handlers } = createAckNode({
     actionMode: "delete",
     batchSize: 100,
@@ -351,19 +463,9 @@ test("ack runtime accepts legacy tokens with missing or blank scope fields", () 
   });
 
   const { outputs, doneCount } = invokeInput(handlers, {
-    payload: "legacy",
+    payload: "scoped",
     imap: {
-      ackToken: {
-        accountId: "",
-        host: "",
-        port: "",
-        secure: "",
-        user: "",
-        queueKey: "",
-        uid: 1,
-        uidValidity: "uidv-1",
-        mailbox: "Archive"
-      }
+      ackToken: inputToken(1, { mailbox: "Archive" })
     }
   });
 
@@ -387,12 +489,11 @@ test("ack runtime validates explicit token account scope before queueing", () =>
     ["host", "imap.other.test", /host/i],
     ["host", "IMAP.EXAMPLE.TEST", null],
     ["port", "994", /port/i],
-    ["port", "993.9", /port.*invalid/i],
+    ["port", "993.9", /port.*(invalid|ungueltig)/i],
     ["secure", "false", /secure/i],
-    ["secure", "typo", /secure.*invalid/i],
+    ["secure", "typo", /secure.*(invalid|ungueltig)/i],
     ["user", "User@example.test", /user/i],
-    ["queueKey", "other-queue", /queueKey/i],
-    ["inflightKey", "other-queue", /queueKey/i]
+    ["queueKey", "other-queue", /queueKey/i]
   ];
 
   for (const [field, value, expectedError] of cases) {
@@ -405,11 +506,7 @@ test("ack runtime validates explicit token account scope before queueing", () =>
       clientCalls += 1;
       throw new Error("client should not be created");
     });
-    const token = {
-      uid: 1,
-      uidValidity: "uidv-1",
-      mailbox: "INBOX"
-    };
+    const token = inputToken(1);
     token[field] = value;
 
     const { outputs, doneCount } = invokeInput(handlers, {
@@ -442,7 +539,6 @@ test("ack runtime validates explicit token account scope before queueing", () =>
 test("ack runtime validates queue keys against the token mailbox", () => {
   const { node: okNode, handlers: okHandlers } = createAckNode({
     actionMode: "delete",
-    mailbox: "INBOX",
     batchSize: 100,
     flushMs: 60000
   }, () => {
@@ -450,12 +546,7 @@ test("ack runtime validates queue keys against the token mailbox", () => {
   });
   const accepted = invokeInput(okHandlers, {
     imap: {
-      ackToken: {
-        uid: 1,
-        uidValidity: "uidv-1",
-        mailbox: "Archive",
-        queueKey: expectedQueueKey("Archive")
-      }
+      ackToken: inputToken(1, { mailbox: "Archive" })
     }
   });
   if (okNode.timer) {
@@ -470,7 +561,6 @@ test("ack runtime validates queue keys against the token mailbox", () => {
   let clientCalls = 0;
   const { node: badNode, handlers: badHandlers } = createAckNode({
     actionMode: "delete",
-    mailbox: "INBOX",
     batchSize: 100,
     flushMs: 60000
   }, () => {
@@ -479,12 +569,10 @@ test("ack runtime validates queue keys against the token mailbox", () => {
   });
   const rejected = invokeInput(badHandlers, {
     imap: {
-      ackToken: {
-        uid: 2,
-        uidValidity: "uidv-1",
+      ackToken: inputToken(2, {
         mailbox: "Archive",
         queueKey: expectedQueueKey("INBOX")
-      }
+      })
     }
   });
   if (badNode.timer) {
@@ -513,9 +601,7 @@ test("ack runtime sends invalid message actions to output 2 without queueing", (
 
   const result = invokeInput(handlers, {
     imap: {
-      uid: 1,
-      uidValidity: "uidv-1",
-      mailbox: "INBOX",
+      ackToken: inputToken(1),
       ackAction: {
         action: "flag",
         flags: {
@@ -551,9 +637,7 @@ test("ack runtime sends invalid static action config to output 2 without queuein
 
   const result = invokeInput(handlers, {
     imap: {
-      uid: 1,
-      uidValidity: "uidv-1",
-      mailbox: "INBOX"
+      ackToken: inputToken(1)
     }
   });
   if (node.timer) {
@@ -622,6 +706,16 @@ test("builds simplified msg.imapAck success and error structures", () => {
     completed: false,
     error: "flag failed"
   });
+
+  const partialError = new Error("move failed");
+  partialError.partial = true;
+  assert.equal(buildImapAckError({
+    token,
+    plan,
+    mailbox: "INBOX",
+    range: "123",
+    error: partialError
+  }).partial, true);
 });
 
 test("executes move with automatic target mailbox creation", async () => {
@@ -629,11 +723,19 @@ test("executes move with automatic target mailbox creation", async () => {
   const calls = [];
   const plan = normalizeAckAction({
     action: "move",
-    targetMailbox: "Archive/Processed"
+    targetMailbox: "Archive/Processed",
+    seenAction: "set",
+    flagRemove: "$Todo"
   });
   const client = {
     async mailboxCreate(path) {
       calls.push(["mailboxCreate", path]);
+    },
+    async messageFlagsAdd(range, flags, options) {
+      calls.push(["messageFlagsAdd", range, flags, options]);
+    },
+    async messageFlagsRemove(range, flags, options) {
+      calls.push(["messageFlagsRemove", range, flags, options]);
     },
     async messageMove(range, target, options) {
       calls.push(["messageMove", range, target, options]);
@@ -644,6 +746,107 @@ test("executes move with automatic target mailbox creation", async () => {
 
   assert.deepEqual(calls, [
     ["mailboxCreate", "Archive/Processed"],
+    ["messageFlagsAdd", "123", ["\\Seen"], { uid: true }],
+    ["messageFlagsRemove", "123", ["$Todo"], { uid: true }],
+    ["messageMove", "123", "Archive/Processed", { uid: true }]
+  ]);
+});
+
+test("does not apply move flags when target mailbox creation fails", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const calls = [];
+  const plan = normalizeAckAction({
+    action: "move",
+    targetMailbox: "Archive/Processed",
+    seenAction: "set"
+  });
+  const client = {
+    async mailboxCreate(path) {
+      calls.push(["mailboxCreate", path]);
+      throw new Error("create failed");
+    },
+    async messageFlagsAdd() {
+      calls.push(["messageFlagsAdd"]);
+    },
+    async messageMove() {
+      calls.push(["messageMove"]);
+    }
+  };
+
+  await assert.rejects(
+    () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
+    /create failed/
+  );
+  assert.deepEqual(calls, [["mailboxCreate", "Archive/Processed"]]);
+});
+
+test("does not move when move flag updates fail before any side effect", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const calls = [];
+  const plan = normalizeAckAction({
+    action: "move",
+    targetMailbox: "Archive/Processed",
+    seenAction: "set"
+  });
+  const client = {
+    async mailboxCreate(path) {
+      calls.push(["mailboxCreate", path]);
+    },
+    async messageFlagsAdd(range, flags, options) {
+      calls.push(["messageFlagsAdd", range, flags, options]);
+      throw new Error("flag add failed");
+    },
+    async messageMove() {
+      calls.push(["messageMove"]);
+    }
+  };
+
+  await assert.rejects(
+    () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
+    (err) => {
+      assert.equal(err.message, "flag add failed");
+      assert.equal(err.partial, undefined);
+      return true;
+    }
+  );
+  assert.deepEqual(calls, [
+    ["mailboxCreate", "Archive/Processed"],
+    ["messageFlagsAdd", "123", ["\\Seen"], { uid: true }]
+  ]);
+});
+
+test("marks move failures after flag changes as partial", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const calls = [];
+  const plan = normalizeAckAction({
+    action: "move",
+    targetMailbox: "Archive/Processed",
+    seenAction: "set"
+  });
+  const client = {
+    async mailboxCreate(path) {
+      calls.push(["mailboxCreate", path]);
+    },
+    async messageFlagsAdd(range, flags, options) {
+      calls.push(["messageFlagsAdd", range, flags, options]);
+    },
+    async messageMove(range, target, options) {
+      calls.push(["messageMove", range, target, options]);
+      throw new Error("move failed");
+    }
+  };
+
+  await assert.rejects(
+    () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
+    (err) => {
+      assert.equal(err.message, "move failed");
+      assert.equal(err.partial, true);
+      return true;
+    }
+  );
+  assert.deepEqual(calls, [
+    ["mailboxCreate", "Archive/Processed"],
+    ["messageFlagsAdd", "123", ["\\Seen"], { uid: true }],
     ["messageMove", "123", "Archive/Processed", { uid: true }]
   ]);
 });
@@ -818,6 +1021,66 @@ test("ack runtime fails remaining chunks after a transient action connection los
     itemOutputs.filter((output) => output[1]).map((output) => output[1].imapAck.uid),
     [1, 2, 3, 4]
   );
+});
+
+test("ack runtime stops remaining chunks after a partial move side effect", async () => {
+  const clientCalls = [];
+  const { node, warnings, errors } = createAckNode({
+    actionMode: "move",
+    targetMailbox: "Archive/Processed",
+    seenAction: "set",
+    batchSize: 4,
+    maxUidPerCommand: 2,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    usable: true,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async mailboxCreate(path) {
+      clientCalls.push(["mailboxCreate", path]);
+    },
+    async messageFlagsAdd(range, flags, options) {
+      clientCalls.push(["messageFlagsAdd", range, flags, options]);
+    },
+    async messageMove(range, target, options) {
+      clientCalls.push(["messageMove", range, target, options]);
+      throw new Error("move failed after flags");
+    },
+    async logout() {}
+  }));
+
+  const itemOutputs = [];
+  let doneCount = 0;
+  for (const uid of [1, 2, 3, 4]) {
+    node.pending.push({
+      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
+      send: sendWithCapture(itemOutputs),
+      done: () => {
+        doneCount += 1;
+      },
+      token: sampleToken(uid),
+      plan: node.actionPlan,
+      enqueuedAt: Date.now()
+    });
+  }
+
+  await node.flush();
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.deepEqual(clientCalls, [
+    ["mailboxCreate", "Archive/Processed"],
+    ["messageFlagsAdd", "1:2", ["\\Seen"], { uid: true }],
+    ["messageMove", "1:2", "Archive/Processed", { uid: true }]
+  ]);
+  assert.equal(warnings.length, 2);
+  assert.equal(doneCount, 4);
+  assert.equal(itemOutputs.filter((output) => output[1]).length, 4);
+  assert.equal(itemOutputs.every((output) => output[1].imapAck.partial === true), true);
 });
 
 test("ack runtime ignores transient logout failures after successful actions", async () => {

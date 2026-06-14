@@ -269,7 +269,7 @@ Die Modi werden neutral und aktionsorientiert benannt:
 delete
 move
 flag
-set by msg.
+set by msg.imap.ackAction
 ```
 
 Empfohlene interne Werte:
@@ -278,7 +278,7 @@ Empfohlene interne Werte:
 delete      delete
 move        move
 flag        flag
-set by msg. message
+set by msg.imap.ackAction message
 ```
 
 ### 4.3 Semantik der Modi
@@ -294,21 +294,22 @@ set by msg. message
 - Verschiebt die Mail per UID in einen Zielordner.
 - Der Zielordner wird automatisch angelegt, falls der Server ihn als fehlend
   meldet.
+- Kann vor dem Verschieben Flags setzen oder entfernen.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
-- Darf nicht mit Flag-Aenderungen kombiniert werden.
 
 `flag`
 
 - Setzt oder entfernt IMAP-Flags per UID.
-- Unterstuetzt in der oeffentlichen Konfiguration bewusst nur `\Seen`,
-  `\Answered` und `\Flagged`; zum Loeschen einer Mail ist der Modus `delete`
-  vorgesehen.
+- Unterstuetzt benannte Aktionen fuer `\Seen`, `\Answered` und `\Flagged`
+  sowie freie IMAP-Systemflags und Custom Keywords.
+- Zum Loeschen einer Mail ist der Modus `delete` vorgesehen. `\Deleted` kann
+  als freies Flag gesetzt werden, ersetzt aber nicht die Delete-Aktion.
 - Behaelt die Mail im Postfach.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher Flag-Aktion.
 - Wenn keine Flag-Aenderung konfiguriert ist, wird die Mail unveraendert im
   Postfach behalten und trotzdem als erfolgreich abgeschlossen behandelt.
 
-`set by msg.`
+`set by msg.imap.ackAction`
 
 - Aktion, Zielordner und Flag-Aenderungen werden aus einer Message-Property
   gelesen.
@@ -343,7 +344,7 @@ Struktur normalisiert:
   targetMailbox: "Archive",
   flags: {
     add: ["\\Seen"],
-    remove: ["\\Flagged"]
+    remove: ["\\Flagged", "$Todo"]
   }
 }
 ```
@@ -355,12 +356,12 @@ Erlaubt:
 - `flag` ohne Flag-Aenderungen.
 - `flag` mit Flag-Aenderungen.
 - `move` ohne Flag-Aenderungen.
+- `move` mit Flag-Aenderungen.
 - `delete` ohne Flag-Aenderungen.
 
 Nicht erlaubt:
 
 - `delete` mit Flag-Aenderungen.
-- `move` mit Flag-Aenderungen.
 - `set` und `clear` fuer dasselbe Flag gleichzeitig.
 - `move` ohne gueltigen Zielordner.
 - `message`-Modus ohne gueltiges Action-Objekt.
@@ -375,11 +376,12 @@ Bei erfolgreicher Tokenvalidierung und Mailbox-Sperre:
 
 1. UIDVALIDITY pruefen.
 2. UID-Mengen in handhabbare Chunks aufteilen.
-3. Bei `flag`: Flags fuer den Chunk setzen oder entfernen.
-4. Bei `move`: Zielordner bei Bedarf anlegen und den Chunk verschieben.
-5. Bei `delete`: den Chunk loeschen.
-6. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
-7. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
+3. Bei `move`: Zielordner bei Bedarf anlegen.
+4. Bei `flag` und `move`: Flags fuer den Chunk setzen oder entfernen.
+5. Bei `move`: den Chunk verschieben.
+6. Bei `delete`: den Chunk loeschen.
+7. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
+8. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
 
 Chunks bleiben die Performance-Grenze. Innerhalb eines fehlgeschlagenen Chunks
 wird nicht auf einzelne UIDs heruntergebrochen.
@@ -407,8 +409,9 @@ Erwartete Felder:
 }
 ```
 
-Der bestehende Fallback auf `msg.imap.uid`, `msg.imap.mailbox` und
-`msg.imap.uidValidity` darf erhalten bleiben.
+Es gibt keinen Fallback auf `msg.imap.uid`, `msg.imap.mailbox`,
+`msg.imap.uidValidity` oder alte Queue-Key-Aliasse. Das ACK-Token ist der
+verbindliche Vertrag.
 
 ### 5.2 `msg.imap.flags`
 
@@ -434,12 +437,13 @@ Boolean-Objekt bildet nur die vom Node unterstuetzten Standardflags ab.
 
 ### 5.3 `msg.imap.ackAction`
 
-Im Modus `set by msg.` wird fest `msg.imap.ackAction` gelesen. Der
+Im Modus `set by msg.imap.ackAction` wird fest `msg.imap.ackAction` gelesen. Der
 Property-Pfad ist nicht konfigurierbar.
 
 Das Objekt beschreibt die Aktion, den Zielordner fuer `move` und Flags fuer
-`flag`. Die benannten Flag-Aktionen sind auf `seen`, `answered` und `flagged`
-begrenzt:
+`flag` und `move`. Die benannten Flag-Aktionen sind auf `seen`, `answered` und
+`flagged` begrenzt; freie Flags koennen ueber `add` und `remove` gesetzt
+werden:
 
 ```js
 {
@@ -448,7 +452,9 @@ begrenzt:
   flags: {
     seen: "ignore" | "set" | "clear",
     answered: "ignore" | "set" | "clear",
-    flagged: "ignore" | "set" | "clear"
+    flagged: "ignore" | "set" | "clear",
+    add: ["$Processed"],
+    remove: ["\\Draft"]
   }
 }
 ```
@@ -494,7 +500,8 @@ msg.imapAck = {
     remove: []
   },
   range: "123",
-  error: "UIDVALIDITY mismatch",
+  partial: true,
+  error: "move failed after flags",
   completed: false
 };
 ```
@@ -549,19 +556,21 @@ Optionen:
 delete
 move
 flag
-set by msg.
+set by msg.imap.ackAction
 ```
 
 Zusaetzliche Felder:
 
 ```text
 Target folder              sichtbar bei move
-Seen action                sichtbar bei flag, ignore | set | clear
-Answered action            sichtbar bei flag, ignore | set | clear
-Flagged action             sichtbar bei flag, ignore | set | clear
+Seen action                sichtbar bei flag und move, ignore | set | clear
+Answered action            sichtbar bei flag und move, ignore | set | clear
+Flagged action             sichtbar bei flag und move, ignore | set | clear
+Flags to set               sichtbar bei flag und move
+Flags to clear             sichtbar bei flag und move
 ```
 
-Bei `set by msg.` ersetzt die Message-Aktion die statische Aktion
+Bei `set by msg.imap.ackAction` ersetzt die Message-Aktion die statische Aktion
 einschliesslich Flags und Zielordner. Der Node liest dabei fest
 `msg.imap.ackAction`.
 
@@ -580,10 +589,9 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 
 - Eingehende Nachrichten werden wie bisher gebatcht.
 - Token werden aus `msg.imap.ackToken` extrahiert.
-- Explizite Token-Scope-Felder (`accountId`, `host`, `port`, `secure`, `user`
-  und `queueKey`/`inflightKey`) muessen zur konfigurierten Account-Node und zur
-  Token-Mailbox passen. Fehlende Legacy-Felder duerfen weiterhin aus der
-  Account-Konfiguration ergaenzt werden.
+- Alle Token-Scope-Felder (`accountId`, `host`, `port`, `secure`, `user` und
+  `queueKey`) muessen vorhanden sein und zur konfigurierten Account-Node und zur
+  Token-Mailbox passen.
 - Nachrichten werden nach Mailbox, UIDVALIDITY und Action-Plan gruppiert.
 - Grosse UID-Mengen werden in handhabbare IMAP-Kommandos
   aufgeteilt.
@@ -714,18 +722,24 @@ imap-email ack:
 ### 10.2 `imap-email ack`
 
 - Default-Modus `delete` verhaelt sich wie bisheriges ACK.
-- `move` ruft Zielordner-Erstellung und `messageMove`.
+- `move` ruft Zielordner-Erstellung, optionale Flag-Aenderungen und
+  `messageMove` in dieser Reihenfolge.
 - `flag` ruft `messageFlagsAdd` und `messageFlagsRemove`.
-- `delete` und `move` koennen nicht mit Flag-Aenderungen kombiniert werden.
+- `delete` kann nicht mit Flag-Aenderungen kombiniert werden.
 - Ungueltige Kombinationen werden abgelehnt.
-- `set by msg.` liest Aktion und Flags aus der konfigurierten
+- `set by msg.imap.ackAction` liest Aktion und Flags aus der festen
   Message-Property.
 - Ungueltiges Message-Action-Objekt geht auf Output 2.
 - Ungueltige Flag-Aktionswerte werden nicht still zu `ignore` normalisiert.
+- Freie IMAP-Flags und Custom Keywords koennen gesetzt oder geloescht werden.
 - ACK-Token mit falschem Account-/Queue-Scope gehen auf Output 2 und starten
   keine IMAP-Aktion.
+- Fehlende ACK-Token-Scope-Felder und alte Aliasse wie `inflightKey` werden
+  abgelehnt.
 - UIDVALIDITY mismatch geht auf Output 2.
 - IMAP-Fehler bei Flags, Move oder Delete entfernt Inflight nicht.
+- Partielle Move-/Flag-Seiteneffekte werden in `msg.imapAck.partial` und Stats
+  sichtbar.
 - Grosse UID-Mengen werden gechunkt.
 - Erfolgreiche Chunks entfernen Inflight und gehen auf Output 1.
 - Fehlgeschlagene Chunks behalten Inflight und gehen auf Output 2.
@@ -749,8 +763,8 @@ imap-email ack:
 - `msg.imap.flags` bleibt als vollstaendiges Array der IMAP-Flags erhalten.
   Zusaetzlich wird `msg.imap.flagState` als Convenience-Objekt mit `deleted`,
   `seen`, `answered` und `flagged` vorgesehen.
-- `set by msg.` liest fest `msg.imap.ackAction`. Der Property-Pfad wird nicht
-  konfigurierbar gemacht.
+- `set by msg.imap.ackAction` liest fest `msg.imap.ackAction`. Der
+  Property-Pfad wird nicht konfigurierbar gemacht.
 - `Expunge window` und `Expunge limit` werden in der UI nur angezeigt, wenn
   `Deleted = Only without flag` gesetzt ist. Runtime-seitig bleibt Expunge auf
   `deletedSelection=exclude` beschraenkt.

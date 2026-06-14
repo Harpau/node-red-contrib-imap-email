@@ -28,18 +28,19 @@ module.exports = function registerImapEmailAck(RED) {
     const node = this;
     node.account = RED.nodes.getNode(config.account);
     node.name = config.name || "";
-    node.mailbox = config.mailbox || "";
     node.batchSize = parseInteger(config.batchSize, 100, 1, 10000);
     node.flushMs = parseInteger(config.flushMs, 500, 1, 60000);
     node.maxUidPerCommand = parseInteger(config.maxUidPerCommand, 500, 1, 5000);
     node.maxBatchesPerFlush = parseInteger(config.maxBatchesPerFlush, 20, 1, 1000);
     node.closeTimeoutMs = parseInteger(config.closeTimeoutMs, DEFAULT_CLOSE_TIMEOUT_MS, 1, 14000);
-    node.actionMode = config.actionMode || config.action || "delete";
+    node.actionMode = config.actionMode || "delete";
     node.targetMailbox = config.targetMailbox || "";
     node.actionProperty = "imap.ackAction";
     node.seenAction = config.seenAction || "ignore";
     node.answeredAction = config.answeredAction || "ignore";
     node.flaggedAction = config.flaggedAction || "ignore";
+    node.flagAdd = config.flagAdd || "";
+    node.flagRemove = config.flagRemove || "";
     node.diagnostics = diagnostics.normalizeDiagnostics(config.diagnostics, "stats");
     node.actionPlan = null;
     node.configError = null;
@@ -67,10 +68,13 @@ module.exports = function registerImapEmailAck(RED) {
         const actionConfig = { action: node.actionMode };
         if (node.actionMode === "move") {
           actionConfig.targetMailbox = node.targetMailbox;
-        } else if (node.actionMode === "flag") {
+        }
+        if (node.actionMode === "flag" || node.actionMode === "move") {
           actionConfig.seenAction = node.seenAction;
           actionConfig.answeredAction = node.answeredAction;
           actionConfig.flaggedAction = node.flaggedAction;
+          actionConfig.flagAdd = node.flagAdd;
+          actionConfig.flagRemove = node.flagRemove;
         }
         node.actionPlan = normalizeAckAction(actionConfig);
       } catch (err) {
@@ -80,109 +84,37 @@ module.exports = function registerImapEmailAck(RED) {
       }
     }
 
-    function defaultTokenValues() {
-      return {
-        accountId: node.account.id,
-        host: node.account.host,
-        port: node.account.port,
-        secure: node.account.secure,
-        user: node.account.getUsername(),
-        mailbox: node.mailbox || "INBOX"
-      };
-    }
-
-    function hasScopeValue(value) {
-      return value !== undefined && value !== null && String(value).trim() !== "";
-    }
-
-    function getRawAckTokenSource(msg) {
-      if (msg && msg.imap && msg.imap.ackToken && typeof msg.imap.ackToken === "object") {
-        return msg.imap.ackToken;
-      }
-      if (msg && msg.imap && typeof msg.imap === "object") {
-        return msg.imap;
-      }
-      return {};
-    }
-
-    function parseScopePort(value, label) {
-      if (!hasScopeValue(value)) {
-        return null;
-      }
-      if (typeof value === "number") {
-        if (Number.isSafeInteger(value) && value > 0) {
-          return value;
-        }
-        throw new Error(`ACK token ${label} is invalid`);
-      }
-
-      const text = String(value).trim();
-      if (!/^[0-9]+$/.test(text)) {
-        throw new Error(`ACK token ${label} is invalid`);
-      }
-
-      const port = Number(text);
-      if (!Number.isSafeInteger(port) || port < 1) {
-        throw new Error(`ACK token ${label} is invalid`);
-      }
-      return port;
-    }
-
-    function parseScopeBoolean(value, label) {
-      if (!hasScopeValue(value)) {
-        return null;
-      }
-      if (typeof value === "boolean") {
-        return value;
-      }
-
-      const text = String(value).trim().toLowerCase();
-      if (["true", "1", "yes", "on"].includes(text)) {
-        return true;
-      }
-      if (["false", "0", "no", "off"].includes(text)) {
-        return false;
-      }
-      throw new Error(`ACK token ${label} is invalid`);
-    }
-
     function expectedQueueKey(mailbox) {
       return registry.makeQueueKey({
         accountId: node.account.id,
         host: node.account.host,
         user: node.account.getUsername(),
-        mailbox: mailbox || node.mailbox || "INBOX"
+        mailbox
       });
     }
 
-    function validateAckTokenScope(rawToken, token) {
-      const expected = defaultTokenValues();
-
-      if (hasScopeValue(rawToken.accountId) && String(rawToken.accountId) !== String(expected.accountId)) {
+    function validateAckTokenScope(token) {
+      if (String(token.accountId) !== String(node.account.id)) {
         throw new Error("ACK token accountId does not match configured account");
       }
 
-      if (hasScopeValue(rawToken.host)
-        && String(rawToken.host).trim().toLowerCase() !== String(expected.host || "").trim().toLowerCase()) {
+      if (String(token.host).trim().toLowerCase() !== String(node.account.host || "").trim().toLowerCase()) {
         throw new Error("ACK token host does not match configured account");
       }
 
-      if (hasScopeValue(rawToken.port)
-        && parseScopePort(rawToken.port, "port") !== parseScopePort(expected.port, "account port")) {
+      if (Number(token.port) !== Number(node.account.port)) {
         throw new Error("ACK token port does not match configured account");
       }
 
-      if (hasScopeValue(rawToken.secure)
-        && parseScopeBoolean(rawToken.secure, "secure") !== !!expected.secure) {
+      if (Boolean(token.secure) !== Boolean(node.account.secure)) {
         throw new Error("ACK token secure setting does not match configured account");
       }
 
-      if (hasScopeValue(rawToken.user) && String(rawToken.user) !== String(expected.user || "")) {
+      if (String(token.user) !== String(node.account.getUsername() || "")) {
         throw new Error("ACK token user does not match configured account");
       }
 
-      const rawQueueKey = hasScopeValue(rawToken.queueKey) ? rawToken.queueKey : rawToken.inflightKey;
-      if (hasScopeValue(rawQueueKey) && String(rawQueueKey) !== expectedQueueKey(token.mailbox)) {
+      if (String(token.queueKey) !== expectedQueueKey(token.mailbox)) {
         throw new Error("ACK token queueKey does not match configured account and mailbox");
       }
     }
@@ -249,7 +181,7 @@ module.exports = function registerImapEmailAck(RED) {
             targetMailbox: "",
             flags: { add: [], remove: [] }
           },
-          mailbox: token.mailbox || node.mailbox || "INBOX",
+          mailbox: token.mailbox || "",
           error: err
         });
         item.send([null, item.msg, null]);
@@ -327,10 +259,10 @@ module.exports = function registerImapEmailAck(RED) {
       for (const item of items) {
         const token = item.token;
         const key = [
-          token.accountId || node.account.id,
-          token.host || node.account.host,
-          token.user || node.account.getUsername(),
-          token.mailbox || node.mailbox || "INBOX",
+          token.accountId,
+          token.host,
+          token.user,
+          token.mailbox,
           token.uidValidity,
           actionPlanKey(item.plan)
         ].join("|");
@@ -391,7 +323,7 @@ module.exports = function registerImapEmailAck(RED) {
           let lock;
           const token = group.token;
           const plan = group.plan;
-          const mailbox = token.mailbox || node.mailbox || "INBOX";
+          const mailbox = token.mailbox;
           const actionCounter = stats.actions[plan.action] || { requested: 0, ok: 0, error: 0 };
           actionCounter.requested += group.items.length;
           stats.actions[plan.action] = actionCounter;
@@ -408,9 +340,7 @@ module.exports = function registerImapEmailAck(RED) {
               }
 
               const ackToken = item.token;
-              if (ackToken.queueKey) {
-                registry.removeInflight(ackToken.queueKey, ackToken.uidValidity, ackToken.uid);
-              }
+              registry.removeInflight(ackToken.queueKey, ackToken.uidValidity, ackToken.uid);
 
               item.msg.imapAck = buildImapAckResult({
                 token: ackToken,
@@ -464,6 +394,7 @@ module.exports = function registerImapEmailAck(RED) {
               uidValidity: token.uidValidity,
               range: range || undefined,
               count: failedCount,
+              partial: err && err.partial ? true : undefined,
               error: err.message
             });
           }
@@ -557,11 +488,12 @@ module.exports = function registerImapEmailAck(RED) {
                   targetMailbox: plan.targetMailbox || undefined,
                   range,
                   count: chunkItems.length,
+                  partial: err && err.partial ? true : undefined,
                   error: err.message
                 });
                 failItems(chunkItems, range, err);
                 node.warn(`IMAP ACK failed for ${mailbox} ${range}: ${err.message}`);
-                if (isTransientImapConnectionError(err)) {
+                if (isTransientImapConnectionError(err) || err.partial) {
                   connectionInterrupted = err;
                 }
               }
@@ -620,14 +552,13 @@ module.exports = function registerImapEmailAck(RED) {
 
       let token;
       try {
-        const rawToken = getRawAckTokenSource(msg);
-        token = extractAckToken(msg, defaultTokenValues());
-        validateAckTokenScope(rawToken, token);
+        token = extractAckToken(msg);
+        validateAckTokenScope(token);
       } catch (err) {
         msg.imapAck = buildImapAckError({
           token,
           plan: node.actionPlan || normalizeAckAction({ action: "delete" }),
-          mailbox: token && token.mailbox || node.mailbox || "INBOX",
+          mailbox: token && token.mailbox || "",
           error: err
         });
         send([null, msg, null]);
@@ -654,7 +585,7 @@ module.exports = function registerImapEmailAck(RED) {
             targetMailbox: "",
             flags: { add: [], remove: [] }
           },
-          mailbox: token.mailbox || node.mailbox || "INBOX",
+          mailbox: token.mailbox,
           error: err
         });
         send([null, msg, null]);
@@ -676,7 +607,7 @@ module.exports = function registerImapEmailAck(RED) {
       node.status({ fill: "yellow", shape: "ring", text: `ACK pending ${node.pending.length}` });
       diagnostics.debug(node, node.diagnostics, "imap email ack.queued", {
         pending: node.pending.length,
-        mailbox: token.mailbox || node.mailbox || "INBOX",
+        mailbox: token.mailbox,
         action: plan.action,
         uid: token.uid,
         uidValidity: token.uidValidity

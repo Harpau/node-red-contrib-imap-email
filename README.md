@@ -65,14 +65,17 @@ Only wire messages to `imap-email ack` after all processing that must succeed ha
 
 ```text
 delete       delete the mail by UID and complete it
-move         create the target folder if needed, move the mail and complete it
+move         create the target folder if needed, optionally update flags, move the mail and complete it
 flag         set or clear flags, keep the mail and complete it
-set by msg.  read action, target folder and flags from the message
+set by msg.imap.ackAction
+             read action, target folder and flags from the message
 ```
 
-The ack node can set or clear `\Seen`, `\Answered` and `\Flagged` in `flag`
-mode. Use `delete` to delete mail; `\Deleted` is not exposed as a separate flag
-action. `delete` and `move` are intentionally not combined with flag changes.
+The ack node can set or clear `\Seen`, `\Answered`, `\Flagged`, other IMAP
+system flags such as `\Draft`, and custom keywords such as `$Processed` in
+`flag` and `move` mode. With `move`, flags are updated before the message is
+moved. Use `delete` to delete mail; setting `\Deleted` as a raw flag is an
+advanced flag operation and does not replace the delete action.
 
 ## Large Mailboxes
 
@@ -174,28 +177,35 @@ fails. In that case output 2 receives the original message with
 `msg.imapAck.ok = false`, and the inflight entry remains available for a later
 retry.
 
-ACK tokens are scoped to the configured IMAP account. If a token explicitly
-names a different account, host, port, TLS setting, user or queue key, the ACK
-node rejects it on output 2 instead of running an IMAP action against the wrong
+ACK tokens are scoped to the configured IMAP account and must contain the
+account, mailbox, UID, UIDVALIDITY and queue scope fields emitted by
+`imap-email in`. If a token is missing required scope fields or names a
+different account, host, port, TLS setting, user or queue key, the ACK node
+rejects it on output 2 instead of running an IMAP action against the wrong
 account.
 
-For dynamic decisions, configure `imap-email ack` to `set by msg.` and set
-`msg.imap.ackAction`:
+For dynamic decisions, configure `imap-email ack` to
+`set by msg.imap.ackAction` and set `msg.imap.ackAction`:
 
 ```js
 msg.imap.ackAction = {
-  action: "flag",               // delete, move, flag
+  action: "move",               // delete, move, flag
+  targetMailbox: "Archive/Processed",
   flags: {
     seen: "set",                // ignore, set, clear
     answered: "ignore",
-    flagged: "clear"
+    flagged: "clear",
+    add: ["$Processed"],
+    remove: ["\\Draft"]
   }
 };
 ```
 
 Successful completions add `msg.imapAck` with fields such as `action`,
 `disposition`, `mailbox`, `targetMailbox`, `uid`, `uidValidity`, `flags`,
-`range` and `completed`.
+`range` and `completed`. Failed completions may include
+`msg.imapAck.partial = true` when flag changes were already applied before a
+later IMAP command failed.
 
 ## Current Limits
 

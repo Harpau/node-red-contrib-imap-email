@@ -5,12 +5,13 @@
     defaults: {
       name: { value: '' },
       account: { value: '', type: 'imap-email account', required: true },
-      mailbox: { value: 'INBOX' },
       actionMode: { value: 'delete' },
       targetMailbox: { value: '' },
       seenAction: { value: 'ignore' },
       answeredAction: { value: 'ignore' },
       flaggedAction: { value: 'ignore' },
+      flagAdd: { value: '' },
+      flagRemove: { value: '' },
       batchSize: { value: 100, required: true, validate: RED.validators.number() },
       flushMs: { value: 500, required: true, validate: RED.validators.number() },
       maxUidPerCommand: { value: 500, required: true, validate: RED.validators.number() },
@@ -29,7 +30,7 @@
       function updateActionRows() {
         var mode = $('#node-input-actionMode').val();
         $('.form-row-target-mailbox').toggle(mode === 'move');
-        $('.form-row-flag-action').toggle(mode === 'flag');
+        $('.form-row-flag-action').toggle(mode === 'flag' || mode === 'move');
       }
       $('#node-input-actionMode').on('change', updateActionRows);
       updateActionRows();
@@ -47,17 +48,12 @@
     <input type="text" id="node-input-account">
   </div>
   <div class="form-row">
-    <label for="node-input-mailbox"><i class="fa fa-inbox"></i> Mailbox fallback</label>
-    <input type="text" id="node-input-mailbox" placeholder="INBOX">
-  </div>
-  <hr>
-  <div class="form-row">
     <label for="node-input-actionMode">Mode</label>
     <select id="node-input-actionMode">
       <option value="delete">delete</option>
       <option value="move">move</option>
       <option value="flag">flag</option>
-      <option value="message">set by msg.</option>
+      <option value="message">set by msg.imap.ackAction</option>
     </select>
   </div>
   <div class="form-row form-row-target-mailbox">
@@ -87,6 +83,14 @@
       <option value="set">set</option>
       <option value="clear">clear</option>
     </select>
+  </div>
+  <div class="form-row form-row-flag-action">
+    <label for="node-input-flagAdd">Flags to set</label>
+    <input type="text" id="node-input-flagAdd" placeholder="\Draft $Processed">
+  </div>
+  <div class="form-row form-row-flag-action">
+    <label for="node-input-flagRemove">Flags to clear</label>
+    <input type="text" id="node-input-flagRemove" placeholder="$Todo">
   </div>
   <hr>
   <div class="form-row">
@@ -127,9 +131,9 @@
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
-    <dd>ACK token emitted by <b>imap email in</b>.</dd>
+    <dd>ACK token emitted by <b>imap email in</b>. The token must include account, mailbox, UID, UIDVALIDITY and queue scope fields.</dd>
     <dt>msg.imap.ackAction <span class="property-type">object</span></dt>
-    <dd>When Mode is <code>set by msg.</code>, this fixed message property contains action, target folder and flag actions.</dd>
+    <dd>When Mode is <code>set by msg.imap.ackAction</code>, this fixed message property contains action, target folder and flag actions.</dd>
   </dl>
 
   <h3>Outputs</h3>
@@ -143,14 +147,14 @@
   <dl class="message-properties">
     <dt>Account <span class="property-type">config</span></dt>
     <dd>Required <b>imap email account</b> configuration.</dd>
-    <dt>Mailbox fallback <span class="property-type">string</span></dt>
-    <dd>Mailbox used if the incoming ACK token does not include a mailbox. Usually <code>INBOX</code>.</dd>
     <dt>Mode <span class="property-type">select</span></dt>
-    <dd><code>delete</code>, <code>move</code>, <code>flag</code>, or <code>set by msg.</code>.</dd>
+    <dd><code>delete</code>, <code>move</code>, <code>flag</code>, or <code>set by msg.imap.ackAction</code>.</dd>
     <dt>Target folder <span class="property-type">string</span></dt>
     <dd>Destination mailbox used by <code>move</code>. The target folder is created automatically if needed.</dd>
     <dt>Seen / Answered / Flagged <span class="property-type">no change | set | clear</span></dt>
-    <dd>Optional IMAP flag changes for <code>flag</code>. Use <code>delete</code> to delete mail; the <code>\Deleted</code> flag is not exposed as a separate flag action. <code>delete</code> and <code>move</code> cannot be combined with flag changes.</dd>
+    <dd>Optional IMAP flag changes for <code>flag</code> and <code>move</code>. With <code>move</code>, flags are changed before the message is moved.</dd>
+    <dt>Flags to set / Flags to clear <span class="property-type">string</span></dt>
+    <dd>Optional comma- or whitespace-separated IMAP system flags and custom keywords for <code>flag</code> and <code>move</code>, for example <code>\Draft</code> or <code>$Processed</code>. Use <code>delete</code> to delete mail; setting <code>\Deleted</code> as a raw flag is an advanced flag operation and does not replace the delete action.</dd>
     <dt>Batch size <span class="property-type">number</span></dt>
     <dd>Number of ACKs to collect before flushing immediately.</dd>
     <dt>Flush ms <span class="property-type">number</span></dt>
@@ -165,10 +169,10 @@
 
   <h3>ACK result</h3>
   <p>Successful messages receive <code>msg.imapAck</code> with fields such as <code>ok</code>, <code>action</code>, <code>disposition</code>, <code>mailbox</code>, <code>targetMailbox</code>, <code>uid</code>, <code>uidValidity</code>, <code>flags</code>, <code>range</code> and <code>completed</code>.</p>
-  <p>Failed completions receive <code>msg.imapAck.ok = false</code> and <code>msg.imapAck.error</code>. A mail is not treated as successfully completed when the configured IMAP action fails or when the ACK token does not match the configured account.</p>
+  <p>Failed completions receive <code>msg.imapAck.ok = false</code> and <code>msg.imapAck.error</code>. If a <code>move</code> or flag update partially changed server state before a later IMAP command failed, <code>msg.imapAck.partial = true</code>.</p>
 
   <h3>At-least-once behavior</h3>
-  <p>Successful <code>delete</code>, <code>move</code> and <code>flag</code> actions complete the message and remove the inflight entry. Failed actions keep the inflight entry, so the message can be retried later by <b>imap email in</b>.</p>
+  <p>Successful <code>delete</code>, <code>move</code> and <code>flag</code> actions complete the message and remove the inflight entry. Failed actions keep the inflight entry, so the message can be retried later by <b>imap email in</b>. Partial failures may leave flag changes on the server while still keeping the inflight entry for retry.</p>
 
   <h3>Stats</h3>
   <p>Stats include <code>requested</code>, <code>groups</code>, <code>actions</code>, <code>chunks</code>, <code>okCount</code>, <code>errorCount</code>, <code>pendingAfter</code>, <code>ranges</code> and timings such as <code>connectMs</code>, <code>lockMs</code> and <code>totalMs</code>.</p>
