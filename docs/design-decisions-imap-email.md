@@ -134,10 +134,12 @@ skipDeleted=false  -> deletedSelection=ignore
 Wenn sowohl `deletedSelection` als auch `skipDeleted` vorhanden sind, hat
 `deletedSelection` Vorrang.
 
-### 3.5 Cursor-Window-Regel
+### 3.5 Adaptive Scan-Strategie
 
-Die Standardstrategie `cursor-window` liest pro Fetch-Zyklus genau ein
-begrenztes Cursor-Fenster:
+`imap-email in` verwendet genau eine adaptive Scan-Strategie. Nach einem
+Node-RED-Neustart, ungueltigem `newUidCursor` oder UIDVALIDITY-Wechsel startet
+der Node in der Betriebsphase `cursor-window`. Diese Phase liest begrenzte
+Sequenzfenster:
 
 ```text
 windowStart = scanCursor
@@ -149,7 +151,7 @@ Erlaubt ist ein Fetch dieses Fensters mit `flags: true`, `uid: true` und den
 bereits benoetigten leichten Metadaten.
 
 Der Cursor ist ein fluechtiger Runtime-Zustand pro Node. Nach einem
-erfolgreichen Fetch-Zyklus wird er auf `windowEnd + 1` gesetzt. Wenn das Ende
+erfolgreich gelesenen Fenster wird er auf `windowEnd + 1` gesetzt. Wenn das Ende
 der Mailbox erreicht ist, wrappt der Cursor auf `1`. Enthaelt das Fenster mehr
 ausgabefaehige Kandidaten als in die verbleibende Batch-/Inflight-Kapazitaet
 passen, bleibt der Cursor auf `windowStart`. Bei leerer Mailbox, ungueltigem
@@ -159,17 +161,10 @@ Der Cursor bleibt in Version 0.1 bewusst volatil. Nach einem Node-RED-Neustart
 beginnt der Scan-Cursor wieder bei Sequenz `1`. Eine Persistenz ueber
 Node-RED Context ist kein Ziel fuer Version 0.1.
 
-### 3.5.1 New-UID-Priority-Strategie
-
-Die optionale Strategie `new-uid-priority` ist fuer Postfaecher gedacht, in
-denen verarbeitete Nachrichten im selben Ordner bleiben und z. B. nur mit
-`\Seen` markiert werden. Auch diese Strategie bleibt speicherbegrenzt: Es wird
-immer nur ein Fenster gestreamt und verworfen, bevor das naechste Fenster
-gelesen wird. Gespeichert werden nur Kandidaten bis `batchSize` bzw. bis zur
-verfuegbaren `maxInflight`-Kapazitaet.
-
-Nach Node-RED-Neustart, ungueltigem `newUidCursor` oder UIDVALIDITY-Wechsel
-laeuft die Strategie in eine Warm-up-Phase:
+Die `cursor-window` Phase bleibt speicherbegrenzt: Es wird immer nur ein
+Fenster gestreamt und verworfen, bevor das naechste Fenster gelesen wird.
+Gespeichert werden nur Kandidaten bis `batchSize` bzw. bis zur verfuegbaren
+`maxInflight`-Kapazitaet. Die Phase nutzt die volle `frontWindowSize`:
 
 ```text
 windowSize = frontWindowSize
@@ -177,9 +172,9 @@ range      = scanCursor : min(mailbox.exists, scanCursor + windowSize - 1)
 ```
 
 Nach jedem vollstaendig gelesenen Fenster wird der Node-Status aktualisiert.
-Leere Fenster werden verworfen. Die Warm-up-Phase laeuft weiter, bis
+Leere Fenster werden verworfen. Die `cursor-window` Phase laeuft weiter, bis
 `batchSize`, `maxInflight`-Kapazitaet, Mailbox-Ende oder `scanTimeLimitMs`
-erreicht ist. `scanTimeLimitMs=0` bedeutet: nur ein Warm-up-Fenster lesen.
+erreicht ist. `scanTimeLimitMs=0` bedeutet: nur ein Cursor-Fenster lesen.
 Enthaelt ein Fenster mehr ausgabefaehige Kandidaten als in die verbleibende
 Batch-/Inflight-Kapazitaet passen, wird der Scan-Cursor auf dem Fensteranfang
 gehalten. Dieses Fenster wird dann bei einem spaeteren Trigger erneut gelesen,
@@ -187,8 +182,13 @@ statt Kandidaten hinter dem Cursor zurueckzulassen. Wird das Mailbox-Ende ohne
 Kandidatenueberlauf erreicht, wird `newUidCursor` auf den pro Trigger fixierten
 `uidNextSnapshot` gesetzt.
 
-Sobald `newUidCursor` gueltig ist, wird pro Trigger zuerst ein UID-Fenster fuer
-neu eingegangene Nachrichten gelesen:
+Wenn die Mailbox leer ist und ein gueltiges `UIDNEXT` vorliegt, gilt das
+Mailbox-Ende als erreicht und `newUidCursor` wird sofort auf dieses `UIDNEXT`
+gesetzt.
+
+Sobald `newUidCursor` gueltig ist, wechselt der Node in die Betriebsphase
+`new-uid-priority`. Pro Trigger wird zuerst ein UID-Fenster fuer neu
+eingegangene Nachrichten gelesen:
 
 ```text
 uidWindowStart = newUidCursor
@@ -203,6 +203,19 @@ die Batch passende UID gesetzt. Wenn ein Bestandsfenster ueberlaeuft, wird der
 Bestands-Cursor auf dem Fensteranfang gehalten. Die Strategie garantiert
 dadurch keine global strikt aelteste ungelesene Nachricht ueber das gesamte
 Postfach.
+
+Die Diagnose trennt Betriebsphase und konkretes Fenster:
+
+```text
+scanStrategy      = adaptive
+phase             = cursor-window | new-uid-priority
+windowPhase       = cursor | new-uid | backlog
+windowPhasesRead  = geordnete eindeutige Fensterarten des Triggers
+```
+
+Gespeicherte alte Flow-Properties `scanStrategy=cursor-window` oder
+`scanStrategy=new-uid-priority` bleiben ladbar, steuern aber kein
+Runtime-Verhalten mehr.
 
 Nicht erlaubt:
 
@@ -621,16 +634,18 @@ Bei Fehlern:
 
 - Kein unbounded Mailbox-Scan.
 - Kein mailboxweites IMAP `SEARCH`.
-- In der Standardstrategie pro Trigger nur ein bounded Cursor-Fenster.
-- Bei Kandidatenueberlauf haelt die Standardstrategie den Cursor auf dem
-  Fensteranfang, statt nicht ausgegebene Kandidaten zu ueberspringen.
-- In der Strategie `new-uid-priority` duerfen pro Trigger mehrere bounded
-  Fenster nacheinander gelesen werden. Die Warm-up-Phase wird durch
-  `scanTimeLimitMs` begrenzt; im laufenden Betrieb werden hoechstens ein
+- In der initialen `cursor-window` Phase duerfen pro Trigger mehrere bounded
+  Cursor-Fenster nacheinander gelesen werden. Diese Phase wird durch
+  `scanTimeLimitMs` begrenzt; `scanTimeLimitMs=0` liest genau ein
+  Cursor-Fenster.
+- Bei Kandidatenueberlauf haelt die adaptive Strategie den Cursor auf dem
+  jeweiligen Fensteranfang, statt nicht ausgegebene Kandidaten zu
+  ueberspringen.
+- In der Betriebsphase `new-uid-priority` werden pro Trigger hoechstens ein
   New-UID-Fenster und ein Bestandsfenster gelesen.
 - `frontWindowSize` bleibt die harte Obergrenze fuer ein einzelnes gelesenes
-  Fenster. Im laufenden `new-uid-priority`-Betrieb wird es auf New-UID- und
-  Bestandsfenster aufgeteilt.
+  Fenster. In der `cursor-window` Phase wird die volle Groesse genutzt; in
+  `new-uid-priority` wird sie auf New-UID- und Bestandsfenster aufgeteilt.
 - Der interne Scan-Cursor wrappt am Mailbox-Ende auf `1` und wird bei
   UIDVALIDITY-Wechsel zurueckgesetzt.
 - `batchSize` begrenzt die Ausgabe.
@@ -656,7 +671,6 @@ imap-email in:
   frontWindowSize:  500
   maxInflight:      500
   retryAfterMs:     1800000
-  scanStrategy:     cursor-window
   scanTimeLimitMs:  10000
   maxUidPerCommand: 500
 
@@ -679,23 +693,27 @@ imap-email ack:
 - Kombination mehrerer Flag-Filter.
 - Filterung erfolgt nach Cursor-Fetch und vor Full-Fetch.
 - Full-Fetch prueft Flags erneut.
-- In `cursor-window` loesen selektive Filter kein weiteres Fenster im selben
-  Trigger aus.
-- In `cursor-window` haelt ein Kandidatenueberlauf den Cursor auf dem
-  Fensteranfang.
-- In `new-uid-priority` aktualisiert die Warm-up-Phase den Status nach jedem
-  gelesenen Fenster und respektiert `scanTimeLimitMs`.
-- In `new-uid-priority` halten Warm-up- und Bestandsfenster den Cursor bei
-  Kandidatenueberlauf auf dem Fensteranfang.
+- Die `cursor-window` Phase aktualisiert den Status nach jedem gelesenen
+  Fenster und respektiert `scanTimeLimitMs`.
+- `scanTimeLimitMs=0` liest genau ein Cursor-Fenster.
+- In der `cursor-window` Phase haelt ein Kandidatenueberlauf den Cursor auf
+  dem Fensteranfang.
+- Das Erreichen des Mailbox-Endes ohne Kandidatenueberlauf initialisiert
+  `newUidCursor`.
+- Eine leere Mailbox mit gueltigem `UIDNEXT` initialisiert `newUidCursor`
+  sofort.
+- Interner Expunge waehrend der `cursor-window` Phase verwirft eine im selben
+  Lauf gesetzte `newUidCursor`-Initialisierung.
 - In `new-uid-priority` werden neue UIDs vor dem Bestandsfenster ausgegeben.
 - In `new-uid-priority` teilt der laufende Betrieb `frontWindowSize` auf New-
   UID- und Bestandsfenster auf.
-- Der interne Cursor liest pro Standard-Trigger hoechstens `frontWindowSize`
-  Nachrichten.
 - Der interne Cursor wrappt am Mailbox-Ende.
 - Der interne Cursor resetet bei UIDVALIDITY-Wechsel.
 - Mock-Client stellt sicher, dass kein `SEARCH` ausgefuehrt wird.
-- Stats enthalten `selection`, `filteredByFlags` und Cursor-Felder.
+- Stats enthalten `scanStrategy=adaptive`, `phase`, `windowPhase`,
+  `windowPhasesRead`, `selection`, `filteredByFlags` und Cursor-Felder.
+- Alte `scanStrategy`-Properties in gespeicherten Flows werden akzeptiert,
+  aber ignoriert.
 - HTML defaults, labels und help text sind konsistent.
 
 ### 10.2 `imap-email ack`

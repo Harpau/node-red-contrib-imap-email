@@ -10,7 +10,6 @@
       frontWindowSize: { value: 500, required: true, validate: RED.validators.number() },
       maxInflight: { value: 500, required: true, validate: RED.validators.number() },
       retryAfterMs: { value: 1800000, required: true, validate: RED.validators.number() },
-      scanStrategy: { value: 'cursor-window' },
       scanTimeLimitMs: { value: 10000, required: true, validate: RED.validators.number() },
       maxUidPerCommand: { value: 500, required: true, validate: RED.validators.number() },
       deletedSelection: { value: 'exclude' },
@@ -72,13 +71,6 @@
   <div class="form-row">
     <label for="node-input-retryAfterMs">Retry after ms</label>
     <input type="number" id="node-input-retryAfterMs">
-  </div>
-  <div class="form-row">
-    <label for="node-input-scanStrategy">Scan strategy</label>
-    <select id="node-input-scanStrategy">
-      <option value="cursor-window">Cursor window</option>
-      <option value="new-uid-priority">Prioritize new UIDs</option>
-    </select>
   </div>
   <div class="form-row">
     <label for="node-input-scanTimeLimitMs">Scan time ms</label>
@@ -165,7 +157,7 @@
 
   <h3>Behavior</h3>
   <p>Each input message starts one bounded fetch cycle. The node does not poll automatically and does not delete successfully processed messages itself.</p>
-  <p>The node scans one bounded cursor window per trigger, emits at most the configured batch size, and attaches <code>msg.imap.ackToken</code> to every emitted mail. The internal scan cursor advances after successful fetch cycles and wraps at the end of the mailbox. Wire the successful processing path to <b>imap email ack</b>.</p>
+  <p>The node starts with bounded cursor windows, then records <code>UIDNEXT</code> after reaching the mailbox end and prioritizes newly arrived UIDs on later triggers. If a window contains more selectable messages than can be emitted, the window is held for a later trigger. Wire the successful processing path to <b>imap email ack</b>.</p>
   <p>If another trigger arrives while a fetch cycle is already running, no parallel IMAP fetch is started. A skipped stats message is emitted on output 3 when Diagnostics is <code>stats</code> or <code>debug</code>.</p>
 
   <h3>Inputs</h3>
@@ -195,10 +187,8 @@
     <dd>Maximum number of emitted but not-yet-ACKed messages kept active in memory.</dd>
     <dt>Retry after ms <span class="property-type">number</span></dt>
     <dd>Time after which an un-ACKed inflight message may be emitted again.</dd>
-    <dt>Scan strategy <span class="property-type">selection</span></dt>
-    <dd><code>Cursor window</code> reads one bounded window per trigger and keeps that window when more selectable messages exist than can be emitted. <code>Prioritize new UIDs</code> first warms up through the mailbox, then reads newly arrived UIDs before one cyclic backlog window.</dd>
     <dt>Scan time ms <span class="property-type">number</span></dt>
-    <dd>Soft time budget for warm-up scans in <code>Prioritize new UIDs</code>. The node checks the limit after each fully read window. <code>0</code> reads only one warm-up window.</dd>
+    <dd>Soft time budget for the initial <code>cursor-window</code> phase. The node checks the limit after each fully read window. <code>0</code> reads only one cursor window.</dd>
     <dt>UIDs/command <span class="property-type">number</span></dt>
     <dd>Maximum number of UIDs per IMAP command/range chunk.</dd>
     <dt>Deleted / Seen / Answered / Flagged <span class="property-type">selection</span></dt>
@@ -242,7 +232,7 @@
   </dl>
 
   <h3>Stats</h3>
-  <p>Stats include counters such as <code>exists</code>, <code>uidNextSnapshot</code>, <code>scanStrategy</code>, <code>scanTimeLimitReached</code>, <code>windowsRead</code>, <code>frontWindowRead</code>, <code>candidateOverflow</code>, <code>windowUnselectedCandidates</code>, <code>scanCursorStart</code>, <code>scanCursorEnd</code>, <code>scanCursorNext</code>, <code>scanWrapped</code>, <code>scanCursorAdjusted</code>, <code>scanCursorHeld</code>, <code>scanCursorHoldReason</code>, <code>newUidCursor</code>, <code>uidWindowStart</code>, <code>uidWindowEnd</code>, <code>filteredByFlags</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>deletedExpungeSkipped</code>, <code>inflightPruned</code>, <code>missingSource</code>, <code>missingMessages</code>, <code>tooLarge</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>downloadMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
+  <p>Stats include counters such as <code>exists</code>, <code>uidNextSnapshot</code>, <code>scanStrategy</code>, <code>phase</code>, <code>windowPhase</code>, <code>windowPhasesRead</code>, <code>scanTimeLimitReached</code>, <code>windowsRead</code>, <code>frontWindowRead</code>, <code>candidateOverflow</code>, <code>windowUnselectedCandidates</code>, <code>scanCursorStart</code>, <code>scanCursorEnd</code>, <code>scanCursorNext</code>, <code>scanWrapped</code>, <code>scanCursorAdjusted</code>, <code>scanCursorHeld</code>, <code>scanCursorHoldReason</code>, <code>newUidCursor</code>, <code>uidWindowStart</code>, <code>uidWindowEnd</code>, <code>filteredByFlags</code>, <code>emitted</code>, <code>deletedExpunged</code>, <code>deletedExpungeSkipped</code>, <code>inflightPruned</code>, <code>missingSource</code>, <code>missingMessages</code>, <code>tooLarge</code> and timings such as <code>connectMs</code>, <code>frontFetchMs</code>, <code>fullFetchMs</code>, <code>downloadMs</code>, <code>parseMs</code>, <code>expungeMs</code> and <code>totalMs</code>.</p>
 
   <h3>Delivery guarantee</h3>
   <p>The node provides at-least-once delivery when combined with <b>imap email ack</b>. Duplicate delivery is possible; silent message loss is avoided by keeping mails in the mailbox until the configured ACK action succeeds.</p>

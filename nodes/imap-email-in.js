@@ -25,12 +25,7 @@ const diagnostics = require("../lib/diagnostics");
 const DEFAULT_DOWNLOAD_CHUNK_SIZE = 64 * 1024;
 const TOO_LARGE_CODE = "IMAP_EMAIL_MESSAGE_TOO_LARGE";
 const DEFAULT_SCAN_TIME_LIMIT_MS = 10000;
-const VALID_SCAN_STRATEGIES = new Set(["cursor-window", "new-uid-priority"]);
-
-function normalizeScanStrategy(value) {
-  const normalized = String(value || "").toLowerCase();
-  return VALID_SCAN_STRATEGIES.has(normalized) ? normalized : "cursor-window";
-}
+const ADAPTIVE_SCAN_STRATEGY = "adaptive";
 
 function buildTooLargeError(limit) {
   const err = new Error(`IMAP message exceeds maxMessageBytes (${limit})`);
@@ -273,7 +268,7 @@ module.exports = function registerImapEmailIn(RED) {
     node.frontWindowSize = parseInteger(config.frontWindowSize, 500, 1, 100000);
     node.maxInflight = parseInteger(config.maxInflight, 500, 1, 100000);
     node.retryAfterMs = parseInteger(config.retryAfterMs, 30 * 60 * 1000, 1000, 7 * 24 * 60 * 60 * 1000);
-    node.scanStrategy = normalizeScanStrategy(config.scanStrategy);
+    node.scanStrategy = ADAPTIVE_SCAN_STRATEGY;
     node.scanTimeLimitMs = parseInteger(config.scanTimeLimitMs, DEFAULT_SCAN_TIME_LIMIT_MS, 0, 10 * 60 * 1000);
     node.maxUidPerCommand = parseInteger(config.maxUidPerCommand, 500, 1, 5000);
     const legacyDeletedSelection = parseBoolean(config.skipDeleted, true) ? "exclude" : "ignore";
@@ -328,6 +323,8 @@ module.exports = function registerImapEmailIn(RED) {
         scanTimeLimitMs: node.scanTimeLimitMs,
         scanTimeLimitReached: false,
         phase: null,
+        windowPhase: null,
+        windowPhasesRead: [],
         frontWindowSize: node.frontWindowSize,
         frontWindowRead: 0,
         windowsRead: 0,
@@ -650,12 +647,17 @@ module.exports = function registerImapEmailIn(RED) {
         stats.uidNextSnapshot = uidNextSnapshot;
 
         if (exists < 1) {
+          const uidReset = ensureScanUidValidity(uidValidity);
           node.scanCursor = 1;
           node.scanUidValidity = uidValidity || null;
-          node.newUidCursor = node.scanStrategy === "new-uid-priority" ? uidNextSnapshot : null;
+          node.newUidCursor = uidNextSnapshot;
+          stats.phase = node.newUidCursor !== null ? "new-uid-priority" : "cursor-window";
           stats.scanCursorStart = 1;
           stats.scanCursorEnd = 0;
           stats.scanCursorNext = 1;
+          stats.scanCursorReset = stats.scanCursorReset || uidReset;
+          stats.newUidCursorReset = uidReset;
+          stats.newUidCursorInitialized = node.newUidCursor !== null;
           stats.newUidCursor = node.newUidCursor;
           finishStats();
           node.status({ fill: "green", shape: "ring", text: "empty" });
@@ -672,10 +674,15 @@ module.exports = function registerImapEmailIn(RED) {
         let cursorAfterCycle = node.scanCursor;
         let sequenceRetryCursor = null;
         let newUidRetryCursor = null;
+        let initializedNewUidCursorThisCycle = false;
         let warmupStartedAt = Date.now();
 
         function noteScanWindow(window) {
           stats.phase = window.phase;
+          stats.windowPhase = window.windowPhase;
+          if (window.windowPhase && !stats.windowPhasesRead.includes(window.windowPhase)) {
+            stats.windowPhasesRead.push(window.windowPhase);
+          }
           stats.windowsRead += 1;
           stats.frontWindowRead += window.windowSize;
 
@@ -696,11 +703,11 @@ module.exports = function registerImapEmailIn(RED) {
         }
 
         function updateWindowStatus(window) {
-          const label = window.phase === "warm-up"
-            ? "warm-up"
-            : window.phase === "new"
+          const label = window.windowPhase === "cursor"
+            ? "cursor-window"
+            : window.windowPhase === "new-uid"
               ? "new UIDs"
-              : window.phase === "backlog"
+              : window.windowPhase === "backlog"
                 ? "backlog"
                 : "window";
           node.status({
@@ -785,7 +792,24 @@ module.exports = function registerImapEmailIn(RED) {
           return result;
         }
 
-        async function readCursorWindow(phase, windowSize, options = {}) {
+        function initializeNewUidCursor(value) {
+          node.newUidCursor = value;
+          initializedNewUidCursorThisCycle = node.newUidCursor !== null;
+          stats.newUidCursorInitialized = initializedNewUidCursorThisCycle;
+          stats.newUidCursor = node.newUidCursor;
+        }
+
+        function clearInitializedNewUidCursor() {
+          if (!initializedNewUidCursorThisCycle) {
+            return;
+          }
+          node.newUidCursor = null;
+          stats.newUidCursor = null;
+          stats.newUidCursorInitialized = false;
+          initializedNewUidCursorThisCycle = false;
+        }
+
+        async function readCursorWindow(phase, windowPhase, windowSize, options = {}) {
           const scanWindow = prepareScanWindow(exists, uidValidity, windowSize);
           if (sequenceRetryCursor === null) {
             sequenceRetryCursor = scanWindow.windowStart;
@@ -793,6 +817,7 @@ module.exports = function registerImapEmailIn(RED) {
 
           const result = await readCandidateWindow({
             phase,
+            windowPhase,
             uid: false,
             ...scanWindow
           });
@@ -809,11 +834,12 @@ module.exports = function registerImapEmailIn(RED) {
           return { scanWindow, result };
         }
 
-        async function readWarmupWindows() {
+        async function readCursorWindowPhase() {
+          stats.phase = "cursor-window";
           warmupStartedAt = Date.now();
 
           while (candidates.length < candidateLimit) {
-            const { scanWindow, result } = await readCursorWindow("warm-up", node.frontWindowSize, {
+            const { scanWindow, result } = await readCursorWindow("cursor-window", "cursor", node.frontWindowSize, {
               holdOnOverflow: true
             });
 
@@ -822,8 +848,7 @@ module.exports = function registerImapEmailIn(RED) {
             }
 
             if (scanWindow.wrapped) {
-              node.newUidCursor = uidNextSnapshot || (highestUidSeen > 0 ? highestUidSeen + 1 : null);
-              stats.newUidCursorInitialized = node.newUidCursor !== null;
+              initializeNewUidCursor(uidNextSnapshot || (highestUidSeen > 0 ? highestUidSeen + 1 : null));
               break;
             }
 
@@ -838,21 +863,17 @@ module.exports = function registerImapEmailIn(RED) {
           }
         }
 
-        async function readDefaultCursorWindow() {
-          await readCursorWindow("cursor", node.frontWindowSize, {
-            holdOnOverflow: true
-          });
-        }
-
-        async function readPriorityWindows() {
+        async function readAdaptiveWindows() {
           const uidReset = ensureScanUidValidity(uidValidity);
           stats.scanCursorReset = stats.scanCursorReset || uidReset;
           stats.newUidCursorReset = uidReset;
 
           if (!hasKnownNewUidCursor()) {
-            await readWarmupWindows();
+            await readCursorWindowPhase();
             return;
           }
+
+          stats.phase = "new-uid-priority";
 
           if (uidNextSnapshot && Number(node.newUidCursor) > uidNextSnapshot) {
             node.newUidCursor = uidNextSnapshot;
@@ -864,7 +885,8 @@ module.exports = function registerImapEmailIn(RED) {
             const uidWindowStart = Number(node.newUidCursor);
             const uidWindowEnd = Math.min(uidNextSnapshot - 1, uidWindowStart + newWindowSize - 1);
             const result = await readCandidateWindow({
-              phase: "new",
+              phase: "new-uid-priority",
+              windowPhase: "new-uid",
               uid: true,
               windowStart: uidWindowStart,
               windowEnd: uidWindowEnd,
@@ -884,17 +906,13 @@ module.exports = function registerImapEmailIn(RED) {
           stats.newUidCursor = node.newUidCursor;
 
           if (candidates.length < candidateLimit) {
-            await readCursorWindow("backlog", backlogWindowSize, {
+            await readCursorWindow("new-uid-priority", "backlog", backlogWindowSize, {
               holdOnOverflow: true
             });
           }
         }
 
-        if (node.scanStrategy === "new-uid-priority") {
-          await readPriorityWindows();
-        } else {
-          await readDefaultCursorWindow();
-        }
+        await readAdaptiveWindows();
 
         stats.newUidCursor = node.newUidCursor;
         if (stats.scanCursorStart === null) {
@@ -1124,9 +1142,7 @@ module.exports = function registerImapEmailIn(RED) {
             node.newUidCursor = newUidRetryCursor;
             stats.newUidCursor = node.newUidCursor;
           } else if (stats.newUidCursorInitialized && sequenceRetryCursor !== null) {
-            node.newUidCursor = null;
-            stats.newUidCursor = null;
-            stats.newUidCursorInitialized = false;
+            clearInitializedNewUidCursor();
           }
         } else if (expungedAny) {
           if (sequenceRetryCursor !== null) {
@@ -1134,6 +1150,9 @@ module.exports = function registerImapEmailIn(RED) {
             stats.scanCursorAdjusted = true;
             stats.scanCursorNext = cursorAfterCycle;
             stats.scanWrapped = cursorAfterCycle === 1;
+            if (stats.phase === "cursor-window") {
+              clearInitializedNewUidCursor();
+            }
           }
         }
 
