@@ -409,6 +409,7 @@ test("example flow serializes imap email in selection fields", () => {
 
   assert.equal(inputNode.maxMessageBytes, "0");
   assert.equal(inputNode.downloadChunkSize, "65536");
+  assert.equal(inputNode.scanTimeLimitMs, "10000");
 
   assert.equal(
     Object.prototype.hasOwnProperty.call(inputNode, "skipDeleted"),

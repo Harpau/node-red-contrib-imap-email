@@ -60,14 +60,17 @@ Nicht Teil dieser Spezifikation:
 `imap-email in` ist ein extern getriggerter Eingangsnode. Jede eingehende
 Nachricht startet hoechstens einen Fetch-Zyklus.
 
-Der Node liest pro Trigger nur ein begrenztes Cursor-Fenster des Postfachs,
-zum Beispiel `1:500` im ersten Zyklus und `501:1000` im naechsten Zyklus.
-Innerhalb dieses Fensters werden Kandidaten anhand von IMAP-Flags,
-Inflight-Zustand, Batchgroesse und Kapazitaet gefiltert.
+Der Node liest pro Trigger nur begrenzte Cursor-Fenster des Postfachs, zum
+Beispiel `1:500` und danach `501:1000`. In der initialen `cursor-window` Phase
+duerfen innerhalb eines Triggers mehrere solche Fenster gelesen werden, solange
+Batch-/Inflight-Kapazitaet frei ist und das Zeitbudget `scanTimeLimitMs` nicht
+erreicht wurde. Jedes einzelne Fenster bleibt durch `frontWindowSize` begrenzt.
 
-Der Node darf nicht so lange weitere Bereiche lesen, bis ein Batch voll ist.
-Selektive Filter duerfen deshalb dazu fuehren, dass ein Trigger weniger als
-`batchSize` oder auch gar keine Nachrichten ausgibt.
+Innerhalb der Fenster werden Kandidaten anhand von IMAP-Flags,
+Inflight-Zustand, Batchgroesse und Kapazitaet gefiltert. Selektive Filter
+duerfen deshalb dazu fuehren, dass ein Trigger weniger als `batchSize` oder auch
+gar keine Nachrichten ausgibt. Die Filter loesen keinen unbeschraenkten
+Mailbox-Scan aus.
 
 ### 3.2 Flag-Filter
 

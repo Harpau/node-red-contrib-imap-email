@@ -46,6 +46,7 @@
     "frontWindowSize": "500",
     "maxInflight": "500",
     "retryAfterMs": "1800000",
+    "scanTimeLimitMs": "10000",
     "maxUidPerCommand": "500",
     "deletedSelection": "exclude",
     "seenSelection": "ignore",
