@@ -282,6 +282,13 @@ function collectStats(outputs) {
     .map((output) => output[2].payload);
 }
 
+function assertRemovedStatsFieldsAbsent(stats) {
+  assert.equal(Object.prototype.hasOwnProperty.call(stats, "scanStrategy"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stats, "windowPhase"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stats, "scanCursorHoldReason"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(stats, "newUidCursorReset"), false);
+}
+
 function findHtmlDefault(html, field) {
   const pattern = new RegExp(`${field}:\\s*\\{\\s*value:\\s*(?:['"]([^'"]+)['"]|([^,}\\s]+))`);
   const match = html.match(pattern);
@@ -313,21 +320,22 @@ test("imap email in selection defaults match the design decision", () => {
     answered: "ignore",
     flagged: "ignore"
   });
-  assert.equal(node.scanStrategy, "adaptive");
+  assert.equal(Object.prototype.hasOwnProperty.call(node, "scanStrategy"), false);
   assert.equal(node.scanTimeLimitMs, 10000);
   assert.equal(node.maxMessageBytes, 0);
   assert.equal(node.downloadChunkSize, 65536);
 });
 
-test("legacy scanStrategy config values are accepted but mapped to adaptive scanning", () => {
-  assert.equal(createInputNode({ scanStrategy: "cursor-window" }).scanStrategy, "adaptive");
-  assert.equal(createInputNode({ scanStrategy: "new-uid-priority" }).scanStrategy, "adaptive");
-  assert.equal(createInputNode({ scanStrategy: "unexpected" }).scanStrategy, "adaptive");
+test("deprecated scanStrategy config values are ignored", () => {
+  assert.equal(Object.prototype.hasOwnProperty.call(createInputNode({ scanStrategy: "cursor-window" }), "scanStrategy"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(createInputNode({ scanStrategy: "new-uid-priority" }), "scanStrategy"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(createInputNode({ scanStrategy: "unexpected" }), "scanStrategy"), false);
 });
 
-test("legacy skipDeleted maps to deletedSelection only when selection is absent", () => {
+test("deprecated skipDeleted config does not affect deletedSelection", () => {
   assert.equal(createInputNode({ skipDeleted: true }).deletedSelection, "exclude");
-  assert.equal(createInputNode({ skipDeleted: false }).deletedSelection, "ignore");
+  assert.equal(createInputNode({ skipDeleted: false }).deletedSelection, "exclude");
+  assert.equal(createInputNode({ skipDeleted: false, deletedSelection: "unexpected" }).deletedSelection, "exclude");
   assert.equal(
     createInputNode({ skipDeleted: false, deletedSelection: "require" }).deletedSelection,
     "require"
@@ -499,10 +507,9 @@ test("imap email in reads one bounded cursor window per trigger when scanTimeLim
   assert.deepEqual(stats.map((item) => item.scanCursorNext), [501, 1001, 1]);
   assert.deepEqual(stats.map((item) => item.frontWindowRead), [500, 500, 200]);
   assert.deepEqual(stats.map((item) => item.scanWrapped), [false, false, true]);
-  assert.deepEqual(stats.map((item) => item.scanStrategy), ["adaptive", "adaptive", "adaptive"]);
   assert.deepEqual(stats.map((item) => item.phase), ["cursor-window", "cursor-window", "cursor-window"]);
-  assert.deepEqual(stats.map((item) => item.windowPhase), ["cursor", "cursor", "cursor"]);
   assert.deepEqual(stats.map((item) => item.windowPhasesRead), [["cursor"], ["cursor"], ["cursor"]]);
+  stats.forEach(assertRemovedStatsFieldsAbsent);
 });
 
 test("imap email in adaptive cursor phase scans to mailbox end and initializes new UID cursor", async () => {
@@ -532,9 +539,8 @@ test("imap email in adaptive cursor phase scans to mailbox end and initializes n
   assert.equal(node.newUidCursor, 1300);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.scanStrategy, "adaptive");
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.deepEqual(stats.windowPhasesRead, ["cursor"]);
   assert.equal(stats.newUidCursorInitialized, true);
   assert.equal(stats.newUidCursor, 1300);
@@ -559,9 +565,8 @@ test("imap email in treats an empty mailbox as ready for new UID priority", asyn
   assert.equal(node.newUidCursor, 42);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.scanStrategy, "adaptive");
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "new-uid-priority");
-  assert.equal(stats.windowPhase, null);
   assert.deepEqual(stats.windowPhasesRead, []);
   assert.equal(stats.scanCursorStart, 1);
   assert.equal(stats.scanCursorEnd, 0);
@@ -672,9 +677,8 @@ test("imap email in adaptive cursor-window phase reads only one window when scan
   assert.equal(node.newUidCursor, null);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.scanStrategy, "adaptive");
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.deepEqual(stats.windowPhasesRead, ["cursor"]);
   assert.equal(stats.windowsRead, 1);
   assert.equal(stats.frontWindowRead, 2);
@@ -714,12 +718,11 @@ test("imap email in adaptive cursor-window phase holds cursor when a non-final w
   assert.equal(node.newUidCursor, null);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.equal(stats.candidateOverflow, true);
   assert.equal(stats.windowUnselectedCandidates, 1);
   assert.equal(stats.scanCursorHeld, true);
-  assert.equal(stats.scanCursorHoldReason, "candidate overflow");
   assert.equal(stats.scanCursorNext, 1);
   assert.equal(stats.newUidCursorInitialized, false);
 });
@@ -757,8 +760,8 @@ test("imap email in adaptive cursor-window phase does not initialize new UID cur
   assert.equal(node.newUidCursor, null);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.equal(stats.candidateOverflow, true);
   assert.equal(stats.scanCursorHeld, true);
   assert.equal(stats.newUidCursorInitialized, false);
@@ -802,8 +805,8 @@ test("imap email in adaptive cursor-window phase updates status after every wind
   assert.equal(statuses.filter((status) => /^cursor-window /.test(status.text || "")).length, 3);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.deepEqual(stats.windowPhasesRead, ["cursor"]);
   assert.equal(stats.newUidCursorInitialized, true);
   assert.equal(stats.newUidCursor, 10);
@@ -853,9 +856,8 @@ test("imap email in new UID priority emits new UIDs before backlog and splits wi
   assert.equal(node.scanCursor, 3);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.scanStrategy, "adaptive");
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "new-uid-priority");
-  assert.equal(stats.windowPhase, "backlog");
   assert.deepEqual(stats.windowPhasesRead, ["new-uid", "backlog"]);
   assert.equal(stats.uidWindowStart, 101);
   assert.equal(stats.uidWindowEnd, 103);
@@ -900,12 +902,254 @@ test("imap email in new UID priority skips backlog when new UIDs fill capacity",
   assert.equal(node.scanCursor, 1);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "new-uid-priority");
-  assert.equal(stats.windowPhase, "new-uid");
   assert.deepEqual(stats.windowPhasesRead, ["new-uid"]);
   assert.equal(stats.windowsRead, 1);
   assert.equal(stats.emitted, 2);
   assert.equal(stats.candidateOverflow, false);
+});
+
+test("imap email in new UID priority skips redundant backlog when new UID window covers mailbox", async () => {
+  const messages = [
+    createMessage(101, "New one"),
+    createMessage(102, "New two"),
+    createMessage(103, "New three")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 5
+  }, [
+    {
+      exists: 3,
+      uidNext: 104,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        assert.equal(range, "101:103");
+        return [
+          { uid: 101, flags: [], size: 80 },
+          { uid: 102, flags: [], size: 80 },
+          { uid: 103, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103"]);
+  assert.deepEqual(fetchCalls.map((call) => call.options), [{ uid: true }]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102", "103"]);
+  assert.equal(node.newUidCursor, 104);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.phase, "new-uid-priority");
+  assert.deepEqual(stats.windowPhasesRead, ["new-uid"]);
+  assert.equal(stats.windowsRead, 1);
+  assert.equal(stats.frontWindowRead, 3);
+  assert.equal(stats.scanCursorStart, 1);
+  assert.equal(stats.scanCursorEnd, 0);
+  assert.equal(stats.scanCursorNext, 1);
+  assert.equal(stats.emitted, 3);
+});
+
+test("imap email in new UID priority keeps backlog when new UID window does not cover mailbox", async () => {
+  const messages = [
+    createMessage(1, "Backlog one"),
+    createMessage(101, "New one"),
+    createMessage(102, "New two"),
+    createMessage(103, "New three")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 5
+  }, [
+    {
+      exists: 4,
+      uidNext: 104,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        if (options && options.uid) {
+          assert.equal(range, "101:103");
+          return [
+            { uid: 101, flags: [], size: 80 },
+            { uid: 102, flags: [], size: 80 },
+            { uid: 103, flags: [], size: 80 }
+          ];
+        }
+
+        assert.equal(options, undefined);
+        assert.equal(range, "1:2");
+        return [{ uid: 1, flags: [], size: 80 }];
+      }
+    }
+  ]);
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103", "1:2"]);
+  assert.deepEqual(fetchCalls.map((call) => call.options), [{ uid: true }, undefined]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102", "103", "1"]);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.phase, "new-uid-priority");
+  assert.deepEqual(stats.windowPhasesRead, ["new-uid", "backlog"]);
+  assert.equal(stats.windowsRead, 2);
+  assert.equal(stats.frontWindowRead, 5);
+  assert.equal(stats.emitted, 4);
+});
+
+test("imap email in new UID priority skips redundant backlog after flag filtering", async () => {
+  const messages = [
+    createMessage(101, "Seen one", ["\\Seen"]),
+    createMessage(102, "Seen two", ["\\Seen"]),
+    createMessage(103, "Unseen three")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 5,
+    seenSelection: "exclude"
+  }, [
+    {
+      exists: 3,
+      uidNext: 104,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        assert.equal(range, "101:103");
+        return [
+          { uid: 101, flags: ["\\Seen"], size: 80 },
+          { uid: 102, flags: ["\\Seen"], size: 80 },
+          { uid: 103, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["103"]);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.phase, "new-uid-priority");
+  assert.deepEqual(stats.windowPhasesRead, ["new-uid"]);
+  assert.equal(stats.windowsRead, 1);
+  assert.equal(stats.filteredByFlags, 2);
+  assert.equal(stats.emitted, 1);
+});
+
+test("imap email in new UID priority counts only unique valid UIDs for mailbox coverage", async () => {
+  const messages = [
+    createMessage(1, "Backlog one"),
+    createMessage(101, "New one"),
+    createMessage(102, "New two")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 5
+  }, [
+    {
+      exists: 3,
+      uidNext: 104,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        if (options && options.uid) {
+          assert.equal(range, "101:103");
+          return [
+            { uid: 101, flags: [], size: 80 },
+            { uid: 101, flags: [], size: 80 },
+            { uid: "not-a-uid", flags: [], size: 80 },
+            { uid: 102, flags: [], size: 80 }
+          ];
+        }
+
+        assert.equal(options, undefined);
+        assert.equal(range, "1:2");
+        return [{ uid: 1, flags: [], size: 80 }];
+      }
+    }
+  ]);
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103", "1:2"]);
+  assert.deepEqual(fetchCalls.map((call) => call.options), [{ uid: true }, undefined]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102", "1"]);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.phase, "new-uid-priority");
+  assert.deepEqual(stats.windowPhasesRead, ["new-uid", "backlog"]);
+  assert.equal(stats.windowsRead, 2);
+  assert.equal(stats.emitted, 3);
+});
+
+test("imap email in new UID priority normalizes stale scan cursor when covered new UID window skips backlog", async () => {
+  const messages = [
+    createMessage(101, "New one"),
+    createMessage(102, "New two"),
+    createMessage(103, "New three")
+  ];
+  const { node, fetchCalls } = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 5
+  }, [
+    {
+      exists: 3,
+      uidNext: 104,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        assert.equal(range, "101:103");
+        return [
+          { uid: 101, flags: [], size: 80 },
+          { uid: 102, flags: [], size: 80 },
+          { uid: 103, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+  node.scanCursor = 99;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103"]);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.phase, "new-uid-priority");
+  assert.deepEqual(stats.windowPhasesRead, ["new-uid"]);
+  assert.equal(stats.scanCursorReset, true);
+  assert.equal(stats.scanCursorStart, 1);
+  assert.equal(stats.scanCursorEnd, 0);
+  assert.equal(stats.scanCursorNext, 1);
 });
 
 test("imap email in new UID priority leaves new UID cursor on first unselected UID when new window overflows", async () => {
@@ -946,8 +1190,8 @@ test("imap email in new UID priority leaves new UID cursor on first unselected U
   assert.equal(node.scanCursor, 1);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "new-uid-priority");
-  assert.equal(stats.windowPhase, "new-uid");
   assert.deepEqual(stats.windowPhasesRead, ["new-uid"]);
   assert.equal(stats.candidateOverflow, true);
   assert.equal(stats.windowUnselectedCandidates, 1);
@@ -991,8 +1235,8 @@ test("imap email in new UID priority holds backlog cursor when backlog window ov
   assert.equal(node.newUidCursor, 101);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "new-uid-priority");
-  assert.equal(stats.windowPhase, "backlog");
   assert.deepEqual(stats.windowPhasesRead, ["backlog"]);
   assert.equal(stats.candidateOverflow, true);
   assert.equal(stats.scanCursorHeld, true);
@@ -1030,13 +1274,11 @@ test("imap email in default cursor window holds cursor when candidate list fills
   assert.equal(node.scanCursor, 1);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.scanStrategy, "adaptive");
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.deepEqual(stats.windowPhasesRead, ["cursor"]);
   assert.equal(stats.candidateOverflow, true);
   assert.equal(stats.scanCursorHeld, true);
-  assert.equal(stats.scanCursorHoldReason, "candidate overflow");
   assert.equal(stats.scanCursorNext, 1);
   assert.equal(stats.scanWrapped, false);
 });
@@ -1072,9 +1314,8 @@ test("imap email in default cursor window advances when candidate list fits", as
   assert.equal(node.scanCursor, 3);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.scanStrategy, "adaptive");
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.deepEqual(stats.windowPhasesRead, ["cursor"]);
   assert.equal(stats.candidateOverflow, false);
   assert.equal(stats.scanCursorHeld, false);
@@ -1114,8 +1355,8 @@ test("imap email in default cursor window holds overflowing final window without
   assert.equal(node.scanCursor, 4);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.deepEqual(stats.windowPhasesRead, ["cursor"]);
   assert.equal(stats.candidateOverflow, true);
   assert.equal(stats.scanCursorStart, 4);
@@ -1172,11 +1413,11 @@ test("imap email in default cursor window drains held window after emitted mail 
   assert.equal(stats[0].candidateOverflow, true);
   assert.equal(stats[0].scanCursorHeld, true);
   assert.equal(stats[0].phase, "cursor-window");
-  assert.equal(stats[0].windowPhase, "cursor");
+  assert.deepEqual(stats[0].windowPhasesRead, ["cursor"]);
   assert.equal(stats[1].candidateOverflow, false);
   assert.equal(stats[1].scanCursorHeld, false);
   assert.equal(stats[1].phase, "cursor-window");
-  assert.equal(stats[1].windowPhase, "cursor");
+  assert.deepEqual(stats[1].windowPhasesRead, ["cursor"]);
   assert.equal(stats[1].scanWrapped, true);
 });
 
@@ -1230,12 +1471,12 @@ test("imap email in default cursor window keeps held cursor while inflight mail 
   assert.equal(stats[0].candidateOverflow, true);
   assert.equal(stats[0].scanCursorHeld, true);
   assert.equal(stats[0].phase, "cursor-window");
-  assert.equal(stats[0].windowPhase, "cursor");
+  assert.deepEqual(stats[0].windowPhasesRead, ["cursor"]);
   assert.equal(stats[1].filteredByInflight, 1);
   assert.equal(stats[1].candidateOverflow, true);
   assert.equal(stats[1].scanCursorHeld, true);
   assert.equal(stats[1].phase, "cursor-window");
-  assert.equal(stats[1].windowPhase, "cursor");
+  assert.deepEqual(stats[1].windowPhasesRead, ["cursor"]);
   assert.equal(stats[1].scanCursorNext, 1);
 });
 
@@ -1266,11 +1507,9 @@ test("imap email in new UID priority resets new UID cursor on UIDVALIDITY change
   assert.equal(node.scanCursor, 3);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.scanStrategy, "adaptive");
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.equal(stats.scanCursorReset, true);
-  assert.equal(stats.newUidCursorReset, true);
 });
 
 test("imap email in handles transient connect, lock and fetch errors without node.error", async () => {
@@ -1674,8 +1913,8 @@ test("imap email in does not enter new UID priority when cursor-window expunge a
   assert.equal(node.newUidCursor, null);
 
   const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
   assert.equal(stats.phase, "cursor-window");
-  assert.equal(stats.windowPhase, "cursor");
   assert.equal(stats.deletedExpunged, 1);
   assert.equal(stats.scanCursorAdjusted, true);
   assert.equal(stats.newUidCursorInitialized, false);
@@ -1713,7 +1952,7 @@ test("imap email in does not adjust cursor when expunge returns false", async ()
   assert.equal(stats.scanCursorNext, 1);
 });
 
-test("imap email in runtime contract is not limited to legacy skipDeleted", () => {
+test("imap email in runtime contract uses explicit selection fields", () => {
   const source = readProjectFile(path.join("nodes", "imap-email-in.js"));
   const html = readProjectFile(path.join("nodes", "imap-email-in.html"));
   const flow = readProjectFile(path.join("examples", "basic-at-least-once-flow.json"));

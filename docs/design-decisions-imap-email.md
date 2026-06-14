@@ -112,8 +112,7 @@ Selection-Objekt:
 
 ### 3.3 Defaults
 
-Die Defaults muessen das bisherige Verhalten des alten `skipDeleted=true`
-abbilden:
+Die Defaults:
 
 ```text
 deletedSelection   exclude
@@ -122,19 +121,7 @@ answeredSelection  ignore
 flaggedSelection   ignore
 ```
 
-### 3.4 Legacy-Abbildung von `skipDeleted`
-
-Falls alte Flow-Konfigurationen oder Tests noch `skipDeleted` enthalten, gilt:
-
-```text
-skipDeleted=true   -> deletedSelection=exclude
-skipDeleted=false  -> deletedSelection=ignore
-```
-
-Wenn sowohl `deletedSelection` als auch `skipDeleted` vorhanden sind, hat
-`deletedSelection` Vorrang.
-
-### 3.5 Adaptive Scan-Strategie
+### 3.4 Adaptive Scan-Strategie
 
 `imap-email in` verwendet genau eine adaptive Scan-Strategie. Nach einem
 Node-RED-Neustart, ungueltigem `newUidCursor` oder UIDVALIDITY-Wechsel startet
@@ -202,20 +189,19 @@ New-UID-Fenster ueberlaeuft, wird `newUidCursor` auf die erste nicht mehr in
 die Batch passende UID gesetzt. Wenn ein Bestandsfenster ueberlaeuft, wird der
 Bestands-Cursor auf dem Fensteranfang gehalten. Die Strategie garantiert
 dadurch keine global strikt aelteste ungelesene Nachricht ueber das gesamte
-Postfach.
+Postfach. Deckt das New-UID-Fenster bereits alle aktuell im Postfach
+existierenden Nachrichten ab, wird das redundante Bestandsfenster ausgelassen.
 
 Die Diagnose trennt Betriebsphase und konkretes Fenster:
 
 ```text
-scanStrategy      = adaptive
 phase             = cursor-window | new-uid-priority
-windowPhase       = cursor | new-uid | backlog
 windowPhasesRead  = geordnete eindeutige Fensterarten des Triggers
 ```
 
-Gespeicherte alte Flow-Properties `scanStrategy=cursor-window` oder
-`scanStrategy=new-uid-priority` bleiben ladbar, steuern aber kein
-Runtime-Verhalten mehr.
+`windowPhasesRead` enthaelt die geordneten eindeutigen Fensterarten des
+Triggers (`cursor`, `new-uid`, `backlog`). Das letzte Array-Element ist die
+zuletzt gelesene Fensterart.
 
 Nicht erlaubt:
 
@@ -685,9 +671,8 @@ imap-email ack:
 
 ### 10.1 `imap-email in`
 
-- Defaults entsprechen altem `skipDeleted=true`.
-- Legacy `skipDeleted=true` wird zu `deletedSelection=exclude`.
-- Legacy `skipDeleted=false` wird zu `deletedSelection=ignore`.
+- Defaults setzen `deletedSelection=exclude` und die uebrigen Flag-Filter auf
+  `ignore`.
 - `deleted`, `seen`, `answered`, `flagged` jeweils mit `ignore`, `require`,
   `exclude`.
 - Kombination mehrerer Flag-Filter.
@@ -710,10 +695,8 @@ imap-email ack:
 - Der interne Cursor wrappt am Mailbox-Ende.
 - Der interne Cursor resetet bei UIDVALIDITY-Wechsel.
 - Mock-Client stellt sicher, dass kein `SEARCH` ausgefuehrt wird.
-- Stats enthalten `scanStrategy=adaptive`, `phase`, `windowPhase`,
-  `windowPhasesRead`, `selection`, `filteredByFlags` und Cursor-Felder.
-- Alte `scanStrategy`-Properties in gespeicherten Flows werden akzeptiert,
-  aber ignoriert.
+- Stats enthalten `phase`, `windowPhasesRead`, `selection`, `filteredByFlags`
+  und Cursor-Felder.
 - HTML defaults, labels und help text sind konsistent.
 
 ### 10.2 `imap-email ack`

@@ -131,15 +131,15 @@ phase the new-UID and backlog windows each use about half of `Front window`,
 with the larger half assigned to new UIDs. New UIDs are emitted before backlog
 messages and in ascending UID order, but the node does not guarantee globally
 oldest unread delivery across the whole mailbox. Backlog windows are also held
-on candidate overflow. New-UID windows advance to the first UID that did not
-fit into the current batch.
+on candidate overflow. If the new-UID window already covers all messages that
+currently exist in the mailbox, the redundant backlog window is skipped.
+New-UID windows advance to the first UID that did not fit into the current
+batch.
 
-Stats report `scanStrategy = "adaptive"`. `phase` describes the current
-operating phase (`cursor-window` or `new-uid-priority`), while `windowPhase`
-and `windowPhasesRead` describe the actual window types read during the
-trigger (`cursor`, `new-uid`, `backlog`). Older flows that still contain a
-saved `scanStrategy` property load normally; the value no longer controls
-runtime behavior.
+Stats report `phase` as the current operating phase (`cursor-window` or
+`new-uid-priority`). `windowPhasesRead` contains the ordered unique window
+types read during the trigger (`cursor`, `new-uid`, `backlog`); the last entry
+is the last window type read.
 
 Output messages include the server flags as an array:
 
