@@ -37,7 +37,7 @@ Restart Node-RED after installation.
 
 ## Example Flow
 
-Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password. The example tab is disabled by default, the Inject node does not run automatically, and the ACK path only marks messages as seen. The visible palette labels use spaces; the stored Flow JSON types use the `imap-email ...` prefix.
+Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password. The example tab is disabled by default, the Inject node does not run automatically, and the ACK path only marks messages as seen. The visible palette labels use spaces; the stored Flow-JSON types use the `imap-email ...` prefix.
 
 Minimal flow:
 
