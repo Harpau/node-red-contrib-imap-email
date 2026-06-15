@@ -1,499 +1,158 @@
-# Maintainer-Briefing: @compeso/node-red-contrib-imap-queue
+# Maintainer-Briefing: @compeso/node-red-contrib-imap-email
 
-Stand: Release 1.0.1
+Stand: Entwicklungsfassung 0.1.0
 
-Dieses Dokument ist ein kompaktes Briefing für spätere Wartung, Bugfixes und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-queue`. Es kann zusammen mit dem ZIP-Quellpaket `compeso-node-red-contrib-imap-queue-x.y.z.zip` in einem neuen Chat, in Codex oder in einer lokalen Entwicklungsumgebung verwendet werden.
+Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
+und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
 
 ## 1. Projektziel
 
-Das Paket stellt Node-RED-Nodes bereit, mit denen ein IMAP-Postfach als robuste Queue genutzt werden kann.
+Das Repository ist ein eigenstaendiges Node-RED npm-Paket fuer flexible
+IMAP-E-Mail-Verarbeitung. Es liest Nachrichten extern getriggert aus einem
+Postfach, gibt sie portionsweise aus und schliesst erfolgreiche Verarbeitung
+ueber einen separaten ACK-Node ab.
 
 Zielverhalten:
 
 ```text
 externer Trigger
-  -> imap queue in
+  -> imap-email in
       -> erfolgreiche Verarbeitung
-          -> imap queue ack
+          -> imap-email ack
 ```
 
-Optionale Fehlerbehandlung:
+Eine Nachricht darf mehrfach geliefert werden, aber nicht still verloren
+gehen. ACK-Aktionen muessen fail-closed sein.
+
+## 2. Paketdaten
 
 ```text
-Verarbeitungsfehler oder fachlicher Fehler
-  -> imap queue nack
+npm-Paket:      @compeso/node-red-contrib-imap-email
+Repository:     Harpau/node-red-contrib-imap-email
+Node.js:        >=18.0.0
+Node-RED:       >=3.0.0
+Lizenz:         MIT
+Startversion:   0.1.0
 ```
 
-Die Mailbox bleibt die dauerhafte Quelle der Wahrheit:
+Keine Veroeffentlichung auf npm oder flows.nodered.org ohne ausdrueckliche
+menschliche Freigabe.
+
+## 3. Oeffentliche Node-RED-Typen
+
+Nur diese Typen duerfen oeffentlich registriert werden:
 
 ```text
-Mail liegt noch in der Queue-Mailbox = noch nicht erfolgreich abgeschlossen
-Mail wurde per ACK gelöscht          = erfolgreich verarbeitet
+imap-email account
+imap-email in
+imap-email ack
 ```
 
-## 2. Zentrale Zusage: At-least-once
-
-Das Paket garantiert bewusst keine Exactly-once-Verarbeitung. Es ist auf At-least-once ausgelegt.
+Palette-Labels:
 
 ```text
-At least once:          ja
-Exactly once:           nein
-Doppelte Verarbeitung:  möglich
-Persistenter lokaler Status erforderlich: nein
+imap email account
+imap email in
+imap email ack
 ```
 
-Daraus folgen wichtige Designentscheidungen:
-
-- Eine Mail darf doppelt ausgegeben werden.
-- Eine Mail darf nicht still verloren gehen.
-- Erfolgreiche Verarbeitung wird erst durch `imap queue ack` abgeschlossen.
-- Der flüchtige Inflight-Cache dient nur zur Deduplizierung während des laufenden Prozesses, nicht als dauerhafte Wahrheit.
-- Wenn Node-RED neu startet, darf der Inflight-Cache verloren gehen; nicht geACKte Mails bleiben in der Mailbox und werden später erneut ausgegeben.
-
-## 3. Node-Typen
-
-Die technischen Node-RED-Typnamen verwenden Leerzeichen, nicht Bindestriche:
-
-```text
-imap queue account
-imap queue in
-imap queue ack
-imap queue nack
-```
-
-Die Dateinamen bleiben intern mit Bindestrichen:
-
-```text
-nodes/imap-queue-account.js
-nodes/imap-queue-account.html
-nodes/imap-queue-in.js
-nodes/imap-queue-in.html
-nodes/imap-queue-ack.js
-nodes/imap-queue-ack.html
-nodes/imap-queue-nack.js
-nodes/imap-queue-nack.html
-```
-
-Wichtig: Bei Änderungen an Typnamen müssen mindestens diese Stellen synchron bleiben:
-
-- `RED.nodes.registerType(...)`
-- `data-template-name`
-- `data-help-name`
-- `package.json` unter `node-red.nodes`
-- Beispiel-Flows
-- README und Node-RED-Hilfetexte
-- Tests, insbesondere Modul- und Beispiel-Flow-Tests
+Typnamen muessen zwischen `package.json`, JavaScript, HTML, Beispielen, README
+und Tests konsistent bleiben.
 
 ## 4. Architektur
 
-### 4.1 `imap queue account`
+### 4.1 `imap-email account`
 
-Config-Node für gemeinsame IMAP-Zugangsdaten und Verbindungseinstellungen.
+Config-Node fuer IMAP-Zugangsdaten und Verbindungseinstellungen:
 
-Aktuelle Einstellungen:
+- Host, Port, TLS
+- Zertifikatspruefung
+- Benutzername und Passwort als Node-RED-Credentials
+- IMAP-Timeouts
 
-- Name
-- Host
-- Port
-- TLS
-- Verify cert / `tlsRejectUnauthorized`
-- Username, als Node-RED-Credential
-- Password, als Node-RED-Credential
-- Access token, als Node-RED-Credential, aktuell nur statisch/advanced
-- Connect ms
-- Greeting ms
-- Socket ms
+Regel: keine Credentials oder privaten Endpunkte in Logs, Tests, Beispielen
+oder Dokumentation.
 
-Wichtig:
+### 4.2 `imap-email in`
 
-- Keine Passwörter oder Tokens loggen.
-- Access Token ist vorhanden, aber OAuth2-Refresh ist in Version 1.0.0 nicht finalisiert.
-- Für STRATO ist Passwort-Auth der getestete Standard.
-
-### 4.2 `imap queue in`
-
-Extern getriggerter Abruf-Node. Es gibt keinen internen Polling-Modus mehr.
-
-Pro eingehender Message wird genau ein begrenzter Abrufzyklus gestartet. Wenn bereits ein Abruf läuft, wird kein paralleler IMAP-Abruf gestartet; stattdessen wird eine übersprungene Stats-Meldung erzeugt.
-
-Kernprinzip:
-
-- Niemals ein unbounded `SEARCH UNDELETED` über die ganze Mailbox.
-- Stattdessen ein begrenztes Front-Fenster lesen, z. B. `1:500`.
-- Aus diesem Front-Fenster maximal `batchSize` Mails emitten.
-- Jede Mail bekommt ein `msg.imap.ackToken`.
-- Der Node löscht normale erfolgreich verarbeitete Mails nie selbst.
-
-Aktuelle wichtige Einstellungen:
-
-- Account
-- Mailbox, z. B. `INBOX`
-- Batch size
-- Front window
-- Max inflight
-- Retry after ms
-- UIDs/command
-- Skip deleted
-- Expunge deleted front
-- Expunge limit
-- Include parsed attachments in `msg.email.attachments`
-- Emit raw source in `msg.email.raw`
-- Diagnostics: `off`, `stats`, `debug`
-
-Ausgänge:
+Extern getriggerter Eingangsnode mit drei Ausgaengen:
 
 ```text
-Output 1: geparste Queue-Mail
-Output 2: Fehler / parsebare Fehlerfälle
+Output 1: geparste E-Mail
+Output 2: Fehler / behandelbare Zustellprobleme
 Output 3: Stats, wenn Diagnostics stats/debug aktiv ist
 ```
 
-Wichtige Message-Form:
+Wichtige Eigenschaften:
 
-```js
-msg.topic                 // Mail-Betreff
-msg.payload               // Text-Body
+- kein internes Polling
+- bounded cursor-window Strategie fuer grosse Mailboxen
+- keine mailboxweite unbounded Suche
+- volatile Inflight-Verfolgung
+- `msg.imap.ackToken` fuer den Abschluss ueber `imap-email ack`
+- optionale Attachments und Raw-Ausgabe
+- Flag-Selektion fuer Deleted, Seen, Answered und Flagged
 
-msg.email.topic           // Mail-Betreff
-msg.email.messageId
-msg.email.date
-msg.email.from
-msg.email.to
-msg.email.cc
-msg.email.bcc
-msg.email.text
-msg.email.html
-msg.email.header
-msg.email.attachments     // nur wenn aktiviert
-msg.email.raw             // nur wenn aktiviert
+Die New-UID-Prioritaetsphase liest neue UIDs vor dem Backlog. Das logische
+New-UID-Fenster bleibt durch `frontWindowSize` begrenzt; einzelne
+UID-Kommandos werden durch `maxUidPerCommand` begrenzt.
 
-msg.imap.ackToken
-msg.imap.uid
-msg.imap.uidValidity
-msg.imap.mailbox
-msg.imap.delivery.mode = "at-least-once"
-msg.imap.delivery.duplicatePossible = true
-```
+### 4.3 `imap-email ack`
 
-Nicht wieder einführen, außer bewusst als Breaking Change:
+ACK-Node fuer erfolgreiche oder bewusst abgeschlossene Verarbeitung. Er
+unterstuetzt:
 
-```js
-msg.html
-msg.attachments
-msg.email.subject
-msg.email.headers
-```
+- `delete`
+- `move`
+- `copy`
+- `flag`
+- message-driven Action-Plans ueber `msg.imap.ackAction`
 
-### 4.3 `imap queue ack`
+Sicherheitsregeln:
 
-ACK-Node für erfolgreiche Verarbeitung.
-
-Er sammelt eingehende ACKs intern und löscht gebatcht per UID. Er benötigt keinen zusätzlichen Inject- oder Tick-Node.
-
-Aktuelle Einstellungen:
-
-- Account
-- Mailbox
-- Batch size
-- Flush ms
-- UIDs/command
-- Batches/flush
-- Diagnostics: `off`, `stats`, `debug`
-
-Ausgänge:
-
-```text
-Output 1: ACK ok
-Output 2: ACK error
-Output 3: ACK batch stats
-```
-
-Wichtige Regeln:
-
-- ACK darf nur auf dem erfolgreichen Verarbeitungspfad hängen.
-- ACK löscht per UID und prüft UIDVALIDITY.
-- Bereits verschwundene Mails sollten für ACK-Zwecke nicht unnötig als harter Fehler behandelt werden.
-- ACK-Pending darf flüchtig sein. Wenn Node-RED vor dem Flush abstürzt, bleibt die Mail in der Mailbox und wird später erneut ausgegeben.
-
-### 4.4 `imap queue nack`
-
-Optionaler NACK-Node für fachliche Fehler oder bewusstes Aussortieren.
-
-Aktuelle Einstellungen:
-
-- Account
-- Mailbox
-- Action:
-  - `retry`
-  - `retry-now`
-  - `move`
-  - `delete`
-- Failed mailbox, Default: `NodeRED.failed`
-- Diagnostics: `off`, `debug`
-
-Ausgänge:
-
-```text
-Output 1: NACK ok
-Output 2: NACK error
-```
-
-Wichtig:
-
-- Der Default für Failed mailbox ist `NodeRED.failed`, nicht `.NodeRED.failed`.
-- Ein führender Punkt kann bei manchen IMAP-Servern, insbesondere STRATO, zu `Command failed` führen.
+- `delete` nur mit `UIDPLUS`
+- `move` nur mit nativer `MOVE`-Capability
+- `copy` behaelt die Quellmail und setzt Flags vor dem Kopieren
+- `false` oder `undefined` aus ImapFlow-Aktionen gilt als Fehler
+- Partial-Fehler duerfen nicht als Erfolg bestaetigt werden
 
 ## 5. Kritische Invarianten
 
-Diese Punkte dürfen bei Änderungen nicht versehentlich verletzt werden:
+1. Keine unbounded IMAP-Operationen ueber grosse Mailboxen.
+2. Keine mailboxweite Suche, um Batch-Groessen aufzufuellen.
+3. At-least-once bleibt wichtiger als genau-einmal.
+4. Eine Nachricht darf erneut erscheinen, wenn kein erfolgreicher ACK erfolgt.
+5. ACK entfernt Inflight nur nach bestaetigtem Erfolg.
+6. Unsichere IMAP-Fallbacks werden abgelehnt.
+7. Kein persistenter lokaler Status als Pflichtbestandteil.
+8. Keine Secrets oder sensiblen Mail-Inhalte loggen.
+9. Node.js 18 bleibt installierbar, bis eine Major-Entscheidung getroffen wird.
+10. README, Hilfetexte, Beispiele und Tests bleiben konsistent.
 
-1. Kein unbounded Search/Fetch über riesige Mailboxen.
-2. Keine automatische Löschung im `imap queue in` für normal verarbeitete Mails.
-3. Normale Löschung nur durch `imap queue ack` nach erfolgreicher Downstream-Verarbeitung.
-4. `\Deleted`-Mails im Front-Fenster werden übersprungen und optional kontrolliert expunged.
-5. Kein erforderlicher persistenter lokaler Status.
-6. Inflight ist nur ein RAM-Cache.
-7. Credentials, Access Tokens, Raw-Mails und Attachments dürfen nicht geloggt werden.
-8. Node-Typnamen mit Leerzeichen beibehalten.
-9. Message-Shape ab Version 1.0.0 stabil halten, außer bei bewusstem Major Release.
-10. README, Node-RED-Hilfetexte, Beispiele und Tests bei jeder Nutzer-sichtbaren Änderung aktualisieren.
+## 6. Lokale Validierung
 
-## 6. Bekannte Grenzen in Version 1.0.0
-
-- Keine Exactly-once-Verarbeitung.
-- Keine automatische OAuth2-Token-Erneuerung.
-- Keine echten Integrationstests gegen einen IMAP-Server im CI.
-- Optimiert für eine dedizierte Queue-Mailbox und einen primären Consumer.
-- Mehrere unabhängige Worker gegen dieselbe Mailbox können doppelte Verarbeitung verstärken.
-- Sehr große Attachments erhöhen Speicherbedarf, wenn Attachments oder Raw Source aktiviert sind.
-
-## 7. Test- und Qualitätsgate
-
-Vor jedem Commit mit Funktionsänderung:
+Vor groesseren Abschluessen:
 
 ```bash
-npm install --no-audit --no-fund
+npm install
 npm test
-npm pack --dry-run
+npm run pack:check
 ```
 
-Vor jedem Release zusätzlich:
+Ergaenzend sinnvoll:
 
 ```bash
-npm pack
+git diff --check
+rg "alte Paket- oder Node-Namen" .github README.md docs nodes test
 ```
 
-Danach lokale Installation in Node-RED prüfen:
+## 7. Release-Hinweise
 
-```bash
-cd ~/.node-red
-npm uninstall @compeso/node-red-contrib-imap-queue
-npm install /pfad/zu/compeso-node-red-contrib-imap-queue-x.y.z.tgz
-```
+Die Entwicklungsfassung startet bei `0.1.0`. Eine oeffentliche `1.0.0` sollte
+erst vorbereitet werden, wenn mindestens diese Punkte erledigt sind:
 
-Bei Windows:
-
-```powershell
-cd $env:USERPROFILE\.node-red
-npm uninstall @compeso/node-red-contrib-imap-queue
-npm install C:\Pfad\zu\compeso-node-red-contrib-imap-queue-x.y.z.tgz
-```
-
-## 8. CI
-
-GitHub Actions liegt unter:
-
-```text
-.github/workflows/test.yml
-```
-
-Die CI-Matrix testet Node.js 18, 20, 22 und 24.
-
-Der Workflow sollte mindestens ausführen:
-
-```bash
-npm install --no-audit --no-fund
-npm test
-npm pack --dry-run
-```
-
-## 9. Release-Prozess
-
-Für Patch-/Minor-Releases:
-
-```bash
-npm test
-npm pack --dry-run
-
-git status
-git add .
-git commit -m "Release x.y.z"
-git tag vx.y.z
-git push
-git push --tags
-
-npm publish --access public
-```
-
-Nach dem Publish prüfen:
-
-```bash
-npm view @compeso/node-red-contrib-imap-queue version
-npm view @compeso/node-red-contrib-imap-queue dist-tags
-```
-
-### 9.1 GitHub Release anlegen
-
-Nach `git push --tags` und erfolgreichem GitHub-Actions-Lauf sollte zusätzlich ein GitHub Release zum Tag angelegt werden. GitHub Releases basieren auf Git-Tags und bündeln die sichtbaren Release Notes sowie optionale Download-Artefakte wie den npm-Tarball und Prüfsummen.
-
-Vorbereitung:
-
-```bash
-git fetch --tags
-git tag --list "v*"
-npm view @compeso/node-red-contrib-imap-queue version
-npm test
-npm pack --dry-run
-npm pack
-```
-
-Die erzeugte Tarball-Datei und, falls vorhanden, die SHA256-Datei können als Release Assets hochgeladen werden, zum Beispiel:
-
-```text
-compeso-node-red-contrib-imap-queue-x.y.z.tgz
-compeso-node-red-contrib-imap-queue-x.y.z.sha256
-```
-
-Empfohlener Ablauf über die GitHub-Weboberfläche:
-
-```text
-Repository auf GitHub öffnen
--> Releases
--> Draft a new release / Neues Release entwerfen
--> Tag vx.y.z auswählen
--> Release title setzen, z. B. vx.y.z - Kurzer Änderungstitel
--> Release Notes aus CHANGELOG.md oder release-notes-vx.y.z.md einfügen
--> Assets anhängen, insbesondere .tgz und optional .sha256
--> Bei Release-Kandidaten "Set as a pre-release" aktivieren
--> Bei stabilen Versionen "Set as latest release" aktivieren oder GitHub automatisch nach SemVer entscheiden lassen
--> Publish release
-```
-
-Für normale stabile Versionen:
-
-```text
-Pre-release: nicht aktivieren
-Set as latest release: aktivieren oder GitHub automatisch nach SemVer entscheiden lassen
-npm publish ohne speziellen Dist-Tag, also als latest
-```
-
-Für Release-Kandidaten:
-
-```text
-Pre-release: aktivieren
-Title z. B.: v0.9.0 release candidate
-npm publish möglichst mit --tag rc statt latest
-```
-
-Alternative mit GitHub CLI:
-
-```bash
-gh release create vx.y.z \
-  compeso-node-red-contrib-imap-queue-x.y.z.tgz \
-  compeso-node-red-contrib-imap-queue-x.y.z.sha256 \
-  --title "vx.y.z" \
-  --notes-file release-notes-vx.y.z.md \
-  --verify-tag
-```
-
-Wenn keine SHA256-Datei vorhanden ist:
-
-```bash
-gh release create vx.y.z \
-  compeso-node-red-contrib-imap-queue-x.y.z.tgz \
-  --title "vx.y.z" \
-  --notes-file release-notes-vx.y.z.md \
-  --verify-tag
-```
-
-Für Release-Kandidaten zusätzlich:
-
-```bash
-gh release create vx.y.z \
-  compeso-node-red-contrib-imap-queue-x.y.z.tgz \
-  compeso-node-red-contrib-imap-queue-x.y.z.sha256 \
-  --title "vx.y.z release candidate" \
-  --notes-file release-notes-vx.y.z.md \
-  --verify-tag \
-  --prerelease
-```
-
-Wenn GitHub Releases im Repository als unveränderlich geschützt sind, den Release zuerst als Draft erstellen, Assets anhängen und erst danach veröffentlichen. Dadurch sind alle Artefakte vorhanden, bevor der veröffentlichte Release nicht mehr geändert werden kann.
-
-Prüfliste nach dem GitHub Release:
-
-```text
-GitHub Release-Seite zeigt die richtige Version
-Tag verweist auf den erwarteten Commit
-Release Notes sind vollständig und enthalten Upgrade-Hinweise
-.tgz und .sha256 sind angehängt, falls sie erzeugt wurden
-Assets lassen sich herunterladen
-GitHub Actions für main und vx.y.z sind grün
-npm view zeigt dieselbe Version wie das GitHub Release
-```
-
-### 9.2 Node-RED Flow Library nach npm-Publish aktualisieren
-
-Nach einem npm-Publish ist die neue Version nicht zwingend sofort im Node-RED Palette Manager sichtbar. Die Flow Library muss ggf. aktualisiert werden.
-
-Vorgehen:
-
-```text
-flows.nodered.org öffnen
-einloggen
-Paket-Seite von @compeso/node-red-contrib-imap-queue öffnen
-request refresh anklicken
-warten und Paket-Seite neu laden
-prüfen, ob die neue Version angezeigt wird
-Node-RED Palette Manager erneut öffnen
-```
-
-Falls kein `request refresh` sichtbar ist oder der Refresh nicht greift:
-
-```text
-https://flows.nodered.org/add/node öffnen
-@compeso/node-red-contrib-imap-queue erneut einreichen
-```
-
-Für sofortige Installationen unabhängig von der Palette:
-
-```bash
-cd ~/.node-red
-npm install @compeso/node-red-contrib-imap-queue@latest
-```
-
-Danach Node-RED neu starten.
-
-## 10. Sinnvolle nächste Verbesserungen
-
-Priorisierte Wartungs-/Weiterentwicklungsideen:
-
-1. Integrationstest mit lokalem oder gemocktem IMAP-Server.
-2. OAuth2-Refresh-Konzept für Microsoft 365 und Gmail als separates Feature.
-3. Verbesserte Troubleshooting-Dokumentation aus realen Issues.
-4. Optionales Performance-Monitoring über einheitliche Stats-Events.
-5. Zusätzliche Beispiele für NACK-Strategien.
-6. GitHub Issue Templates.
-7. Security Policy (`SECURITY.md`).
-8. CONTRIBUTING.md.
-9. Optional: automatisierte Release-Notes aus CHANGELOG.
-
-## 11. Kurzprompt für neue Chats
-
-Wenn dieses Projekt später in einem neuen Chat weiterbearbeitet wird, sollte der neue Chat mindestens diese Informationen bekommen:
-
-- Aktuelles ZIP-Quellpaket hochladen.
-- Dieses Maintainer-Briefing hochladen oder einfügen.
-- Konkrete Änderung als kleine Aufgabe formulieren.
-- Verlangen, dass Tests angepasst und `npm test` sowie `npm pack --dry-run` ausgeführt werden.
-- Explizit sagen: keine unbounded IMAP-Operationen, keine Änderung der At-least-once-Semantik, keine Credentials loggen.
+- lokaler Node-RED-Test mit realem Testpostfach
+- Installationspruefung aus Tarball oder GitHub
+- README, Beispiele, Hilfetexte und Release-Doku final konsistent
+- CI gruen fuer Node.js 18 und aktuelle LTS-Versionen
+- keine privaten Daten in Beispielen, Tests oder Dokumentation

@@ -35,6 +35,22 @@ function engineRangeAllowsNode18(range) {
     .some((alternative) => engineAlternativeAllowsNode18(alternative.trim()));
 }
 
+function listFilesRecursive(directory) {
+  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listFilesRecursive(fullPath));
+    } else if (entry.isFile()) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
 test("stable package metadata is complete", () => {
   const root = path.resolve(__dirname, "..");
   const pkg = require(path.join(root, "package.json"));
@@ -147,4 +163,35 @@ test("ack documentation describes copy and fail-closed capability rules", () => 
   assert.match(docs["nodes/imap-email-ack.html"], /<option value="copy">copy<\/option>/);
   assert.match(docs["README.md"], /action fails closed on output 2/);
   assert.match(docs["docs/design-decisions-imap-email.md"], /messageCopy/);
+});
+
+test("github maintainer files describe the current imap email package", () => {
+  const root = path.resolve(__dirname, "..");
+  const githubDir = path.join(root, ".github");
+  const files = listFilesRecursive(githubDir)
+    .filter((file) => !file.endsWith(".DS_Store"));
+  const stalePatterns = [
+    /\bimap queue\b/i,
+    /\bimap-queue\b/i,
+    /\bimap queue nack\b/i,
+    /@compeso\/node-red-contrib-imap-queue/i,
+    /compeso-node-red-contrib-imap-queue/i
+  ];
+
+  assert.ok(files.length > 0, ".github maintainer files must exist");
+
+  for (const file of files) {
+    const relative = path.relative(root, file);
+    const content = fs.readFileSync(file, "utf8");
+
+    for (const pattern of stalePatterns) {
+      assert.doesNotMatch(content, pattern, `${relative} contains stale imap queue content`);
+    }
+  }
+
+  const workflow = fs.readFileSync(path.join(githubDir, "workflows", "test.yml"), "utf8");
+  assert.match(workflow, /18\.x/, "CI must test the minimum supported Node.js version");
+  assert.match(workflow, /npm test/, "CI must run the unit tests");
+  assert.match(workflow, /npm run pack:check/, "CI must run the package content check");
+  assert.doesNotMatch(workflow, /npm publish/, "CI must not publish the package");
 });

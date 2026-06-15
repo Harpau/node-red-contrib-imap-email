@@ -1,73 +1,61 @@
-# Empfehlung für die langfristige Pflege
+# Empfehlung fuer die langfristige Pflege
 
 ## 1. Repository als Quelle der Wahrheit
 
-Langfristig sollte nicht mehr mit einzelnen ZIPs als Primärquelle gearbeitet werden. Das GitHub-Repository sollte die Quelle der Wahrheit sein.
+Das GitHub-Repository `Harpau/node-red-contrib-imap-email` ist die Quelle der
+Wahrheit. Tarballs und ZIPs sind nur Artefakte fuer Tests, Releases oder
+Uebergaben.
 
-ZIPs und Tarballs sind gut für:
-
-- Releases,
-- Tests in isolierten Umgebungen,
-- Übergabe an neue Chats,
-- Archivierung.
-
-Für laufende Pflege ist besser:
+Empfohlener Arbeitsfluss:
 
 ```text
-GitHub Issue -> Branch -> Änderung -> npm test -> Pull Request -> GitHub Actions -> Merge -> Tag -> npm publish
+Issue -> Branch -> Aenderung -> Tests -> Pull Request -> CI -> Merge -> Tag -> Release
 ```
 
-## 2. Kleine Änderungen, kleine Releases
+Ein `npm publish` erfolgt nie automatisch und nur nach ausdruecklicher
+menschlicher Freigabe.
 
-Empfohlene Semver-Regel:
-
-```text
-1.0.x  Bugfixes, Dokumentationsfixes, kleine interne Verbesserungen
-1.x.0  kompatible neue Features
-2.0.0  Breaking Changes
-```
-
-Beispiele:
-
-```text
-Bug in ACK-Batching                  -> Patch
-Neues Diagnostics-Feld               -> Minor, wenn kompatibel
-Message-Shape ändern                 -> Major
-Node-Typnamen ändern                 -> Major
-OAuth2-Refresh als zusätzliches Auth -> Minor, wenn kompatibel
-```
-
-## 3. Branch-Strategie
+## 2. Branch-Strategie
 
 Einfach halten:
 
 ```text
-main      immer releasefähig
-topic/*   einzelne Features oder Bugfixes
+main      immer gruener, releasefaehiger Stand
+codex/*   Codex-Arbeitszweige
+topic/*   manuelle Features oder Bugfixes
 ```
 
-Beispiele:
+## 3. Semver-Leitlinie
+
+Vor `1.0.0`:
 
 ```text
-topic/fix-nack-mailbox
-topic/oauth2-refresh
-topic/integration-tests
+0.1.x  Haertung, Bugfixes, Dokumentation
+0.2.x  kompatible Verbesserungen vor erster stabiler Version
+1.0.0  erste oeffentliche stabile Version nach Node-RED-Test
 ```
 
-## 4. Pull-Request-Checkliste
+Nach `1.0.0`:
 
-Jeder PR sollte diese Punkte beantworten:
+```text
+Patch  Bugfixes ohne API- oder Flow-Vertragsaenderung
+Minor  kompatible neue Features
+Major  Breaking Changes
+```
 
-- Was ändert sich für Nutzer?
+## 4. Pull-Request-Pruefung
+
+Jeder PR sollte beantworten:
+
+- Was aendert sich fuer Nutzer?
 - Bleibt At-least-once erhalten?
-- Gibt es ein Risiko für große Mailboxen?
-- Werden Credentials geschützt?
-- Wurden README/Hilfetexte/CHANGELOG angepasst?
-- Sind Tests grün?
+- Gibt es ein Risiko fuer grosse Postfaecher?
+- Werden Credentials und Mail-Inhalte geschuetzt?
+- Bleibt Node.js 18 installierbar?
+- Sind README, Hilfetexte, Beispiele oder CHANGELOG betroffen?
+- Sind `npm test` und `npm run pack:check` gruen?
 
-## 5. Issue Labels
-
-Sinnvolle GitHub Labels:
+## 5. Sinnvolle Labels
 
 ```text
 bug
@@ -76,7 +64,7 @@ documentation
 imap-provider
 performance
 diagnostics
-oauth2
+security
 breaking-change
 good-first-issue
 needs-repro
@@ -84,47 +72,45 @@ needs-repro
 
 ## 6. Security
 
-Ein `SECURITY.md` wäre sinnvoll, sobald das Paket öffentlich stärker genutzt wird.
+Ein `SECURITY.md` ist sinnvoll, sobald das Paket oeffentlich genutzt wird.
+Bis dahin sollten Issues und Templates klar sagen:
 
-Empfohlener Inhalt:
+- keine Passwoerter, Tokens oder privaten Hostnamen posten
+- Flow-Ausschnitte nur ohne Credentials teilen
+- Raw-Mails und Attachments nur anonymisiert beschreiben
 
-- Keine Secrets in Issues posten.
-- Sicherheitsprobleme per privatem Kontakt melden.
-- Unterstützte Versionen nennen, z. B. nur aktuelle Minor-Version.
+## 7. CI
 
-## 7. Codex-Nutzung
+Der Standard-Workflow prueft:
 
-Codex eignet sich besonders für:
+- Node.js 18, 20, 22 und 24
+- `npm install --no-audit --no-fund`
+- `npm test`
+- `npm run pack:check`
 
-- Tests ergänzen,
-- kleine Bugfixes,
-- README/Hilfetexte konsistent halten,
-- Codebase-Exploration,
-- Pull-Request-Vorbereitung.
+CI darf keine Veroeffentlichungsschritte enthalten.
 
-Bei jeder Codex-Aufgabe sollten die Architekturregeln explizit genannt werden. Besonders wichtig:
+## 8. Manuelle Tests, die CI nicht ersetzt
+
+Vor relevanten Releases weiterhin manuell pruefen:
+
+- Installation in lokalem Node-RED
+- Import des deaktivierten Beispiel-Flows
+- Verbindung mit dediziertem Testpostfach
+- `imap-email in` mit bounded Front-Window
+- ACK `flag`, `copy`, `move` und `delete` gegen passende Server-Capabilities
+- Verhalten nach Node-RED-Neustart
+
+## 9. Codex-Nutzung
+
+Bei jeder Codex-Aufgabe die wichtigsten Regeln wiederholen:
 
 ```text
 Keine unbounded IMAP-Operationen.
 Keine Secrets loggen.
-At-least-once bleibt wichtiger als genau-einmal.
+At-least-once bleibt erhalten.
+ACK-Erfolg nur nach bestaetigter IMAP-Aktion.
+Node.js 18 bleibt unterstuetzt.
 ```
 
-## 8. Manuelle Tests, die CI nicht ersetzt
-
-Vor relevanten Releases weiterhin manuell prüfen:
-
-- Installation in Node-RED aus npm oder Tarball.
-- Import des Beispiel-Flows.
-- STRATO-Testpostfach mit Rückstand.
-- ACK im Normalbetrieb.
-- NACK move nach `NodeRED.failed`.
-- Verhalten nach Node-RED-Neustart.
-
-## 9. Empfohlener nächster Repository-Ausbau
-
-1. `CONTRIBUTING.md` aus diesem Maintainer Pack ableiten.
-2. `SECURITY.md` ergänzen.
-3. GitHub Issue Templates aus `CHANGE_REQUEST_TEMPLATE_DE.md` ableiten.
-4. Optional: englische Version des Maintainer-Briefings für öffentliche Contributor.
-5. Optional: Integrationstest mit lokalem IMAP-Testserver evaluieren.
+Grosse Aenderungen in kleine, reviewbare Commits schneiden.

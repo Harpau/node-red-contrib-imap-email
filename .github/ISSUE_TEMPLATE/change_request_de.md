@@ -1,22 +1,28 @@
-# Change-Request-Template
+---
+name: Change Request
+about: Aenderung, Fehler oder Dokumentationsbedarf fuer imap-email beschreiben
+title: ""
+labels: ""
+assignees: ""
+---
 
-Dieses Template eignet sich für GitHub Issues, neue Chat-Aufgaben oder Codex-Aufgaben.
+# Change Request
 
 ## Kurzbeschreibung
 
-Was soll geändert oder behoben werden?
+Was soll geaendert oder behoben werden?
 
 ```text
 ...
 ```
 
-## Betroffener Node
+## Betroffener Bereich
 
-- [ ] imap queue account
-- [ ] imap queue in
-- [ ] imap queue ack
-- [ ] imap queue nack
+- [ ] `imap-email account`
+- [ ] `imap-email in`
+- [ ] `imap-email ack`
 - [ ] README / Dokumentation
+- [ ] Node-RED-Hilfetexte
 - [ ] Beispiel-Flow
 - [ ] Tests / CI
 - [ ] Paketierung / Release
@@ -47,13 +53,13 @@ Node.js-Version:
 ...
 ```
 
-Paketversion:
+Paketversion oder Commit:
 
 ```text
 ...
 ```
 
-IMAP-Anbieter:
+IMAP-Anbieter / Server:
 
 ```text
 ...
@@ -65,7 +71,7 @@ Flow-Ausschnitt ohne Credentials:
 ...
 ```
 
-Fehlermeldung / Debug-Ausgabe:
+Fehlermeldung / Debug-Ausgabe ohne Secrets:
 
 ```text
 ...
@@ -73,23 +79,24 @@ Fehlermeldung / Debug-Ausgabe:
 
 ## Akzeptanzkriterien
 
-- [ ] Keine unbounded IMAP-Operationen.
+- [ ] Keine unbounded IMAP-Operationen ueber grosse Mailboxen.
 - [ ] At-least-once-Semantik bleibt erhalten.
-- [ ] Keine Secrets im Log.
-- [ ] Message-Shape bleibt kompatibel, falls kein Major Release geplant ist.
+- [ ] Erfolgreiche ACKs entstehen nur nach bestaetigter IMAP-Aktion.
+- [ ] Keine Credentials, Tokens, Raw-Mails oder Attachments im Log.
+- [ ] Node.js `>=18.0.0` bleibt unterstuetzt.
 - [ ] README aktualisiert, falls nutzer-sichtbar.
 - [ ] Node-RED-Hilfetexte aktualisiert, falls nutzer-sichtbar.
 - [ ] Beispiel-Flow aktualisiert, falls relevant.
-- [ ] CHANGELOG aktualisiert.
-- [ ] Tests ergänzt/angepasst.
-- [ ] `npm test` grün.
-- [ ] `npm pack --dry-run` plausibel.
+- [ ] CHANGELOG aktualisiert, falls release-relevant.
+- [ ] Tests ergaenzt oder begruendet nicht noetig.
+- [ ] `npm test` gruen.
+- [ ] `npm run pack:check` plausibel.
 
 ## Versionsentscheidung
 
-- [ ] Patch, z. B. `1.0.1`: Bugfix ohne API-Änderung.
-- [ ] Minor, z. B. `1.1.0`: kompatibles neues Feature.
-- [ ] Major, z. B. `2.0.0`: Breaking Change.
+- [ ] Patch: Bugfix ohne kompatibilitaetsrelevante API-Aenderung.
+- [ ] Minor: kompatibles neues Feature.
+- [ ] Major: Breaking Change mit Migrationsdokumentation.
 
 ## Release-Notiz-Entwurf
 
