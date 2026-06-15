@@ -675,6 +675,8 @@ Bei Fehlern:
   `new-uid-priority` wird sie auf New-UID- und Bestandsfenster aufgeteilt.
 - Der interne Scan-Cursor wrappt am Mailbox-Ende auf `1` und wird bei
   UIDVALIDITY-Wechsel zurueckgesetzt.
+- Transiente Fehler im Full-Fetch nach dem Front-Window duerfen Cursor nicht
+  ueber die betroffenen Kandidaten hinausschieben.
 - `batchSize` begrenzt die Ausgabe.
 - `maxInflight` begrenzt die Anzahl aktiver nicht abgeschlossener Nachrichten.
 - Selektive Filter koennen dazu fuehren, dass weniger Nachrichten als

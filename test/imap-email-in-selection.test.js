@@ -1591,12 +1591,148 @@ test("imap email in handles transient connect, lock and fetch errors without nod
 
     const errorOutput = outputs.find((output) => output && output[1]);
     assert.equal(errorOutput[1].error.code, item.code);
+    if (item.name === "fetchOne") {
+      assert.equal(errorOutput[1].imap.uid, 11);
+      assert.equal(errorOutput[1].imap.ackToken, undefined);
+      assert.equal(node.scanCursor, 1);
+      assert.equal(node.newUidCursor, null);
+      assert.equal(registry.countAllInflight(node.queueKey), 0);
+    }
 
     const stats = collectStats(outputs)[0];
     assert.equal(stats.ok, false);
     assert.equal(stats.connectionErrors, 1);
     assert.match(stats.error, new RegExp(item.message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    if (item.name === "fetchOne") {
+      assert.equal(stats.scanCursorAdjusted, true);
+      assert.equal(stats.scanCursorNext, 1);
+      assert.equal(stats.newUidCursorInitialized, false);
+      assert.equal(stats.newUidCursor, null);
+    }
   }
+});
+
+test("imap email in rolls back new UID cursor on transient fetchOne errors", async () => {
+  const err = createConnectionError("Connection not available", "NoConnection");
+  const { node, statuses, warnings, errors, releasedLocks, loggedOutClients, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 4,
+    batchSize: 1
+  }, [
+    {
+      usable: false,
+      exists: 1,
+      uidValidity: "uidv-fetchone-newuid",
+      uidNext: 103,
+      front: [{ uid: 101, flags: [], size: 100 }],
+      fetchOne() {
+        throw err;
+      }
+    }
+  ]);
+  node.newUidCursor = 101;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0]), /NoConnection/);
+  assert.deepEqual(releasedLocks, ["INBOX"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101"]);
+  assert.equal(node.newUidCursor, 101);
+  assert.equal(registry.countAllInflight(node.queueKey), 0);
+  assert.equal(statuses[statuses.length - 1].fill, "red");
+
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.code, "NoConnection");
+  assert.equal(errorOutput[1].imap.uid, 101);
+  assert.equal(errorOutput[1].imap.ackToken, undefined);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.ok, false);
+  assert.equal(stats.connectionErrors, 1);
+  assert.equal(stats.newUidCursor, 101);
+  assert.equal(stats.scanCursorAdjusted, false);
+});
+
+test("imap email in clears newly initialized new UID cursor after transient fetchOne sequence retry", async () => {
+  const err = createConnectionError("read EADDRNOTAVAIL", "EADDRNOTAVAIL");
+  const { node, warnings, errors, releasedLocks, loggedOutClients, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 2,
+    batchSize: 1
+  }, [
+    {
+      usable: false,
+      exists: 2,
+      uidValidity: "uidv-fetchone-init-newuid",
+      uidNext: 50,
+      front: [{ uid: 11, flags: [], size: 100 }],
+      fetchOne() {
+        throw err;
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(releasedLocks, ["INBOX"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["11"]);
+  assert.equal(node.scanCursor, 1);
+  assert.equal(node.newUidCursor, null);
+  assert.equal(registry.countAllInflight(node.queueKey), 0);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.ok, false);
+  assert.equal(stats.connectionErrors, 1);
+  assert.equal(stats.scanCursorAdjusted, true);
+  assert.equal(stats.scanCursorNext, 1);
+  assert.equal(stats.newUidCursorInitialized, false);
+  assert.equal(stats.newUidCursor, null);
+});
+
+test("imap email in keeps non-transient fetchOne errors on the existing error path", async () => {
+  const err = new Error("invalid fetch query");
+  const { node, statuses, warnings, errors, releasedLocks, loggedOutClients, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-fetchone-permanent",
+      front: [{ uid: 44, flags: [], size: 100 }],
+      fetchOne() {
+        throw err;
+      }
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(node.running, false);
+  assert.equal(warnings.length, 0);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0], err);
+  assert.deepEqual(releasedLocks, ["INBOX"]);
+  assert.deepEqual(loggedOutClients, ["uidv-fetchone-permanent"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["44"]);
+  assert.equal(registry.countAllInflight(node.queueKey), 0);
+  assert.equal(statuses[statuses.length - 1].fill, "red");
+
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.message, "invalid fetch query");
+  assert.equal(errorOutput[1].imap.uid, undefined);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.ok, false);
+  assert.equal(stats.connectionErrors, 0);
+  assert.equal(stats.error, "invalid fetch query");
 });
 
 test("imap email in handles transient download errors without node.error", async () => {

@@ -661,6 +661,7 @@ module.exports = function registerImapEmailIn(RED) {
         const deletedUids = [];
         const candidates = [];
         const candidateSet = new Set();
+        const candidateRetryCursors = new Map();
         const now = Date.now();
         let highestUidSeen = 0;
         let cursorAfterCycle = node.scanCursor;
@@ -767,11 +768,12 @@ module.exports = function registerImapEmailIn(RED) {
             stats.candidates += 1;
             if (candidates.length < candidateLimit) {
               candidates.push(uid);
+              candidateRetryCursors.set(uid, {
+                sequenceRetryCursor: window.uid ? null : window.windowStart,
+                newUidRetryCursor: window.uid ? uid : null
+              });
               result.selected += 1;
               result.lastSelectedUid = uid;
-              if (window.uid && newUidRetryCursor === null) {
-                newUidRetryCursor = window.windowStart;
-              }
             } else {
               result.unselectedCandidates += 1;
               result.candidateOverflow = true;
@@ -948,16 +950,45 @@ module.exports = function registerImapEmailIn(RED) {
 
         for (const uid of candidates) {
           let imapMessage;
+          const candidateRetry = candidateRetryCursors.get(uid) || {};
+          if (Object.prototype.hasOwnProperty.call(candidateRetry, "sequenceRetryCursor")) {
+            sequenceRetryCursor = candidateRetry.sequenceRetryCursor;
+          }
+          if (Object.prototype.hasOwnProperty.call(candidateRetry, "newUidRetryCursor")) {
+            newUidRetryCursor = candidateRetry.newUidRetryCursor;
+          }
 
           started = Date.now();
-          imapMessage = await client.fetchOne(String(uid), {
-            uid: true,
-            envelope: true,
-            flags: true,
-            internalDate: true,
-            size: true
-          }, { uid: true });
-          addTiming(timing, "fullFetchMs", started);
+          try {
+            imapMessage = await client.fetchOne(String(uid), {
+              uid: true,
+              envelope: true,
+              flags: true,
+              internalDate: true,
+              size: true
+            }, { uid: true });
+            addTiming(timing, "fullFetchMs", started);
+          } catch (err) {
+            addTiming(timing, "fullFetchMs", started);
+            if (!isTransientImapConnectionError(err)) {
+              throw err;
+            }
+
+            noteConnectionError(stats, err, "IMAP fetchOne");
+            send([
+              null,
+              {
+                error: diagnostics.errorToObject(err),
+                imap: {
+                  ...buildImapMeta(uid, uidValidity, null),
+                  queueKey: node.queueKey
+                }
+              },
+              null
+            ]);
+            connectionInterrupted = true;
+            break;
+          }
 
           if (!imapMessage) {
             stats.missingMessages += 1;
