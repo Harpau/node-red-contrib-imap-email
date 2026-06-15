@@ -177,6 +177,13 @@ uidWindowStart = newUidCursor
 uidWindowEnd   = min(uidNextSnapshot - 1, newUidCursor + ceil(frontWindowSize / 2) - 1)
 ```
 
+Das logische New-UID-Fenster bleibt durch diese halbe `frontWindowSize`
+begrenzt. Die tatsaechlichen UID-Fetch-Kommandos innerhalb dieses logischen
+Fensters werden zusaetzlich durch `maxUidPerCommand` begrenzt. Wenn die
+Batch-/Inflight-Kapazitaet an einer Chunk-Grenze voll ist, rueckt
+`newUidCursor` nur auf die naechste noch nicht gelesene UID vor, nicht auf das
+Ende des logischen Fensters.
+
 Danach wird, sofern noch Batch-/Inflight-Kapazitaet frei ist, ein zyklisches
 Bestandsfenster mit der kleineren Haelfte von `frontWindowSize` gelesen. Neue
 UIDs werden zuerst und in aufsteigender UID-Reihenfolge ausgegeben. Wenn ein
@@ -669,14 +676,21 @@ Bei Fehlern:
   jeweiligen Fensteranfang, statt nicht ausgegebene Kandidaten zu
   ueberspringen.
 - In der Betriebsphase `new-uid-priority` werden pro Trigger hoechstens ein
-  New-UID-Fenster und ein Bestandsfenster gelesen.
+  logisches New-UID-Fenster und ein Bestandsfenster gelesen. Das logische
+  New-UID-Fenster kann aus mehreren UID-Fetch-Kommandos bestehen, die jeweils
+  durch `maxUidPerCommand` begrenzt sind.
 - `frontWindowSize` bleibt die harte Obergrenze fuer ein einzelnes gelesenes
   Fenster. In der `cursor-window` Phase wird die volle Groesse genutzt; in
   `new-uid-priority` wird sie auf New-UID- und Bestandsfenster aufgeteilt.
+- `frontWindowRead` und `windowsRead` zaehlen die tatsaechlich gelesenen
+  Fetch-Fenster. `uidWindowStart`, `uidWindowEnd` und `uidWindowNext`
+  aggregieren bei gechunkten New-UID-Fetches den tatsaechlich gelesenen
+  UID-Bereich.
 - Der interne Scan-Cursor wrappt am Mailbox-Ende auf `1` und wird bei
   UIDVALIDITY-Wechsel zurueckgesetzt.
 - Transiente Fehler im Full-Fetch nach dem Front-Window duerfen Cursor nicht
   ueber die betroffenen Kandidaten hinausschieben.
+- `maxUidPerCommand` begrenzt UID-Mengen pro IMAP-Kommando.
 - `batchSize` begrenzt die Ausgabe.
 - `maxInflight` begrenzt die Anzahl aktiver nicht abgeschlossener Nachrichten.
 - Selektive Filter koennen dazu fuehren, dass weniger Nachrichten als
@@ -735,6 +749,8 @@ imap-email ack:
 - In `new-uid-priority` werden neue UIDs vor dem Bestandsfenster ausgegeben.
 - In `new-uid-priority` teilt der laufende Betrieb `frontWindowSize` auf New-
   UID- und Bestandsfenster auf.
+- New-UID-Fetches werden durch `maxUidPerCommand` gechunkt, ohne UIDs am
+  Chunk-Ende oder bei transienten Full-Fetch-Fehlern zu ueberspringen.
 - Der interne Cursor wrappt am Mailbox-Ende.
 - Der interne Cursor resetet bei UIDVALIDITY-Wechsel.
 - Mock-Client stellt sicher, dass kein `SEARCH` ausgefuehrt wird.

@@ -190,7 +190,7 @@
     <dt>Scan time ms <span class="property-type">number</span></dt>
     <dd>Soft time budget for the initial <code>cursor-window</code> phase. The node checks the limit after each fully read window. <code>0</code> reads only one cursor window.</dd>
     <dt>UIDs/command <span class="property-type">number</span></dt>
-    <dd>Maximum number of UIDs per IMAP command/range chunk.</dd>
+    <dd>Maximum number of UIDs per IMAP command/range chunk, including new-UID priority fetches.</dd>
     <dt>Deleted / Seen / Answered / Flagged <span class="property-type">selection</span></dt>
     <dd>Select <code>Any</code>, <code>Only with flag</code>, or <code>Only without flag</code> for each IMAP flag. The filters are applied only inside the bounded cursor window; the node does not scan the whole mailbox to fill a batch.</dd>
     <dt>Expunge window <span class="property-type">boolean</span></dt>

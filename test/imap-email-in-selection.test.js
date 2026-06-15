@@ -872,6 +872,196 @@ test("imap email in new UID priority emits new UIDs before backlog and splits wi
   assert.equal(stats.emitted, 3);
 });
 
+test("imap email in new UID priority chunks UID fetches by maxUidPerCommand", async () => {
+  const messages = Array.from({ length: 6 }, (_, index) => createMessage(101 + index, `New ${index + 1}`));
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 12,
+    maxUidPerCommand: 3,
+    batchSize: 10
+  }, [
+    {
+      exists: 6,
+      uidNext: 107,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        const { start, end } = rangeBounds(range);
+        return messages
+          .filter((message) => message.uid >= start && message.uid <= end)
+          .map((message) => ({ uid: message.uid, flags: [], size: message.size }));
+      }
+    }
+  ]);
+  const outputs = [];
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103", "104:106"]);
+  assert.deepEqual(fetchCalls.map((call) => call.options), [{ uid: true }, { uid: true }]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102", "103", "104", "105", "106"]);
+  assert.equal(node.newUidCursor, 107);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.phase, "new-uid-priority");
+  assert.deepEqual(stats.windowPhasesRead, ["new-uid"]);
+  assert.equal(stats.windowsRead, 2);
+  assert.equal(stats.frontWindowRead, 6);
+  assert.equal(stats.uidWindowStart, 101);
+  assert.equal(stats.uidWindowEnd, 106);
+  assert.equal(stats.uidWindowNext, 107);
+  assert.equal(stats.emitted, 6);
+});
+
+test("imap email in new UID priority stops chunking at a full batch boundary without skipping UIDs", async () => {
+  const messages = Array.from({ length: 6 }, (_, index) => createMessage(101 + index, `New ${index + 1}`));
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 12,
+    maxUidPerCommand: 2,
+    batchSize: 2
+  }, [
+    {
+      exists: 6,
+      uidNext: 107,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        const { start, end } = rangeBounds(range);
+        return messages
+          .filter((message) => message.uid >= start && message.uid <= end)
+          .map((message) => ({ uid: message.uid, flags: [], size: message.size }));
+      }
+    }
+  ]);
+  const outputs = [];
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:102"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102"]);
+  assert.equal(node.newUidCursor, 103);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.candidateOverflow, false);
+  assert.equal(stats.windowsRead, 1);
+  assert.equal(stats.frontWindowRead, 2);
+  assert.equal(stats.uidWindowStart, 101);
+  assert.equal(stats.uidWindowEnd, 102);
+  assert.equal(stats.uidWindowNext, 103);
+  assert.equal(stats.emitted, 2);
+});
+
+test("imap email in new UID priority keeps cursor at first unselected UID inside a chunk overflow", async () => {
+  const messages = Array.from({ length: 6 }, (_, index) => createMessage(101 + index, `New ${index + 1}`));
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 12,
+    maxUidPerCommand: 3,
+    batchSize: 2
+  }, [
+    {
+      exists: 6,
+      uidNext: 107,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        assert.equal(range, "101:103");
+        return [
+          { uid: 101, flags: [], size: 80 },
+          { uid: 102, flags: [], size: 80 },
+          { uid: 103, flags: [], size: 80 }
+        ];
+      }
+    }
+  ]);
+  const outputs = [];
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:103"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102"]);
+  assert.equal(node.newUidCursor, 103);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.equal(stats.candidateOverflow, true);
+  assert.equal(stats.windowUnselectedCandidates, 1);
+  assert.equal(stats.uidWindowStart, 101);
+  assert.equal(stats.uidWindowEnd, 103);
+  assert.equal(stats.uidWindowNext, 104);
+  assert.equal(stats.emitted, 2);
+});
+
+test("imap email in new UID priority reads backlog after chunked new UID windows when capacity remains", async () => {
+  const messages = [
+    createMessage(1, "Backlog one"),
+    createMessage(101, "New one"),
+    createMessage(102, "New two"),
+    createMessage(103, "New three"),
+    createMessage(104, "New four")
+  ];
+  const { node, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 10,
+    maxUidPerCommand: 2,
+    batchSize: 5
+  }, [
+    {
+      exists: 5,
+      uidNext: 105,
+      uidValidity: "uidv-1",
+      messages,
+      fetch(range, query, options) {
+        if (options && options.uid) {
+          const { start, end } = rangeBounds(range);
+          return messages
+            .filter((message) => message.uid >= start && message.uid <= end)
+            .map((message) => ({ uid: message.uid, flags: [], size: message.size }));
+        }
+
+        assert.equal(options, undefined);
+        assert.equal(range, "1:5");
+        return [{ uid: 1, flags: [], size: 80 }];
+      }
+    }
+  ]);
+  const outputs = [];
+  node.scanUidValidity = "uidv-1";
+  node.newUidCursor = 101;
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:102", "103:104", "1:5"]);
+  assert.deepEqual(fetchCalls.map((call) => call.options), [{ uid: true }, { uid: true }, undefined]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102", "103", "104", "1"]);
+  assert.equal(node.newUidCursor, 105);
+  assert.equal(node.scanCursor, 1);
+
+  const stats = collectStats(outputs)[0];
+  assertRemovedStatsFieldsAbsent(stats);
+  assert.deepEqual(stats.windowPhasesRead, ["new-uid", "backlog"]);
+  assert.equal(stats.windowsRead, 3);
+  assert.equal(stats.frontWindowRead, 9);
+  assert.equal(stats.uidWindowStart, 101);
+  assert.equal(stats.uidWindowEnd, 104);
+  assert.equal(stats.uidWindowNext, 105);
+  assert.equal(stats.scanCursorStart, 1);
+  assert.equal(stats.scanCursorEnd, 5);
+  assert.equal(stats.scanCursorNext, 1);
+  assert.equal(stats.emitted, 5);
+});
+
 test("imap email in new UID priority skips backlog when new UIDs fill capacity", async () => {
   const messages = [
     createMessage(101, "New one"),
@@ -1655,6 +1845,70 @@ test("imap email in rolls back new UID cursor on transient fetchOne errors", asy
   assert.equal(stats.connectionErrors, 1);
   assert.equal(stats.newUidCursor, 101);
   assert.equal(stats.scanCursorAdjusted, false);
+});
+
+test("imap email in rolls back chunked new UID cursor on transient fetchOne errors", async () => {
+  const err = createConnectionError("Connection not available", "NoConnection");
+  const messages = [
+    createMessage(101, "New one"),
+    createMessage(102, "New two"),
+    createMessage(103, "New three"),
+    createMessage(104, "New four")
+  ];
+  const { node, warnings, errors, fetchCalls, fetchOneCalls } = createCursorTestNode({
+    frontWindowSize: 12,
+    maxUidPerCommand: 2,
+    batchSize: 4
+  }, [
+    {
+      usable: false,
+      exists: 4,
+      uidValidity: "uidv-fetchone-chunked-newuid",
+      uidNext: 105,
+      messages,
+      fetch(range, query, options) {
+        assert.deepEqual(options, { uid: true });
+        const { start, end } = rangeBounds(range);
+        return messages
+          .filter((message) => message.uid >= start && message.uid <= end)
+          .map((message) => ({ uid: message.uid, flags: [], size: message.size }));
+      },
+      fetchOne(uid) {
+        if (Number(uid) === 103) {
+          throw err;
+        }
+        return messages.find((message) => Number(message.uid) === Number(uid)) || null;
+      }
+    }
+  ]);
+  node.newUidCursor = 101;
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0]), /NoConnection/);
+  assert.deepEqual(fetchCalls.map((call) => call.range), ["101:102", "103:104"]);
+  assert.deepEqual(fetchOneCalls.map((call) => call.uid), ["101", "102", "103"]);
+  assert.equal(node.newUidCursor, 103);
+  assert.equal(registry.countAllInflight(node.queueKey), 2);
+
+  const successOutputs = outputs.filter((output) => output && output[0]);
+  assert.deepEqual(successOutputs.map((output) => output[0].imap.uid), [101, 102]);
+
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.code, "NoConnection");
+  assert.equal(errorOutput[1].imap.uid, 103);
+  assert.equal(errorOutput[1].imap.ackToken, undefined);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.ok, false);
+  assert.equal(stats.connectionErrors, 1);
+  assert.equal(stats.newUidCursor, 103);
+  assert.equal(stats.uidWindowStart, 101);
+  assert.equal(stats.uidWindowEnd, 104);
+  assert.equal(stats.uidWindowNext, 105);
 });
 
 test("imap email in clears newly initialized new UID cursor after transient fetchOne sequence retry", async () => {

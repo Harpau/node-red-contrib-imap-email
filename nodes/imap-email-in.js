@@ -679,7 +679,9 @@ module.exports = function registerImapEmailIn(RED) {
           stats.frontWindowRead += window.windowSize;
 
           if (window.uid) {
-            stats.uidWindowStart = window.windowStart;
+            if (stats.uidWindowStart === null) {
+              stats.uidWindowStart = window.windowStart;
+            }
             stats.uidWindowEnd = window.windowEnd;
             stats.uidWindowNext = window.nextCursor;
             return;
@@ -718,7 +720,7 @@ module.exports = function registerImapEmailIn(RED) {
             unselectedCandidates: 0,
             candidateOverflow: false
           };
-          const validWindowUids = window.uid ? new Set() : null;
+          const validWindowUids = window.uid ? (window.validWindowUids || new Set()) : null;
 
           const fetchStarted = Date.now();
           const fetchOptions = window.uid ? { uid: true } : undefined;
@@ -832,6 +834,46 @@ module.exports = function registerImapEmailIn(RED) {
           return { scanWindow, result };
         }
 
+        async function readNewUidWindow(uidWindowStart, uidWindowEnd, uidNext) {
+          const aggregate = {
+            validUidsRead: 0,
+            candidateOverflow: false,
+            firstUnselectedUid: null,
+            nextCursor: uidWindowStart
+          };
+          const validWindowUids = new Set();
+          let chunkStart = uidWindowStart;
+
+          while (chunkStart <= uidWindowEnd && candidates.length < candidateLimit) {
+            const chunkEnd = Math.min(uidWindowEnd, chunkStart + node.maxUidPerCommand - 1);
+            const result = await readCandidateWindow({
+              phase: "new-uid-priority",
+              windowPhase: "new-uid",
+              uid: true,
+              validWindowUids,
+              windowStart: chunkStart,
+              windowEnd: chunkEnd,
+              windowSize: Math.max(0, chunkEnd - chunkStart + 1),
+              nextCursor: chunkEnd + 1,
+              reset: false,
+              wrapped: chunkEnd + 1 >= uidNext
+            });
+
+            aggregate.validUidsRead += result.validUidsRead;
+            aggregate.nextCursor = chunkEnd + 1;
+
+            if (result.candidateOverflow) {
+              aggregate.candidateOverflow = true;
+              aggregate.firstUnselectedUid = result.firstUnselectedUid;
+              break;
+            }
+
+            chunkStart = chunkEnd + 1;
+          }
+
+          return aggregate;
+        }
+
         async function readCursorWindowPhase() {
           stats.phase = "cursor-window";
           warmupStartedAt = Date.now();
@@ -882,23 +924,15 @@ module.exports = function registerImapEmailIn(RED) {
           if (uidNextSnapshot && Number(node.newUidCursor) < uidNextSnapshot && candidates.length < candidateLimit) {
             const uidWindowStart = Number(node.newUidCursor);
             const uidWindowEnd = Math.min(uidNextSnapshot - 1, uidWindowStart + newWindowSize - 1);
-            const result = await readCandidateWindow({
-              phase: "new-uid-priority",
-              windowPhase: "new-uid",
-              uid: true,
-              windowStart: uidWindowStart,
-              windowEnd: uidWindowEnd,
-              windowSize: Math.max(0, uidWindowEnd - uidWindowStart + 1),
-              nextCursor: uidWindowEnd + 1,
-              reset: false,
-              wrapped: uidWindowEnd + 1 >= uidNextSnapshot
-            });
-            newUidWindowCoveredMailbox = uidWindowEnd + 1 >= uidNextSnapshot && result.validUidsRead >= exists;
+            const result = await readNewUidWindow(uidWindowStart, uidWindowEnd, uidNextSnapshot);
+            newUidWindowCoveredMailbox = !result.candidateOverflow
+              && result.nextCursor >= uidNextSnapshot
+              && result.validUidsRead >= exists;
 
             if (result.candidateOverflow && result.firstUnselectedUid !== null) {
               node.newUidCursor = result.firstUnselectedUid;
             } else {
-              node.newUidCursor = uidWindowEnd + 1;
+              node.newUidCursor = result.nextCursor;
             }
           }
 

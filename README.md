@@ -123,13 +123,15 @@ records the current `UIDNEXT`. Later triggers enter the `new-uid-priority`
 phase: they first read newly arrived UIDs up to a per-trigger `UIDNEXT`
 snapshot, then read one cyclic backlog window if capacity remains. In this
 phase the new-UID and backlog windows each use about half of `Front window`,
-with the larger half assigned to new UIDs. New UIDs are emitted before backlog
+with the larger half assigned to new UIDs. The logical new-UID window is still
+bounded by `Front window`, and its UID fetches are additionally split into
+commands of at most `UIDs/command` UIDs. New UIDs are emitted before backlog
 messages and in ascending UID order, but the node does not guarantee globally
 oldest unread delivery across the whole mailbox. Backlog windows are also held
 on candidate overflow. If the new-UID window already covers all messages that
 currently exist in the mailbox, the redundant backlog window is skipped.
 New-UID windows advance to the first UID that did not fit into the current
-batch.
+batch, or to the next UID after the last actually read command chunk.
 
 Stats report `phase` as the current operating phase (`cursor-window` or
 `new-uid-priority`). `windowPhasesRead` contains the ordered unique window
