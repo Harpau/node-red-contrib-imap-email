@@ -2,6 +2,18 @@
 
 All notable changes to `@compeso/node-red-contrib-imap-email` are documented here.
 
+## 0.2.0 - Development compatibility update
+
+### Changed
+
+- Raised the minimum runtime requirements to Node.js `>=22.0.0` and Node-RED
+  `>=4.0.0`.
+- Dropped Node.js 18, Node.js 20 and Node-RED 3 compatibility in this
+  pre-1.0 development line. Node.js 18 reached end-of-life on 2025-04-30 and
+  Node.js 20 reached end-of-life on 2026-04-30.
+- Updated `mailparser` to 3.9.10, which uses `nodemailer` 9.0.0 and removes
+  the transitive Nodemailer audit path for `nodemailer <=8.0.8`.
+
 ## 0.1.0 - Initial development release
 
 ### Added

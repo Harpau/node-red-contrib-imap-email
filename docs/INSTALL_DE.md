@@ -2,6 +2,15 @@
 
 Diese Anleitung gilt fuer das eigenstaendige Paket `@compeso/node-red-contrib-imap-email`.
 
+## Voraussetzungen
+
+- Node.js `>=22.0.0`
+- Node-RED `>=4.0.0`
+
+Node-RED 5 kann selbst ein hoeheres Node.js-Patchlevel verlangen als dieses
+Paket. Pruefe beim Upgrade von Node-RED zusaetzlich die Runtime-Anforderung von
+Node-RED.
+
 ## 1. Paketordner
 
 Arbeite im Repository:

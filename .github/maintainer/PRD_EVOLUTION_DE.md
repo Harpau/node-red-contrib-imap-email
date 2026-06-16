@@ -1,6 +1,6 @@
 # PRD / Evolution Plan: @compeso/node-red-contrib-imap-email
 
-Stand: Entwicklungsfassung 0.1.0
+Stand: Entwicklungsfassung 0.2.0
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
@@ -75,7 +75,7 @@ Paketierung.
 
 - Tests decken Runtime, Action-Planung, Paketmetadaten, Beispiele und
   Fehlerpfade ab.
-- CI prueft Node.js 18 und aktuelle Node-Versionen.
+- CI prueft Node.js 22 und aktuelle Node.js-Versionen.
 - Dokumentation wird bei jeder nutzer-sichtbaren Aenderung aktualisiert.
 
 ## 5. Moegliche Roadmap
@@ -87,8 +87,11 @@ Paketierung.
 - README und Hilfe finalisieren
 - Release-Checkliste weiter schaerfen
 
-### 0.2.x: Betrieb und Diagnose
+### 0.2.x: Kompatibilitaetsumstellung, Betrieb und Diagnose
 
+- Node.js-Mindestversion auf `>=22.0.0` anheben
+- Node-RED-Mindestversion auf `>=4.0.0` anheben
+- Node.js 18/20 und Node-RED 3 als Pre-1.0-Breaking-Change abkuendigen
 - Troubleshooting aus echten Issues aufnehmen
 - Stats-Felder auf Stabilitaet pruefen
 - optional lokale IMAP-Testserver-Evaluation fuer CI
@@ -117,8 +120,8 @@ Ein Feature ist erst fertig, wenn:
 - `npm test` gruen ist.
 - `npm run pack:check` plausibel ist.
 - keine neuen unbounded IMAP-Operationen eingefuehrt wurden.
-- Node.js 18-Kompatibilitaet erhalten bleibt oder eine Major-Entscheidung
-  dokumentiert ist.
+- Node.js `>=22.0.0` und Node-RED `>=4.0.0` unterstuetzt bleiben oder eine
+  Breaking-Change-Entscheidung dokumentiert ist.
 
 ## 7. Breaking-Change-Entscheidung
 
@@ -127,6 +130,7 @@ Breaking Changes benoetigen:
 - klare Problembeschreibung
 - Migrationshinweise
 - CHANGELOG-Eintrag
-- Major-Version
+- Major-Version nach `1.0.0`; vor `1.0.0` eine explizit dokumentierte
+  Kompatibilitaetslinie wie `0.2.0`
 - aktualisierte Beispiele und Hilfetexte
 - bewusste Freigabe vor Release

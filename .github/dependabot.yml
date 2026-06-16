@@ -15,11 +15,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    # Runtime dependencies are pinned manually to preserve Node.js 18 support.
-    # Review these updates deliberately instead of accepting automatic bumps.
+    # Runtime dependencies are pinned deliberately; review IMAP-facing updates
+    # instead of accepting automatic bumps without compatibility checks.
     ignore:
       - dependency-name: "imapflow"
-      - dependency-name: "mailparser"
     groups:
       npm-production:
         dependency-type: "production"

@@ -31,7 +31,7 @@ Vor `1.0.0`:
 
 ```text
 0.1.x  Haertung, Bugfixes, Dokumentation
-0.2.x  kompatible Verbesserungen vor erster stabiler Version
+0.2.x  Pre-1.0-Kompatibilitaetsumstellung auf Node.js >=22 und Node-RED >=4
 1.0.0  erste oeffentliche stabile Version nach Node-RED-Test
 ```
 
@@ -51,7 +51,7 @@ Jeder PR sollte beantworten:
 - Bleibt At-least-once erhalten?
 - Gibt es ein Risiko fuer grosse Postfaecher?
 - Werden Credentials und Mail-Inhalte geschuetzt?
-- Bleibt Node.js 18 installierbar?
+- Bleiben Node.js >=22.0.0 und Node-RED >=4.0.0 installierbar?
 - Sind README, Hilfetexte, Beispiele oder CHANGELOG betroffen?
 - Sind `npm test` und `npm run pack:check` gruen?
 
@@ -83,8 +83,8 @@ Bis dahin sollten Issues und Templates klar sagen:
 
 Der Standard-Workflow prueft:
 
-- Node.js 18, 20, 22 und 24
-- `npm install --no-audit --no-fund`
+- Node.js 22 und 24
+- `npm ci --no-audit --no-fund`
 - `npm test`
 - `npm run pack:check`
 
@@ -110,7 +110,7 @@ Keine unbounded IMAP-Operationen.
 Keine Secrets loggen.
 At-least-once bleibt erhalten.
 ACK-Erfolg nur nach bestaetigter IMAP-Aktion.
-Node.js 18 bleibt unterstuetzt.
+Node.js >=22.0.0 und Node-RED >=4.0.0 bleiben unterstuetzt.
 ```
 
 Grosse Aenderungen in kleine, reviewbare Commits schneiden.

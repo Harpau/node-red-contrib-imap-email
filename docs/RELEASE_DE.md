@@ -11,12 +11,14 @@ Wichtig: Diese Datei bereitet keine Veroeffentlichung vor. Ein `npm publish` ode
 - Repository, Homepage und Issues zeigen auf `https://github.com/Harpau/node-red-contrib-imap-email`.
 - Die gespeicherten Node-RED-Flow-Typen sind `imap-email account`, `imap-email in` und `imap-email ack`.
 - Die sichtbaren Palette-Labels sind `imap email account`, `imap email in` und `imap email ack`.
+- Die dokumentierte Support-Matrix ist Node.js `>=22.0.0` und Node-RED `>=4.0.0`.
 - README, Beispiele und Node-RED-Hilfetexte sind konsistent.
 
 ## 2. Lokale Pruefung
 
 ```bash
 npm install --no-audit --no-fund
+npm audit --audit-level=moderate
 npm test
 npm run pack:check
 ```
@@ -26,6 +28,8 @@ Erwartung fuer die Tests:
 ```text
 # fail 0
 ```
+
+`npm audit --audit-level=moderate` sollte keine Findings melden.
 
 `npm run pack:check` sollte die geplanten Paketdateien zeigen, insbesondere:
 

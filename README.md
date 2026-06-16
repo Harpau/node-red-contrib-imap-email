@@ -13,6 +13,14 @@ imap-email in       imap email in        externally triggered bounded cursor-win
 imap-email ack      imap email ack       batched acknowledgement and UID actions
 ```
 
+## Requirements
+
+- Node.js `>=22.0.0`
+- Node-RED `>=4.0.0`
+
+Node-RED 5.x can require a stricter Node.js patch level than this package
+declares. Check the Node-RED runtime requirement when upgrading Node-RED itself.
+
 ## Installation
 
 From GitHub during development:

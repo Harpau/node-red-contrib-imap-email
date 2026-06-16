@@ -1,6 +1,6 @@
 {
   "name": "@compeso/node-red-contrib-imap-email",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node-RED IMAP email nodes with externally triggered bounded cursor-window fetch, at-least-once ACK actions, diagnostics, timings, and comprehensive help documentation.",
   "license": "MIT",
   "author": "compeso",
@@ -22,7 +22,7 @@
     "ack"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "test": "node --test test/*.test.js",
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "imapflow": "1.0.76",
-    "mailparser": "3.9.8"
+    "mailparser": "3.9.10"
   },
   "files": [
     "nodes",
@@ -43,7 +43,7 @@
     "CHANGELOG.md"
   ],
   "node-red": {
-    "version": ">=3.0.0",
+    "version": ">=4.0.0",
     "nodes": {
       "imap-email account": "nodes/imap-email-account.js",
       "imap-email in": "nodes/imap-email-in.js",

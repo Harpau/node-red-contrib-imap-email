@@ -72,8 +72,9 @@ bounded front-window Strategie. Erfolgreiche Verarbeitung wird ueber
    - Keine Raw-Mail.
    - Keine Attachments.
 
-6. Node.js `>=18.0.0` und Node-RED `>=3.0.0` bleiben unterstuetzt, solange
-   keine begruendete Major-Entscheidung getroffen wurde.
+6. Node.js `>=22.0.0` und Node-RED `>=4.0.0` bleiben unterstuetzt. Neue
+   Laufzeit- oder Node-RED-Anforderungen brauchen eine begruendete
+   Breaking-Change-Entscheidung.
 
 7. Bei jeder nutzer-sichtbaren Aenderung aktualisieren:
    - README

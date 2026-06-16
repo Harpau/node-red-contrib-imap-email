@@ -5,34 +5,86 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-function comparatorAllowsNode18(operator, major) {
+const NODE_22_0_0 = [22, 0, 0];
+
+function parseVersionParts(value) {
+  const parts = String(value)
+    .split(".")
+    .map((part) => {
+      if (part === "*" || part.toLowerCase() === "x") {
+        return 0;
+      }
+      return Number(part) || 0;
+    });
+
+  return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
+}
+
+function compareVersions(left, right) {
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] > right[index]) {
+      return 1;
+    }
+    if (left[index] < right[index]) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+function comparatorAllowsVersion(operator, candidate, required) {
+  const comparison = compareVersions(candidate, parseVersionParts(required));
+
   if (operator === ">=") {
-    return major <= 18;
+    return comparison >= 0;
   }
   if (operator === ">") {
-    return major < 18;
+    return comparison > 0;
   }
   if (operator === "<") {
-    return major > 18;
+    return comparison < 0;
   }
   if (operator === "<=") {
-    return major >= 18;
+    return comparison <= 0;
   }
   return true;
 }
 
-function engineAlternativeAllowsNode18(alternative) {
-  const comparators = [...String(alternative).matchAll(/(>=|>|<=|<)\s*(\d+)/g)];
-  if (comparators.length === 0) {
+function wildcardAlternativeAllowsVersion(alternative, candidate) {
+  const match = String(alternative).match(/^\s*(\d+)(?:\.(\d+|x|\*))?(?:\.(\d+|x|\*))?\s*$/i);
+  if (!match) {
     return true;
   }
-  return comparators.every((match) => comparatorAllowsNode18(match[1], Number(match[2])));
+
+  const major = Number(match[1]);
+  const minor = match[2];
+  const patch = match[3];
+
+  if (candidate[0] !== major) {
+    return false;
+  }
+  if (minor && minor !== "*" && minor.toLowerCase() !== "x" && candidate[1] !== Number(minor)) {
+    return false;
+  }
+  if (patch && patch !== "*" && patch.toLowerCase() !== "x" && candidate[2] !== Number(patch)) {
+    return false;
+  }
+  return true;
 }
 
-function engineRangeAllowsNode18(range) {
+function engineAlternativeAllowsVersion(alternative, candidate) {
+  const comparatorPattern = /(>=|>|<=|<)\s*(\d+(?:\.(?:\d+|x|\*))?(?:\.(?:\d+|x|\*))?)/gi;
+  const comparators = [...String(alternative).matchAll(comparatorPattern)];
+  if (comparators.length === 0) {
+    return wildcardAlternativeAllowsVersion(alternative, candidate);
+  }
+  return comparators.every((match) => comparatorAllowsVersion(match[1], candidate, match[2]));
+}
+
+function engineRangeAllowsNode22(range) {
   return String(range || "")
     .split("||")
-    .some((alternative) => engineAlternativeAllowsNode18(alternative.trim()));
+    .some((alternative) => engineAlternativeAllowsVersion(alternative.trim(), NODE_22_0_0));
 }
 
 function listFilesRecursive(directory) {
@@ -56,13 +108,15 @@ test("stable package metadata is complete", () => {
   const pkg = require(path.join(root, "package.json"));
 
   assert.equal(pkg.name, "@compeso/node-red-contrib-imap-email");
-  assert.equal(pkg.version, "0.1.0");
+  assert.equal(pkg.version, "0.2.0");
   assert.equal(pkg.license, "MIT");
   assert.equal(pkg.publishConfig && pkg.publishConfig.access, "public");
+  assert.equal(pkg.engines && pkg.engines.node, ">=22.0.0");
+  assert.equal(pkg["node-red"] && pkg["node-red"].version, ">=4.0.0");
   assert.ok(pkg.keywords.includes("node-red"));
   assert.ok(pkg.keywords.includes("imap-email"));
   assert.equal(pkg.dependencies.imapflow, "1.0.76");
-  assert.equal(pkg.dependencies.mailparser, "3.9.8");
+  assert.equal(pkg.dependencies.mailparser, "3.9.10");
   assert.equal(Object.prototype.hasOwnProperty.call(pkg, "overrides"), false);
   assert.ok(pkg.files.includes("CHANGELOG.md"));
   assert.equal(pkg.homepage, "https://github.com/Harpau/node-red-contrib-imap-email#readme");
@@ -76,7 +130,21 @@ test("stable package metadata is complete", () => {
   ]);
 });
 
-test("locked production dependencies remain compatible with Node 18", () => {
+test("package lock root metadata matches package metadata", () => {
+  const root = path.resolve(__dirname, "..");
+  const pkg = require(path.join(root, "package.json"));
+  const lock = require(path.join(root, "package-lock.json"));
+  const rootPackage = lock.packages[""];
+
+  assert.equal(lock.name, pkg.name);
+  assert.equal(lock.version, pkg.version);
+  assert.equal(rootPackage.name, pkg.name);
+  assert.equal(rootPackage.version, pkg.version);
+  assert.deepEqual(rootPackage.dependencies, pkg.dependencies);
+  assert.deepEqual(rootPackage.engines, pkg.engines);
+});
+
+test("locked production dependencies remain compatible with Node 22.0.0", () => {
   const root = path.resolve(__dirname, "..");
   const lock = require(path.join(root, "package-lock.json"));
   const incompatible = [];
@@ -85,7 +153,7 @@ test("locked production dependencies remain compatible with Node 18", () => {
     if (!name || !name.startsWith("node_modules/") || !meta.engines || !meta.engines.node) {
       continue;
     }
-    if (!engineRangeAllowsNode18(meta.engines.node)) {
+    if (!engineRangeAllowsNode22(meta.engines.node)) {
       incompatible.push(`${name}: ${meta.engines.node}`);
     }
   }
@@ -190,7 +258,10 @@ test("github maintainer files describe the current imap email package", () => {
   }
 
   const workflow = fs.readFileSync(path.join(githubDir, "workflows", "test.yml"), "utf8");
-  assert.match(workflow, /18\.x/, "CI must test the minimum supported Node.js version");
+  assert.match(workflow, /22\.x/, "CI must test the minimum supported Node.js version");
+  assert.doesNotMatch(workflow, /18\.x/, "CI must not test unsupported Node.js 18");
+  assert.doesNotMatch(workflow, /20\.x/, "CI must not test unsupported Node.js 20");
+  assert.match(workflow, /npm ci --no-audit --no-fund/, "CI must install from the lockfile");
   assert.match(workflow, /npm test/, "CI must run the unit tests");
   assert.match(workflow, /npm run pack:check/, "CI must run the package content check");
   assert.doesNotMatch(workflow, /npm publish/, "CI must not publish the package");

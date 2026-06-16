@@ -102,10 +102,11 @@ Konfigurierbare Flags:
 
 ## Versions- und Kompatibilitätsregeln
 
-- Node.js-Mindestversion: >=18.0.0
-- Node-RED-Mindestversion: >=3.0.0
-- Neue Major-Anforderungen nur nach Begründung einführen.
-- Die Entwicklungsfassung beginnt mit Version 0.1.0.
+- Node.js-Mindestversion: >=22.0.0
+- Node-RED-Mindestversion: >=4.0.0
+- Neue Laufzeit- oder Node-RED-Anforderungen nur nach Begründung einführen.
+- Die Entwicklungsfassung begann mit Version 0.1.0.
+- Version 0.2.0 dokumentiert die Pre-1.0-Kompatibilitätsumstellung auf Node.js >=22.0.0 und Node-RED >=4.0.0.
 - Eine öffentliche Version 1.0.0 erst nach erfolgreichem lokalen Node-RED-Test und Dokumentationsprüfung vorbereiten.
 
 ## package.json-Regeln

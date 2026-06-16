@@ -7,6 +7,5 @@ npm-debug.log*
 coverage/
 .nyc_output/
 
-# This library intentionally does not commit lockfiles; CI installs from package.json.
-package-lock.json
+# Commit package-lock.json so CI can use npm ci and detect lockfile drift.
 npm-shrinkwrap.json

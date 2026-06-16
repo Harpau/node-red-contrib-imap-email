@@ -1,6 +1,6 @@
 # Maintainer-Briefing: @compeso/node-red-contrib-imap-email
 
-Stand: Entwicklungsfassung 0.1.0
+Stand: Entwicklungsfassung 0.2.0
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -29,10 +29,11 @@ gehen. ACK-Aktionen muessen fail-closed sein.
 ```text
 npm-Paket:      @compeso/node-red-contrib-imap-email
 Repository:     Harpau/node-red-contrib-imap-email
-Node.js:        >=18.0.0
-Node-RED:       >=3.0.0
+Node.js:        >=22.0.0
+Node-RED:       >=4.0.0
 Lizenz:         MIT
 Startversion:   0.1.0
+Aktuelle Linie: 0.2.0 Pre-1.0-Kompatibilitaetsumstellung
 ```
 
 Keine Veroeffentlichung auf npm oder flows.nodered.org ohne ausdrueckliche
@@ -126,7 +127,7 @@ Sicherheitsregeln:
 6. Unsichere IMAP-Fallbacks werden abgelehnt.
 7. Kein persistenter lokaler Status als Pflichtbestandteil.
 8. Keine Secrets oder sensiblen Mail-Inhalte loggen.
-9. Node.js 18 bleibt installierbar, bis eine Major-Entscheidung getroffen wird.
+9. Node.js `>=22.0.0` und Node-RED `>=4.0.0` bleiben installierbar.
 10. README, Hilfetexte, Beispiele und Tests bleiben konsistent.
 
 ## 6. Lokale Validierung
@@ -135,6 +136,7 @@ Vor groesseren Abschluessen:
 
 ```bash
 npm install
+npm audit --audit-level=moderate
 npm test
 npm run pack:check
 ```
@@ -148,11 +150,13 @@ rg "alte Paket- oder Node-Namen" .github README.md docs nodes test
 
 ## 7. Release-Hinweise
 
-Die Entwicklungsfassung startet bei `0.1.0`. Eine oeffentliche `1.0.0` sollte
+Die Entwicklungsfassung startete bei `0.1.0`. Die Linie `0.2.0` dokumentiert
+einen Pre-1.0-Breaking-Change fuer Node.js `>=22.0.0` und Node-RED
+`>=4.0.0`. Eine oeffentliche `1.0.0` sollte
 erst vorbereitet werden, wenn mindestens diese Punkte erledigt sind:
 
 - lokaler Node-RED-Test mit realem Testpostfach
 - Installationspruefung aus Tarball oder GitHub
 - README, Beispiele, Hilfetexte und Release-Doku final konsistent
-- CI gruen fuer Node.js 18 und aktuelle LTS-Versionen
+- CI gruen fuer Node.js 22 und aktuelle Node.js-Versionen
 - keine privaten Daten in Beispielen, Tests oder Dokumentation

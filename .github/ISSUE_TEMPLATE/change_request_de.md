@@ -83,7 +83,7 @@ Fehlermeldung / Debug-Ausgabe ohne Secrets:
 - [ ] At-least-once-Semantik bleibt erhalten.
 - [ ] Erfolgreiche ACKs entstehen nur nach bestaetigter IMAP-Aktion.
 - [ ] Keine Credentials, Tokens, Raw-Mails oder Attachments im Log.
-- [ ] Node.js `>=18.0.0` bleibt unterstuetzt.
+- [ ] Node.js `>=22.0.0` und Node-RED `>=4.0.0` bleiben unterstuetzt.
 - [ ] README aktualisiert, falls nutzer-sichtbar.
 - [ ] Node-RED-Hilfetexte aktualisiert, falls nutzer-sichtbar.
 - [ ] Beispiel-Flow aktualisiert, falls relevant.
