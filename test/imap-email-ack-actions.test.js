@@ -989,7 +989,7 @@ test("rejects unsafe delete and move capability fallbacks before acting", async 
   assert.deepEqual(calls, []);
 });
 
-test("executes copy with automatic target mailbox creation and source flag updates", async () => {
+test("executes copy with automatic target mailbox creation before source flag updates", async () => {
   const { executeAckActionRange, normalizeAckAction } = loadAckActions();
   const calls = [];
   const plan = normalizeAckAction({
@@ -1020,10 +1020,117 @@ test("executes copy with automatic target mailbox creation and source flag updat
 
   assert.deepEqual(calls, [
     ["mailboxCreate", "Archive/Copied"],
+    ["messageCopy", "123", "Archive/Copied", { uid: true }],
     ["messageFlagsAdd", "123", ["\\Seen"], { uid: true }],
-    ["messageFlagsRemove", "123", ["$Todo"], { uid: true }],
-    ["messageCopy", "123", "Archive/Copied", { uid: true }]
+    ["messageFlagsRemove", "123", ["$Todo"], { uid: true }]
   ]);
+});
+
+test("does not apply copy source flags when copy fails first", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const cases = [
+    ["throws", /copy failed/, async () => { throw new Error("copy failed"); }],
+    ["false", /ACK copy failed/, async () => false],
+    ["undefined", /ACK copy failed/, async () => undefined]
+  ];
+
+  for (const [label, expectedError, messageCopy] of cases) {
+    const calls = [];
+    const plan = normalizeAckAction({
+      action: "copy",
+      targetMailbox: "Archive/Copied",
+      seenAction: "set",
+      flagRemove: "$Todo"
+    });
+    const client = {
+      async mailboxCreate(path) {
+        calls.push(["mailboxCreate", path]);
+      },
+      async messageCopy(range, target, options) {
+        calls.push(["messageCopy", range, target, options]);
+        return messageCopy();
+      },
+      async messageFlagsAdd(range, flags, options) {
+        calls.push(["messageFlagsAdd", range, flags, options]);
+        return true;
+      },
+      async messageFlagsRemove(range, flags, options) {
+        calls.push(["messageFlagsRemove", range, flags, options]);
+        return true;
+      }
+    };
+
+    await assert.rejects(
+      () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
+      (err) => {
+        assert.match(err.message, expectedError, label);
+        assert.equal(err.partial, undefined, label);
+        return true;
+      }
+    );
+    assert.deepEqual(calls, [
+      ["mailboxCreate", "Archive/Copied"],
+      ["messageCopy", "123", "Archive/Copied", { uid: true }]
+    ], label);
+  }
+});
+
+test("marks copy source flag failures after successful copy as partial", async () => {
+  const { executeAckActionRange, normalizeAckAction } = loadAckActions();
+  const cases = [
+    ["flag add", {
+      flags: { seenAction: "set" },
+      expectedError: "flag add failed",
+      async messageFlagsAdd() {
+        throw new Error("flag add failed");
+      }
+    }],
+    ["flag remove", {
+      flags: { seenAction: "set", flaggedAction: "clear" },
+      expectedError: "flag remove failed",
+      async messageFlagsAdd() {
+        return true;
+      },
+      async messageFlagsRemove() {
+        throw new Error("flag remove failed");
+      }
+    }]
+  ];
+
+  for (const [label, testCase] of cases) {
+    const plan = normalizeAckAction({
+      action: "copy",
+      targetMailbox: "Archive/Copied",
+      ...testCase.flags
+    });
+    const client = {
+      async mailboxCreate() {},
+      async messageCopy() {
+        return { destination: "Archive/Copied" };
+      },
+      async messageFlagsAdd(range, flags, options) {
+        if (testCase.messageFlagsAdd) {
+          return testCase.messageFlagsAdd(range, flags, options);
+        }
+        return true;
+      },
+      async messageFlagsRemove(range, flags, options) {
+        if (testCase.messageFlagsRemove) {
+          return testCase.messageFlagsRemove(range, flags, options);
+        }
+        return true;
+      }
+    };
+
+    await assert.rejects(
+      () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
+      (err) => {
+        assert.equal(err.message, testCase.expectedError, label);
+        assert.equal(err.partial, true, label);
+        return true;
+      }
+    );
+  }
 });
 
 test("rejects false and undefined IMAP action results", async () => {
@@ -1101,15 +1208,27 @@ test("marks false and undefined results after flag changes as partial", async ()
       async messageFlagsAdd() { return true; },
       async messageMove() {}
     }],
-    ["copy false", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set" }), {
+    ["copy flag add false after copy", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set" }), {
       async mailboxCreate() {},
-      async messageFlagsAdd() { return true; },
-      async messageCopy() { return false; }
+      async messageCopy() { return true; },
+      async messageFlagsAdd() { return false; }
     }],
-    ["copy undefined", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set" }), {
+    ["copy flag add undefined after copy", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set" }), {
       async mailboxCreate() {},
+      async messageCopy() { return true; },
+      async messageFlagsAdd() {}
+    }],
+    ["copy flag remove false after copy", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set", flaggedAction: "clear" }), {
+      async mailboxCreate() {},
+      async messageCopy() { return true; },
       async messageFlagsAdd() { return true; },
-      async messageCopy() {}
+      async messageFlagsRemove() { return false; }
+    }],
+    ["copy flag remove undefined after copy", normalizeAckAction({ action: "copy", targetMailbox: "Archive", seenAction: "set", flaggedAction: "clear" }), {
+      async mailboxCreate() {},
+      async messageCopy() { return true; },
+      async messageFlagsAdd() { return true; },
+      async messageFlagsRemove() {}
     }]
   ];
 
@@ -1279,8 +1398,8 @@ test("ack runtime completes copy actions and removes inflight", async () => {
 
   assert.deepEqual(clientCalls, [
     ["mailboxCreate", "Archive/Copied"],
-    ["messageFlagsAdd", "1", ["\\Seen"], { uid: true }],
-    ["messageCopy", "1", "Archive/Copied", { uid: true }]
+    ["messageCopy", "1", "Archive/Copied", { uid: true }],
+    ["messageFlagsAdd", "1", ["\\Seen"], { uid: true }]
   ]);
   assert.equal(itemOutputs.length, 1);
   assert.equal(itemOutputs[0][0].imapAck.ok, true);
@@ -1347,8 +1466,8 @@ test("ack runtime completes message-driven copy actions and removes inflight", a
 
   assert.deepEqual(clientCalls, [
     ["mailboxCreate", "Archive/Copied"],
-    ["messageFlagsAdd", "1", ["\\Seen"], { uid: true }],
-    ["messageCopy", "1", "Archive/Copied", { uid: true }]
+    ["messageCopy", "1", "Archive/Copied", { uid: true }],
+    ["messageFlagsAdd", "1", ["\\Seen"], { uid: true }]
   ]);
   assert.equal(doneCount, 1);
   assert.equal(outputs.length, 1);
@@ -1513,6 +1632,76 @@ test("ack runtime stops remaining chunks after a partial move side effect", asyn
   assert.equal(doneCount, 4);
   assert.equal(itemOutputs.filter((output) => output[1]).length, 4);
   assert.equal(itemOutputs.every((output) => output[1].imapAck.partial === true), true);
+});
+
+test("ack runtime stops remaining chunks after a partial copy source flag side effect", async () => {
+  const key = "queue-1";
+  registry.clearQueue(key);
+  for (const uid of [1, 2, 3, 4]) {
+    registry.markInflight(key, sampleToken(uid), { now: 1000 });
+  }
+
+  const clientCalls = [];
+  const { node, warnings, errors } = createAckNode({
+    actionMode: "copy",
+    targetMailbox: "Archive/Copied",
+    seenAction: "set",
+    batchSize: 4,
+    maxUidPerCommand: 2,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    usable: true,
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async mailboxCreate(path) {
+      clientCalls.push(["mailboxCreate", path]);
+    },
+    async messageCopy(range, target, options) {
+      clientCalls.push(["messageCopy", range, target, options]);
+      return { destination: target };
+    },
+    async messageFlagsAdd(range, flags, options) {
+      clientCalls.push(["messageFlagsAdd", range, flags, options]);
+      throw new Error("flag failed after copy");
+    },
+    async logout() {}
+  }));
+
+  const itemOutputs = [];
+  let doneCount = 0;
+  for (const uid of [1, 2, 3, 4]) {
+    node.pending.push({
+      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
+      send: sendWithCapture(itemOutputs),
+      done: () => {
+        doneCount += 1;
+      },
+      token: sampleToken(uid),
+      plan: node.actionPlan,
+      enqueuedAt: Date.now()
+    });
+  }
+
+  await node.flush();
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.deepEqual(clientCalls, [
+    ["mailboxCreate", "Archive/Copied"],
+    ["messageCopy", "1:2", "Archive/Copied", { uid: true }],
+    ["messageFlagsAdd", "1:2", ["\\Seen"], { uid: true }]
+  ]);
+  assert.equal(warnings.length, 2);
+  assert.equal(doneCount, 4);
+  assert.equal(itemOutputs.filter((output) => output[1]).length, 4);
+  assert.equal(itemOutputs.every((output) => output[1].imapAck.partial === true), true);
+  for (const uid of [1, 2, 3, 4]) {
+    assert.equal(registry.isActiveInflight(key, "uidv-1", uid, 10000, 2000), true);
+  }
 });
 
 test("ack runtime ignores transient logout failures after successful actions", async () => {

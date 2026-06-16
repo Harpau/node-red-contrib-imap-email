@@ -306,8 +306,13 @@ set by msg.imap.ackAction message
 - Kopiert die Mail per UID in einen Zielordner.
 - Der Zielordner wird automatisch angelegt, falls der Server ihn als fehlend
   meldet.
-- Kann vor dem Kopieren Flags auf der Quellmail setzen oder entfernen.
+- Fuehrt optionale Flag-Aenderungen erst nach erfolgreichem Copy auf der
+  Quellmail aus.
+- ACK-Flag-Aenderungen adressieren nicht die Zielkopie. Bereits vorhandene
+  Quellflags koennen serverseitig Bestandteil der Kopie sein.
 - Behaelt die Quellmail im Postfach.
+- Wenn Copy erfolgreich war und danach eine Quell-Flag-Aenderung fehlschlaegt,
+  ist der Fehler partiell; ein Retry kann eine weitere Zielkopie erzeugen.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
 
 `flag`
@@ -393,12 +398,13 @@ Bei erfolgreicher Tokenvalidierung und Mailbox-Sperre:
 1. UIDVALIDITY pruefen.
 2. UID-Mengen in handhabbare Chunks aufteilen.
 3. Bei `move` und `copy`: Zielordner bei Bedarf anlegen.
-4. Bei `flag`, `move` und `copy`: Flags fuer den Chunk setzen oder entfernen.
+4. Bei `flag` und `move`: Flags fuer den Chunk setzen oder entfernen.
 5. Bei `move`: den Chunk verschieben.
 6. Bei `copy`: den Chunk kopieren.
-7. Bei `delete`: den Chunk loeschen.
-8. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
-9. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
+7. Bei `copy`: optionale Flags auf der Quellmail setzen oder entfernen.
+8. Bei `delete`: den Chunk loeschen.
+9. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
+10. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
 
 Chunks bleiben die Performance-Grenze. Innerhalb eines fehlgeschlagenen Chunks
 wird nicht auf einzelne UIDs heruntergebrochen.
@@ -615,8 +621,11 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
   aufgeteilt.
 - `delete` wird nur mit Server-Capability `UIDPLUS` ausgefuehrt.
 - `move` wird nur mit nativer Server-Capability `MOVE` ausgefuehrt.
-- `copy` behaelt die Quellmail und fuehrt optionale Flag-Aenderungen vor dem
-  Kopieren aus.
+- `copy` behaelt die Quellmail, kopiert zuerst in die Zielmailbox und fuehrt
+  optionale Flag-Aenderungen danach nur auf der Quellmail aus.
+- Wenn `copy` erfolgreich war und eine anschliessende Quell-Flag-Aenderung
+  fehlschlaegt, wird der Fehler als partiell markiert; Inflight bleibt fuer
+  Retry erhalten.
 - Rueckgaben `false` oder `undefined` von `messageFlagsAdd`,
   `messageFlagsRemove`, `messageMove`, `messageCopy` und `messageDelete`
   zaehlen als fehlgeschlagene IMAP-Aktion.
@@ -768,8 +777,10 @@ imap-email ack:
   `messageMove` in dieser Reihenfolge.
 - `move` ohne native `MOVE`-Capability ruft `messageMove` nicht auf, geht auf
   Output 2 und behaelt Inflight.
-- `copy` ruft Zielordner-Erstellung, optionale Flag-Aenderungen auf der
-  Quellmail und `messageCopy` in dieser Reihenfolge.
+- `copy` ruft Zielordner-Erstellung, `messageCopy` und optionale
+  Flag-Aenderungen auf der Quellmail in dieser Reihenfolge.
+- `copy`-Fehler rufen keine Quell-Flag-Aenderungen auf; Quell-Flag-Fehler nach
+  erfolgreichem `messageCopy` werden als partiell markiert.
 - `flag` ruft `messageFlagsAdd` und `messageFlagsRemove`.
 - `delete` kann nicht mit Flag-Aenderungen kombiniert werden.
 - `copy` verlangt eine Zielmailbox und kann mit Flag-Aenderungen kombiniert

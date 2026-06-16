@@ -63,7 +63,7 @@ Only wire messages to `imap-email ack` after all processing that must succeed ha
 ```text
 delete       delete the mail by UID and complete it; requires IMAP UIDPLUS
 move         optionally update flags, move the mail and complete it; requires native IMAP MOVE
-copy         optionally update source flags, copy the mail to a target folder and complete it
+copy         copy the mail to a target folder, then optionally update source flags
 flag         set or clear flags, keep the mail and complete it
 set by msg.imap.ackAction
              read action, target folder and flags from the message
@@ -71,10 +71,13 @@ set by msg.imap.ackAction
 
 The ack node can set or clear `\Seen`, `\Answered`, `\Flagged`, other IMAP
 system flags such as `\Draft`, and custom keywords such as `$Processed` in
-`flag`, `move` and `copy` mode. With `move` and `copy`, flags are updated on the
-source message before it is moved or copied. Use `delete` to delete mail;
-setting `\Deleted` as a raw flag is an advanced flag operation and does not
-replace the delete action.
+`flag`, `move` and `copy` mode. With `move`, flags are updated on the source
+message before it is moved. With `copy`, the message is copied first and the
+configured ACK flag changes are then applied only to the source message. They
+are not applied to the target copy, though the IMAP server may copy flags that
+already existed on the source message. Use `delete` to delete mail; setting
+`\Deleted` as a raw flag is an advanced flag operation and does not replace the
+delete action.
 
 ## Large Mailboxes
 
@@ -180,8 +183,9 @@ retry.
 
 To avoid unsafe IMAP fallback behavior, `delete` requires server support for
 `UIDPLUS` and `move` requires native `MOVE`. Without those capabilities the ACK
-action fails closed on output 2. `copy` keeps the source message and applies any
-configured flag changes before copying it to the target mailbox.
+action fails closed on output 2. `copy` keeps the source message, copies it to
+the target mailbox first, and then applies any configured flag changes to the
+source message only.
 
 ACK tokens are scoped to the configured IMAP account and must contain the
 account, mailbox, UID, UIDVALIDITY and ACK scope fields emitted by
@@ -210,8 +214,10 @@ msg.imap.ackAction = {
 Successful completions add `msg.imapAck` with fields such as `action`,
 `disposition`, `mailbox`, `targetMailbox`, `uid`, `uidValidity`, `flags`,
 `range` and `completed`. Failed completions may include
-`msg.imapAck.partial = true` when flag changes were already applied before a
-later IMAP command failed.
+`msg.imapAck.partial = true` when a state-changing IMAP step already succeeded
+before a later step failed. For `copy`, a successful copy followed by a failed
+source flag update is partial; because Inflight is kept for retry, a retry may
+create another copy in the target mailbox.
 
 ## Current Limits
 

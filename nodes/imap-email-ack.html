@@ -153,7 +153,7 @@
     <dt>Target folder <span class="property-type">string</span></dt>
     <dd>Destination mailbox used by <code>move</code> and <code>copy</code>. The target folder is created automatically if needed.</dd>
     <dt>Seen / Answered / Flagged <span class="property-type">no change | set | clear</span></dt>
-    <dd>Optional IMAP flag changes for <code>flag</code>, <code>move</code> and <code>copy</code>. With <code>move</code> and <code>copy</code>, flags are changed on the source message before the message is moved or copied.</dd>
+    <dd>Optional IMAP flag changes for <code>flag</code>, <code>move</code> and <code>copy</code>. With <code>move</code>, flags are changed on the source message before the move. With <code>copy</code>, the copy is created first and the configured flag changes are then applied only to the source message.</dd>
     <dt>Flags to set / Flags to clear <span class="property-type">string</span></dt>
     <dd>Optional comma- or whitespace-separated IMAP system flags and custom keywords for <code>flag</code>, <code>move</code> and <code>copy</code>, for example <code>\Draft</code> or <code>$Processed</code>. Use <code>delete</code> to delete mail; setting <code>\Deleted</code> as a raw flag is an advanced flag operation and does not replace the delete action.</dd>
     <dt>Batch size <span class="property-type">number</span></dt>
@@ -170,11 +170,11 @@
 
   <h3>ACK result</h3>
   <p>Successful messages receive <code>msg.imapAck</code> with fields such as <code>ok</code>, <code>action</code>, <code>disposition</code>, <code>mailbox</code>, <code>targetMailbox</code>, <code>uid</code>, <code>uidValidity</code>, <code>flags</code>, <code>range</code> and <code>completed</code>.</p>
-  <p>Failed completions receive <code>msg.imapAck.ok = false</code> and <code>msg.imapAck.error</code>. If a <code>move</code>, <code>copy</code> or flag update partially changed server state before a later IMAP command failed, <code>msg.imapAck.partial = true</code>.</p>
+  <p>Failed completions receive <code>msg.imapAck.ok = false</code> and <code>msg.imapAck.error</code>. If a <code>move</code>, <code>copy</code> or flag update partially changed server state before a later IMAP command failed, <code>msg.imapAck.partial = true</code>. For <code>copy</code>, this includes a successful copy followed by a failed source flag update.</p>
 
   <h3>At-least-once behavior</h3>
-  <p>Successful <code>delete</code>, <code>move</code>, <code>copy</code> and <code>flag</code> actions complete the message and remove the inflight entry. Failed actions keep the inflight entry, so the message can be retried later by <b>imap email in</b>. Partial failures may leave flag changes on the server while still keeping the inflight entry for retry.</p>
-  <p><code>delete</code> requires IMAP <code>UIDPLUS</code> and <code>move</code> requires native IMAP <code>MOVE</code>. Without these capabilities the action fails closed to avoid unsafe expunge fallbacks. <code>copy</code> keeps the source message and applies configured flags before copying.</p>
+  <p>Successful <code>delete</code>, <code>move</code>, <code>copy</code> and <code>flag</code> actions complete the message and remove the inflight entry. Failed actions keep the inflight entry, so the message can be retried later by <b>imap email in</b>. Partial failures may leave flag changes or copied messages on the server while still keeping the inflight entry for retry.</p>
+  <p><code>delete</code> requires IMAP <code>UIDPLUS</code> and <code>move</code> requires native IMAP <code>MOVE</code>. Without these capabilities the action fails closed to avoid unsafe expunge fallbacks. <code>copy</code> keeps the source message, copies it to the target mailbox first, and then applies configured flags only to the source message. A retry after a partial copy failure may create another target copy.</p>
 
   <h3>Stats</h3>
   <p>Stats include <code>requested</code>, <code>groups</code>, <code>actions</code>, <code>chunks</code>, <code>okCount</code>, <code>errorCount</code>, <code>pendingAfter</code>, <code>ranges</code> and timings such as <code>connectMs</code>, <code>lockMs</code> and <code>totalMs</code>.</p>

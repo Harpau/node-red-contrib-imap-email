@@ -231,6 +231,25 @@ test("ack documentation describes copy and fail-closed capability rules", () => 
   assert.match(docs["nodes/imap-email-ack.html"], /<option value="copy">copy<\/option>/);
   assert.match(docs["README.md"], /action fails closed on output 2/);
   assert.match(docs["docs/design-decisions-imap-email.md"], /messageCopy/);
+  assert.match(
+    docs["README.md"],
+    /copy[\s\S]+copied first[\s\S]+applied only to the source message/i
+  );
+  assert.match(
+    docs["nodes/imap-email-ack.html"],
+    /copy[\s\S]+created first[\s\S]+applied only to the source message/i
+  );
+  assert.match(
+    docs["docs/design-decisions-imap-email.md"],
+    /messageCopy[\s\S]+Flag-Aenderungen auf der Quellmail in dieser Reihenfolge/
+  );
+
+  for (const [file, content] of Object.entries(docs)) {
+    assert.doesNotMatch(content, /flags are updated on the\s+source message before it is moved or copied/i, `${file} documents stale copy flag order`);
+    assert.doesNotMatch(content, /applies (?:any )?configured flag changes before copying/i, `${file} documents stale copy flag order`);
+    assert.doesNotMatch(content, /vor dem Kopieren/i, `${file} documents stale copy flag order`);
+    assert.doesNotMatch(content, /Flag-Aenderungen vor dem\s+Kopieren/i, `${file} documents stale copy flag order`);
+  }
 });
 
 test("github maintainer files describe the current imap email package", () => {

@@ -11,6 +11,8 @@ All notable changes to `@compeso/node-red-contrib-imap-email` are documented her
 - Dropped Node.js 18, Node.js 20 and Node-RED 3 compatibility in this
   pre-1.0 development line. Node.js 18 reached end-of-life on 2025-04-30 and
   Node.js 20 reached end-of-life on 2026-04-30.
+- Changed the `copy` ACK action in the pre-1.0 development line to copy the
+  source message before applying configured flag changes to the source message.
 - Updated `mailparser` to 3.9.10, which uses `nodemailer` 9.0.0 and removes
   the transitive Nodemailer audit path for `nodemailer <=8.0.8`.
 
