@@ -1,6 +1,6 @@
 {
   "name": "@compeso/node-red-contrib-imap-email",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Node-RED IMAP email nodes with externally triggered bounded cursor-window fetch, at-least-once ACK actions, diagnostics, timings, and comprehensive help documentation.",
   "license": "MIT",
   "author": "compeso",

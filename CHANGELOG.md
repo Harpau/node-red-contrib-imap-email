@@ -2,6 +2,17 @@
 
 All notable changes to `@compeso/node-red-contrib-imap-email` are documented here.
 
+## 1.0.0 - Stable public release
+
+### Added
+
+- Declared the currently tested Node-RED IMAP email nodes as the first stable public release.
+- Kept the Node.js `>=22.0.0` and Node-RED `>=4.0.0` compatibility baseline from `0.2.0`.
+
+### Notes
+
+- This release does not change runtime behavior from the tested development line.
+
 ## 0.2.0 - Development compatibility update
 
 ### Changed
