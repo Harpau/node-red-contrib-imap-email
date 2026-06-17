@@ -416,10 +416,15 @@ wird nicht auf einzelne UIDs heruntergebrochen.
 `msg.imap.ackToken` ist der zentrale Vertrag zwischen `imap-email in` und
 `imap-email ack`.
 
-Erwartete Felder:
+Das Token ist eine opake, signierte Bearer-Capability. Flows sollen es
+unveraendert weiterreichen, aber nicht selbst bauen, veraendern, protokollieren
+oder an externe Systeme ausgeben.
+
+Aktuelle Felder:
 
 ```js
 {
+  version: 2,
   accountId: "...",
   queueKey: "...",
   host: "...",
@@ -428,13 +433,18 @@ Erwartete Felder:
   user: "...",
   mailbox: "INBOX",
   uid: 123,
-  uidValidity: "456"
+  uidValidity: "456",
+  issuedAt: 1710000000000,
+  nonce: "...",
+  signature: "..."
 }
 ```
 
 Es gibt keinen Fallback auf `msg.imap.uid`, `msg.imap.mailbox`,
 `msg.imap.uidValidity` oder alternative Scope-Aliasse. Das ACK-Token ist der
-verbindliche Vertrag.
+verbindliche Vertrag. Unsignierte Legacy-Tokens werden als Pre-1.0-
+Sicherheitsumstellung abgelehnt. `queueKey` ist ein internes Scope-Feld und
+keine stabile oeffentliche API.
 
 ### 5.2 `msg.imap.flags`
 
@@ -458,7 +468,15 @@ msg.imap.flagState = {
 `msg.imap.flags` enthaelt dabei die vollstaendige Server-Flag-Liste. Das
 Boolean-Objekt bildet nur die vom Node unterstuetzten Standardflags ab.
 
-### 5.3 `msg.imap.ackAction`
+### 5.3 `msg.email.header`
+
+`msg.email.header` enthaelt die geparsten Mail-Header als JSON-serialisierbares
+Objekt ohne `Object`-Prototyp. Nutzer sollen `Object.hasOwn(...)` statt
+`header.hasOwnProperty(...)` verwenden. Headernamen wie `__proto__`,
+`constructor` und `prototype` werden unter neutralisierten, kollisionsfreien
+Namen ausgegeben, damit downstream kein Prototype-Pollution-Risiko entsteht.
+
+### 5.4 `msg.imap.ackAction`
 
 Im Modus `set by msg.imap.ackAction` wird fest `msg.imap.ackAction` gelesen. Der
 Property-Pfad ist nicht konfigurierbar.
@@ -616,6 +634,11 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Alle Token-Scope-Felder (`accountId`, `host`, `port`, `secure`, `user` und
   `queueKey`) muessen vorhanden sein und zur konfigurierten Account-Node und zur
   Token-Mailbox passen.
+- Tokens muessen v2-signiert sein. Manipulierte, unsignierte oder nicht mehr
+  aktuelle Inflight-Generationen werden vor einer IMAP-Aktion abgelehnt.
+- Vor der IMAP-Aktion wird das Token atomar in der Runtime-Registry geclaimed.
+  Doppelte ACKs, parallele ACK-Nodes und Replay-Versuche koennen dadurch nicht
+  dieselbe Inflight-Generation mehrfach ausfuehren.
 - Nachrichten werden nach Mailbox, UIDVALIDITY und Action-Plan gruppiert.
 - Grosse UID-Mengen werden in handhabbare IMAP-Kommandos
   aufgeteilt.
@@ -629,8 +652,10 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Rueckgaben `false` oder `undefined` von `messageFlagsAdd`,
   `messageFlagsRemove`, `messageMove`, `messageCopy` und `messageDelete`
   zaehlen als fehlgeschlagene IMAP-Aktion.
-- Erfolgreiche Chunks entfernen Inflight fuer die enthaltenen Mails.
-- Fehlgeschlagene Chunks behalten Inflight fuer die enthaltenen Mails.
+- Erfolgreiche Chunks entfernen nur exakt passende Inflight-Eintraege mit
+  gleicher UID, UIDVALIDITY, Nonce, issuedAt und Signatur.
+- Fehlgeschlagene Chunks geben den Claim frei und behalten Inflight fuer die
+  enthaltenen Mails.
 
 ## 8. Fehlerverhalten
 
@@ -655,6 +680,8 @@ Fehlerfaelle:
 
 - Fehlender oder ungueltiger ACK-Token.
 - ACK-Token passt nicht zur konfigurierten Account-Node oder zum ACK-Scope.
+- ACK-Token ist nicht signiert, manipuliert, bereits geclaimed oder nicht mehr
+  die aktuelle Inflight-Generation.
 - Fehlende Zielmailbox bei `move` oder `copy`.
 - Ungueltiges Message-Action-Objekt.
 - UIDVALIDITY mismatch.

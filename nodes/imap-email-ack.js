@@ -165,9 +165,18 @@ module.exports = function registerImapEmailAck(RED) {
       return true;
     }
 
+    function releaseItemClaim(item) {
+      if (!item || !item._imapEmailAckClaimed || !item.token) {
+        return false;
+      }
+      item._imapEmailAckClaimed = false;
+      return registry.releaseAckToken(item.token.queueKey, item.token);
+    }
+
     function failItemsForClose(items, err) {
       let count = 0;
       for (const item of items) {
+        releaseItemClaim(item);
         if (!markItemSettled(item)) {
           continue;
         }
@@ -296,7 +305,6 @@ module.exports = function registerImapEmailAck(RED) {
       for (const item of items) {
         node.inflightItems.add(item);
       }
-      const groups = node.groupItems(items);
       const stats = {
         ok: true,
         type: "imap email ack stats",
@@ -304,7 +312,7 @@ module.exports = function registerImapEmailAck(RED) {
         startedAt: new Date(startedAt).toISOString(),
         finishedAt: null,
         requested: items.length,
-        groups: groups.length,
+        groups: 0,
         okCount: 0,
         errorCount: 0,
         pendingAfter: 0,
@@ -317,6 +325,72 @@ module.exports = function registerImapEmailAck(RED) {
 
       node.status({ fill: "blue", shape: "dot", text: `ACK batch ${items.length}` });
 
+      function recordAction(plan, field) {
+        const action = plan && plan.action || node.actionMode;
+        const actionCounter = stats.actions[action] || { requested: 0, ok: 0, error: 0 };
+        actionCounter[field] += 1;
+        stats.actions[action] = actionCounter;
+        return actionCounter;
+      }
+
+      function failPreflightItem(item, err) {
+        const token = item.token || {};
+        const plan = item.plan || {
+          action: node.actionMode,
+          disposition: "keep",
+          targetMailbox: "",
+          flags: { add: [], remove: [] }
+        };
+
+        if (!markItemSettled(item)) {
+          return;
+        }
+
+        item.msg.imapAck = buildImapAckError({
+          token,
+          plan,
+          mailbox: token.mailbox || "",
+          error: err
+        });
+        item.send([null, item.msg, null]);
+        if (item.done) {
+          item.done();
+        }
+
+        stats.ok = false;
+        stats.errorCount += 1;
+        recordAction(plan, "error");
+        stats.errors.push({
+          mailbox: token.mailbox || "",
+          action: plan.action,
+          disposition: plan.disposition,
+          targetMailbox: plan.targetMailbox || undefined,
+          uidValidity: token.uidValidity,
+          count: 1,
+          error: err.message
+        });
+      }
+
+      function buildClaimError() {
+        const err = new Error("ACK token is not current or is already claimed");
+        err.code = "IMAP_EMAIL_ACK_TOKEN_STALE";
+        return err;
+      }
+
+      const claimableItems = [];
+      for (const item of items) {
+        recordAction(item.plan, "requested");
+        if (item.token && registry.claimAckToken(item.token.queueKey, item.token)) {
+          item._imapEmailAckClaimed = true;
+          claimableItems.push(item);
+        } else {
+          failPreflightItem(item, buildClaimError());
+        }
+      }
+
+      const groups = node.groupItems(claimableItems);
+      stats.groups = groups.length;
+
       try {
         for (const group of groups) {
           let client;
@@ -325,7 +399,6 @@ module.exports = function registerImapEmailAck(RED) {
           const plan = group.plan;
           const mailbox = token.mailbox;
           const actionCounter = stats.actions[plan.action] || { requested: 0, ok: 0, error: 0 };
-          actionCounter.requested += group.items.length;
           stats.actions[plan.action] = actionCounter;
 
           function itemsForChunk(uidChunk) {
@@ -340,7 +413,38 @@ module.exports = function registerImapEmailAck(RED) {
               }
 
               const ackToken = item.token;
-              registry.removeInflight(ackToken.queueKey, ackToken.uidValidity, ackToken.uid);
+              item._imapEmailAckClaimed = false;
+              if (!registry.completeAckToken(ackToken.queueKey, ackToken)) {
+                const err = new Error("ACK token is no longer current after IMAP action");
+                err.code = "IMAP_EMAIL_ACK_TOKEN_STALE";
+                err.partial = true;
+                item.msg.imapAck = buildImapAckError({
+                  token: ackToken,
+                  plan,
+                  mailbox,
+                  range,
+                  error: err
+                });
+                item.send([null, item.msg, null]);
+                if (item.done) {
+                  item.done();
+                }
+                stats.ok = false;
+                stats.errorCount += 1;
+                actionCounter.error += 1;
+                stats.errors.push({
+                  mailbox,
+                  action: plan.action,
+                  disposition: plan.disposition,
+                  targetMailbox: plan.targetMailbox || undefined,
+                  uidValidity: token.uidValidity,
+                  range: range || undefined,
+                  count: 1,
+                  partial: true,
+                  error: err.message
+                });
+                continue;
+              }
 
               item.msg.imapAck = buildImapAckResult({
                 token: ackToken,
@@ -361,6 +465,7 @@ module.exports = function registerImapEmailAck(RED) {
           function failItems(chunkItems, range, err) {
             let failedCount = 0;
             for (const item of chunkItems) {
+              releaseItemClaim(item);
               if (!markItemSettled(item)) {
                 continue;
               }

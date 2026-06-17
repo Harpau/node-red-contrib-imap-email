@@ -131,8 +131,8 @@
 
   <h3>Inputs</h3>
   <dl class="message-properties">
-    <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
-    <dd>ACK token emitted by <b>imap email in</b>. The token must include account, mailbox, UID, UIDVALIDITY and ACK scope fields.</dd>
+	    <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
+	    <dd>Opaque signed bearer token emitted by <b>imap email in</b>. Pass it through unchanged; unsigned, modified, replayed or stale tokens are rejected before any IMAP action.</dd>
     <dt>msg.imap.ackAction <span class="property-type">object</span></dt>
     <dd>When Mode is <code>set by msg.imap.ackAction</code>, this fixed message property contains action, target folder and flag actions.</dd>
   </dl>
@@ -172,9 +172,10 @@
   <p>Successful messages receive <code>msg.imapAck</code> with fields such as <code>ok</code>, <code>action</code>, <code>disposition</code>, <code>mailbox</code>, <code>targetMailbox</code>, <code>uid</code>, <code>uidValidity</code>, <code>flags</code>, <code>range</code> and <code>completed</code>.</p>
   <p>Failed completions receive <code>msg.imapAck.ok = false</code> and <code>msg.imapAck.error</code>. If a <code>move</code>, <code>copy</code> or flag update partially changed server state before a later IMAP command failed, <code>msg.imapAck.partial = true</code>. For <code>copy</code>, this includes a successful copy followed by a failed source flag update.</p>
 
-  <h3>At-least-once behavior</h3>
-  <p>Successful <code>delete</code>, <code>move</code>, <code>copy</code> and <code>flag</code> actions complete the message and remove the inflight entry. Failed actions keep the inflight entry, so the message can be retried later by <b>imap email in</b>. Partial failures may leave flag changes or copied messages on the server while still keeping the inflight entry for retry.</p>
-  <p><code>delete</code> requires IMAP <code>UIDPLUS</code> and <code>move</code> requires native IMAP <code>MOVE</code>. Without these capabilities the action fails closed to avoid unsafe expunge fallbacks. <code>copy</code> keeps the source message, copies it to the target mailbox first, and then applies configured flags only to the source message. A retry after a partial copy failure may create another target copy.</p>
+	  <h3>At-least-once behavior</h3>
+	  <p>Successful <code>delete</code>, <code>move</code>, <code>copy</code> and <code>flag</code> actions complete the message and remove the inflight entry. Failed actions keep the inflight entry, so the message can be retried later by <b>imap email in</b>. Partial failures may leave flag changes or copied messages on the server while still keeping the inflight entry for retry.</p>
+	  <p>ACK tokens are process-local bearer capabilities for the current in-memory inflight generation. Do not log them, expose them externally, or construct them manually.</p>
+	  <p><code>delete</code> requires IMAP <code>UIDPLUS</code> and <code>move</code> requires native IMAP <code>MOVE</code>. Without these capabilities the action fails closed to avoid unsafe expunge fallbacks. <code>copy</code> keeps the source message, copies it to the target mailbox first, and then applies configured flags only to the source message. A retry after a partial copy failure may create another target copy.</p>
 
   <h3>Stats</h3>
   <p>Stats include <code>requested</code>, <code>groups</code>, <code>actions</code>, <code>chunks</code>, <code>okCount</code>, <code>errorCount</code>, <code>pendingAfter</code>, <code>ranges</code> and timings such as <code>connectMs</code>, <code>lockMs</code> and <code>totalMs</code>.</p>

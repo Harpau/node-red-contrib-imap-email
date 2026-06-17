@@ -219,12 +219,12 @@
     <dd>Mail subject inside the email object.</dd>
     <dt>msg.email.text / msg.email.html <span class="property-type">string</span></dt>
     <dd>Parsed text and HTML body.</dd>
-    <dt>msg.email.header <span class="property-type">object</span></dt>
-    <dd>Parsed mail headers.</dd>
+	    <dt>msg.email.header <span class="property-type">object</span></dt>
+	    <dd>Parsed mail headers as a JSON-serializable object without an Object prototype. Use <code>Object.hasOwn(...)</code> for presence checks.</dd>
     <dt>msg.email.attachments <span class="property-type">array</span></dt>
     <dd>Only present when Attachments is enabled.</dd>
-    <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
-    <dd>Token required by <b>imap email ack</b>.</dd>
+	    <dt>msg.imap.ackToken <span class="property-type">object</span></dt>
+	    <dd>Opaque signed bearer token required by <b>imap email ack</b>. Pass it through unchanged; do not build, edit, log, or expose it externally.</dd>
     <dt>msg.imap.flags <span class="property-type">array</span></dt>
     <dd>IMAP flags returned by the server, for example <code>["\\Seen", "\\Flagged"]</code>.</dd>
     <dt>msg.imap.flagState <span class="property-type">object</span></dt>

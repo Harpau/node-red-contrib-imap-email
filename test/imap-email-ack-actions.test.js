@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { extractAckToken } = require("../lib/ack-token");
+const { buildAckToken, extractAckToken } = require("../lib/ack-token");
 const registry = require("../lib/runtime-registry");
 const registerImapEmailAck = require("../nodes/imap-email-ack");
 
@@ -10,8 +10,10 @@ function loadAckActions() {
   return require("../lib/imap-ack-actions");
 }
 
-function sampleToken(uid = 123) {
-  return {
+const sampleTokenCache = new Map();
+
+function buildSampleToken(uid = 123, overrides = {}) {
+  return buildAckToken({
     accountId: "account-1",
     queueKey: "queue-1",
     host: "imap.example.test",
@@ -20,8 +22,17 @@ function sampleToken(uid = 123) {
     user: "user@example.test",
     mailbox: "INBOX",
     uid,
-    uidValidity: "uidv-1"
-  };
+    uidValidity: "uidv-1",
+    ...overrides
+  });
+}
+
+function sampleToken(uid = 123, overrides = {}) {
+  const key = JSON.stringify({ uid, overrides });
+  if (!sampleTokenCache.has(key)) {
+    sampleTokenCache.set(key, buildSampleToken(uid, overrides));
+  }
+  return { ...sampleTokenCache.get(key) };
 }
 
 function expectedQueueKey(mailbox = "INBOX") {
@@ -34,15 +45,21 @@ function expectedQueueKey(mailbox = "INBOX") {
 }
 
 function inputToken(uid = 123, overrides = {}) {
-  const token = {
-    ...sampleToken(uid),
-    queueKey: expectedQueueKey("INBOX"),
+  const tokenConfig = {
+    accountId: "account-1",
+    host: "imap.example.test",
+    port: 993,
+    secure: true,
+    user: "user@example.test",
+    mailbox: "INBOX",
+    uid,
+    uidValidity: "uidv-1",
     ...overrides
   };
   if (!Object.prototype.hasOwnProperty.call(overrides, "queueKey")) {
-    token.queueKey = expectedQueueKey(token.mailbox);
+    tokenConfig.queueKey = expectedQueueKey(tokenConfig.mailbox);
   }
-  return token;
+  return buildAckToken(tokenConfig);
 }
 
 function createConnectionError(message, code) {
@@ -125,20 +142,40 @@ function invokeInput(handlers, msg) {
   return { outputs, doneCount };
 }
 
+function enqueueInput(handlers, msg) {
+  const outputs = [];
+  let doneCount = 0;
+  handlers.input(msg, (output) => outputs.push(output), () => {
+    doneCount += 1;
+  });
+  return {
+    outputs,
+    get doneCount() {
+      return doneCount;
+    }
+  };
+}
+
+function makePendingAckItem(node, uid, itemOutputs, onDone) {
+  const token = sampleToken(uid);
+  registry.markInflight(token.queueKey, token, { now: 1000 });
+  return {
+    msg: { payload: uid, imap: { ackToken: token } },
+    send: sendWithCapture(itemOutputs),
+    done: () => {
+      if (onDone) {
+        onDone(uid);
+      }
+    },
+    token,
+    plan: node.actionPlan,
+    enqueuedAt: Date.now()
+  };
+}
+
 function pushPendingAckItems(node, uids, itemOutputs, onDone) {
   for (const uid of uids) {
-    node.pending.push({
-      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
-      send: sendWithCapture(itemOutputs),
-      done: () => {
-        if (onDone) {
-          onDone(uid);
-        }
-      },
-      token: sampleToken(uid),
-      plan: node.actionPlan,
-      enqueuedAt: Date.now()
-    });
+    node.pending.push(makePendingAckItem(node, uid, itemOutputs, onDone));
   }
 }
 
@@ -463,7 +500,7 @@ test("ack runtime rejects legacy or incomplete ACK tokens before queueing", () =
           mailbox: "Archive"
         }
       }
-    }, /ackToken\.accountId.*fehlt/i],
+    }, /ackToken\.version.*ungueltig/i],
     ["inflightKey alias", {
       imap: {
         ackToken: {
@@ -535,18 +572,18 @@ test("ack runtime accepts complete scoped ACK tokens", () => {
 
 test("ack runtime validates explicit token account scope before queueing", () => {
   const cases = [
-    ["accountId", "account-2", /accountId/i],
-    ["host", "imap.other.test", /host/i],
-    ["host", "IMAP.EXAMPLE.TEST", null],
-    ["port", "994", /port/i],
-    ["port", "993.9", /port.*(invalid|ungueltig)/i],
-    ["secure", "false", /secure/i],
-    ["secure", "typo", /secure.*(invalid|ungueltig)/i],
-    ["user", "User@example.test", /user/i],
-    ["queueKey", "other-queue", /queueKey/i]
+    ["accountId", () => inputToken(1, { accountId: "account-2" }), /accountId/i],
+    ["host", () => inputToken(1, { host: "imap.other.test" }), /host/i],
+    ["host", () => inputToken(1, { host: "IMAP.EXAMPLE.TEST" }), null],
+    ["port", () => inputToken(1, { port: 994 }), /port/i],
+    ["port", () => ({ ...inputToken(1), port: "993.9" }), /port.*(invalid|ungueltig)/i],
+    ["secure", () => inputToken(1, { secure: false }), /secure/i],
+    ["secure", () => ({ ...inputToken(1), secure: "typo" }), /secure.*(invalid|ungueltig)/i],
+    ["user", () => inputToken(1, { user: "User@example.test" }), /user/i],
+    ["queueKey", () => inputToken(1, { queueKey: "other-queue" }), /queueKey/i]
   ];
 
-  for (const [field, value, expectedError] of cases) {
+  for (const [field, createToken, expectedError] of cases) {
     let clientCalls = 0;
     const { node, handlers } = createAckNode({
       actionMode: "delete",
@@ -556,8 +593,7 @@ test("ack runtime validates explicit token account scope before queueing", () =>
       clientCalls += 1;
       throw new Error("client should not be created");
     });
-    const token = inputToken(1);
-    token[field] = value;
+    const token = createToken();
 
     const { outputs, doneCount } = invokeInput(handlers, {
       payload: field,
@@ -636,6 +672,275 @@ test("ack runtime validates queue keys against the token mailbox", () => {
   assert.equal(rejected.outputs.length, 1);
   assert.equal(rejected.outputs[0][1].imapAck.ok, false);
   assert.match(rejected.outputs[0][1].imapAck.error, /queueKey/i);
+});
+
+test("ack runtime rejects tampered signed ACK tokens before queueing", () => {
+  const token = inputToken(1);
+  token.uid = 2;
+  let clientCalls = 0;
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000
+  }, () => {
+    clientCalls += 1;
+    throw new Error("client should not be created");
+  });
+
+  const result = invokeInput(handlers, {
+    imap: { ackToken: token }
+  });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+
+  assert.equal(node.pending.length, 0);
+  assert.equal(clientCalls, 0);
+  assert.equal(result.outputs.length, 1);
+  assert.equal(result.outputs[0][1].imapAck.ok, false);
+  assert.match(result.outputs[0][1].imapAck.error, /signature/i);
+});
+
+test("ack runtime rejects ACK tokens without current inflight before creating a client", async () => {
+  const token = inputToken(1);
+  registry.clearQueue(token.queueKey);
+  let clientCalls = 0;
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => {
+    clientCalls += 1;
+    throw new Error("client should not be created");
+  });
+
+  const result = enqueueInput(handlers, {
+    imap: { ackToken: token }
+  });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+
+  assert.equal(node.pending.length, 1);
+  await node.flush();
+
+  assert.equal(clientCalls, 0);
+  assert.equal(result.doneCount, 1);
+  assert.equal(result.outputs.length, 1);
+  assert.equal(result.outputs[0][1].imapAck.ok, false);
+  assert.match(result.outputs[0][1].imapAck.error, /not current|claimed/i);
+});
+
+test("ack runtime claims duplicate ACK tokens so only one reaches IMAP", async () => {
+  const token = inputToken(1);
+  registry.clearQueue(token.queueKey);
+  registry.markInflight(token.queueKey, token, { now: 1000 });
+  const clientCalls = [];
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async messageDelete(range) {
+      clientCalls.push(range);
+      return true;
+    },
+    async logout() {}
+  }));
+
+  const first = enqueueInput(handlers, { imap: { ackToken: token } });
+  const second = enqueueInput(handlers, { imap: { ackToken: token } });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+
+  await node.flush();
+
+  const outputs = [...first.outputs, ...second.outputs];
+  assert.deepEqual(clientCalls, ["1"]);
+  assert.equal(first.doneCount + second.doneCount, 2);
+  assert.equal(outputs.filter((output) => output[0]).length, 1);
+  assert.equal(outputs.filter((output) => output[1]).length, 1);
+  assert.match(outputs.find((output) => output[1])[1].imapAck.error, /not current|claimed/i);
+});
+
+test("ack runtime rejects replay after a successful ACK", async () => {
+  const token = inputToken(1);
+  registry.clearQueue(token.queueKey);
+  registry.markInflight(token.queueKey, token, { now: 1000 });
+  const clientCalls = [];
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async messageDelete(range) {
+      clientCalls.push(range);
+      return true;
+    },
+    async logout() {}
+  }));
+
+  const first = enqueueInput(handlers, { imap: { ackToken: token } });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+  await node.flush();
+
+  const replay = enqueueInput(handlers, { imap: { ackToken: token } });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+  await node.flush();
+
+  assert.deepEqual(clientCalls, ["1"]);
+  assert.equal(first.outputs[0][0].imapAck.ok, true);
+  assert.equal(replay.doneCount, 1);
+  assert.equal(replay.outputs.length, 1);
+  assert.equal(replay.outputs[0][1].imapAck.ok, false);
+  assert.match(replay.outputs[0][1].imapAck.error, /not current|claimed/i);
+});
+
+test("ack runtime rejects stale token generations without removing the current inflight", async () => {
+  const oldToken = inputToken(1);
+  const newToken = inputToken(1);
+  registry.clearQueue(oldToken.queueKey);
+  registry.markInflight(oldToken.queueKey, oldToken, { now: 1000 });
+  registry.markInflight(newToken.queueKey, newToken, { now: 2000 });
+  let clientCalls = 0;
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => {
+    clientCalls += 1;
+    throw new Error("client should not be created");
+  });
+
+  const result = enqueueInput(handlers, {
+    imap: { ackToken: oldToken }
+  });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+  await node.flush();
+
+  assert.equal(clientCalls, 0);
+  assert.equal(result.outputs.length, 1);
+  assert.equal(result.outputs[0][1].imapAck.ok, false);
+  assert.equal(registry.matchesAckToken(newToken.queueKey, newToken), true);
+  assert.equal(registry.isActiveInflight(newToken.queueKey, "uidv-1", 1, 10000, 3000), true);
+});
+
+test("parallel ack nodes cannot execute the same ACK token twice", async () => {
+  const token = inputToken(1);
+  registry.clearQueue(token.queueKey);
+  registry.markInflight(token.queueKey, token, { now: 1000 });
+  const clientCalls = [];
+  function clientFactory() {
+    return {
+      capabilities: imapCaps("UIDPLUS"),
+      mailbox: { uidValidity: "uidv-1" },
+      async connect() {},
+      async getMailboxLock() {
+        return { release() {} };
+      },
+      async messageDelete(range) {
+        clientCalls.push(range);
+        return true;
+      },
+      async logout() {}
+    };
+  }
+  const firstNode = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, clientFactory);
+  const secondNode = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, clientFactory);
+
+  const first = enqueueInput(firstNode.handlers, { imap: { ackToken: token } });
+  const second = enqueueInput(secondNode.handlers, { imap: { ackToken: token } });
+  for (const node of [firstNode.node, secondNode.node]) {
+    if (node.timer) {
+      clearTimeout(node.timer);
+      node.timer = null;
+    }
+  }
+
+  await Promise.all([firstNode.node.flush(), secondNode.node.flush()]);
+  const outputs = [...first.outputs, ...second.outputs];
+
+  assert.deepEqual(clientCalls, ["1"]);
+  assert.equal(first.doneCount + second.doneCount, 2);
+  assert.equal(outputs.filter((output) => output[0]).length, 1);
+  assert.equal(outputs.filter((output) => output[1]).length, 1);
+});
+
+test("ack runtime releases token claims after IMAP failures", async () => {
+  const token = inputToken(1);
+  registry.clearQueue(token.queueKey);
+  registry.markInflight(token.queueKey, token, { now: 1000 });
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
+    mailbox: { uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() {
+      return { release() {} };
+    },
+    async messageDelete() {
+      throw new Error("delete failed");
+    },
+    async logout() {}
+  }));
+
+  const result = enqueueInput(handlers, {
+    imap: { ackToken: token }
+  });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+  await node.flush();
+
+  assert.equal(result.outputs.length, 1);
+  assert.equal(result.outputs[0][1].imapAck.ok, false);
+  assert.equal(registry.matchesAckToken(token.queueKey, token), true);
+  assert.equal(!!registry.claimAckToken(token.queueKey, token), true);
+  assert.equal(registry.releaseAckToken(token.queueKey, token), true);
 });
 
 test("ack runtime sends invalid message actions to output 2 without queueing", () => {
@@ -1274,17 +1579,10 @@ test("ack runtime handles chunk failures at chunk granularity", async () => {
     async logout() {}
   }));
 
-  const itemOutputs = [];
-  for (const uid of [1, 2, 3, 4]) {
-    node.pending.push({
-      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
-      send: sendWithCapture(itemOutputs),
-      done: () => {},
-      token: sampleToken(uid),
-      plan: node.actionPlan,
-      enqueuedAt: Date.now()
-    });
-  }
+    const itemOutputs = [];
+    for (const uid of [1, 2, 3, 4]) {
+      node.pending.push(makePendingAckItem(node, uid, itemOutputs, () => {}));
+    }
 
   await node.flush();
 
@@ -1332,15 +1630,8 @@ test("ack runtime rejects unsafe delete without UIDPLUS and keeps inflight", asy
     async logout() {}
   }));
 
-  const itemOutputs = [];
-  node.pending.push({
-    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
-    send: sendWithCapture(itemOutputs),
-    done: () => {},
-    token: sampleToken(1),
-    plan: node.actionPlan,
-    enqueuedAt: Date.now()
-  });
+    const itemOutputs = [];
+    node.pending.push(makePendingAckItem(node, 1, itemOutputs, () => {}));
 
   await node.flush();
 
@@ -1384,15 +1675,8 @@ test("ack runtime completes copy actions and removes inflight", async () => {
     async logout() {}
   }));
 
-  const itemOutputs = [];
-  node.pending.push({
-    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
-    send: sendWithCapture(itemOutputs),
-    done: () => {},
-    token: sampleToken(1),
-    plan: node.actionPlan,
-    enqueuedAt: Date.now()
-  });
+    const itemOutputs = [];
+    node.pending.push(makePendingAckItem(node, 1, itemOutputs, () => {}));
 
   await node.flush();
 
@@ -1494,18 +1778,11 @@ test("ack runtime handles transient connect failures without node.error", async 
     }
   }));
 
-  const itemOutputs = [];
-  let doneCount = 0;
-  node.pending.push({
-    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
-    send: sendWithCapture(itemOutputs),
-    done: () => {
+    const itemOutputs = [];
+    let doneCount = 0;
+    node.pending.push(makePendingAckItem(node, 1, itemOutputs, () => {
       doneCount += 1;
-    },
-    token: sampleToken(1),
-    plan: node.actionPlan,
-    enqueuedAt: Date.now()
-  });
+    }));
 
   await node.flush();
 
@@ -1543,20 +1820,13 @@ test("ack runtime fails remaining chunks after a transient action connection los
     async logout() {}
   }));
 
-  const itemOutputs = [];
-  let doneCount = 0;
-  for (const uid of [1, 2, 3, 4]) {
-    node.pending.push({
-      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
-      send: sendWithCapture(itemOutputs),
-      done: () => {
+    const itemOutputs = [];
+    let doneCount = 0;
+    for (const uid of [1, 2, 3, 4]) {
+      node.pending.push(makePendingAckItem(node, uid, itemOutputs, () => {
         doneCount += 1;
-      },
-      token: sampleToken(uid),
-      plan: node.actionPlan,
-      enqueuedAt: Date.now()
-    });
-  }
+      }));
+    }
 
   await node.flush();
 
@@ -1604,20 +1874,13 @@ test("ack runtime stops remaining chunks after a partial move side effect", asyn
     async logout() {}
   }));
 
-  const itemOutputs = [];
-  let doneCount = 0;
-  for (const uid of [1, 2, 3, 4]) {
-    node.pending.push({
-      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
-      send: sendWithCapture(itemOutputs),
-      done: () => {
+    const itemOutputs = [];
+    let doneCount = 0;
+    for (const uid of [1, 2, 3, 4]) {
+      node.pending.push(makePendingAckItem(node, uid, itemOutputs, () => {
         doneCount += 1;
-      },
-      token: sampleToken(uid),
-      plan: node.actionPlan,
-      enqueuedAt: Date.now()
-    });
-  }
+      }));
+    }
 
   await node.flush();
 
@@ -1671,20 +1934,13 @@ test("ack runtime stops remaining chunks after a partial copy source flag side e
     async logout() {}
   }));
 
-  const itemOutputs = [];
-  let doneCount = 0;
-  for (const uid of [1, 2, 3, 4]) {
-    node.pending.push({
-      msg: { payload: uid, imap: { ackToken: sampleToken(uid) } },
-      send: sendWithCapture(itemOutputs),
-      done: () => {
+    const itemOutputs = [];
+    let doneCount = 0;
+    for (const uid of [1, 2, 3, 4]) {
+      node.pending.push(makePendingAckItem(node, uid, itemOutputs, () => {
         doneCount += 1;
-      },
-      token: sampleToken(uid),
-      plan: node.actionPlan,
-      enqueuedAt: Date.now()
-    });
-  }
+      }));
+    }
 
   await node.flush();
 
@@ -1729,18 +1985,11 @@ test("ack runtime ignores transient logout failures after successful actions", a
     }
   }));
 
-  const itemOutputs = [];
-  let doneCount = 0;
-  node.pending.push({
-    msg: { payload: 1, imap: { ackToken: sampleToken(1) } },
-    send: sendWithCapture(itemOutputs),
-    done: () => {
+    const itemOutputs = [];
+    let doneCount = 0;
+    node.pending.push(makePendingAckItem(node, 1, itemOutputs, () => {
       doneCount += 1;
-    },
-    token: sampleToken(1),
-    plan: node.actionPlan,
-    enqueuedAt: Date.now()
-  });
+    }));
 
   await node.flush();
 

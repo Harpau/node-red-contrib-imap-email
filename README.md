@@ -156,6 +156,12 @@ msg.imap.flags // for example ["\\Seen", "\\Flagged"]
 msg.imap.flagState // { deleted: false, seen: true, answered: false, flagged: true }
 ```
 
+Parsed mail headers are emitted in `msg.email.header` as a JSON-serializable
+object without an `Object` prototype. Use `Object.hasOwn(msg.email.header, key)`
+instead of `msg.email.header.hasOwnProperty(key)` when checking header presence.
+Headers with prototype-sensitive names such as `__proto__`, `constructor` or
+`prototype` are preserved under neutralized names.
+
 Message bodies are downloaded as streams after the bounded front window has
 selected candidate UIDs. Attachments are drained without buffering unless
 `Attachments` is enabled. `Raw source` intentionally buffers the full RFC822
@@ -187,12 +193,14 @@ action fails closed on output 2. `copy` keeps the source message, copies it to
 the target mailbox first, and then applies any configured flag changes to the
 source message only.
 
-ACK tokens are scoped to the configured IMAP account and must contain the
-account, mailbox, UID, UIDVALIDITY and ACK scope fields emitted by
-`imap-email in`. If a token is missing required scope fields or names a
-different account, host, port, TLS setting, user or internal scope identifier,
-the ACK node rejects it on output 2 instead of running an IMAP action against
-the wrong account.
+ACK tokens are opaque signed bearer capabilities scoped to the configured IMAP
+account and to the current in-memory inflight generation. Pass
+`msg.imap.ackToken` from `imap-email in` to `imap-email ack` unchanged. Do not
+build, edit, log or expose tokens externally. If a token is missing required
+fields, is unsigned, has been modified, has already completed, or no longer
+matches the current inflight generation, the ACK node rejects it on output 2
+without creating an IMAP client. The internal `queueKey` value is not a stable
+public API.
 
 For dynamic decisions, configure `imap-email ack` to
 `set by msg.imap.ackAction` and set `msg.imap.ackAction`:
