@@ -158,6 +158,8 @@ function enqueueInput(handlers, msg) {
 
 function makePendingAckItem(node, uid, itemOutputs, onDone) {
   const token = sampleToken(uid);
+  token.issuedAt = Date.now() + 1000;
+  token.signature = `${token.signature}-${token.issuedAt}`;
   registry.markInflight(token.queueKey, token, { now: 1000 });
   return {
     msg: { payload: uid, imap: { ackToken: token } },
@@ -903,6 +905,57 @@ test("parallel ack nodes cannot execute the same ACK token twice", async () => {
   assert.equal(first.doneCount + second.doneCount, 2);
   assert.equal(outputs.filter((output) => output[0]).length, 1);
   assert.equal(outputs.filter((output) => output[1]).length, 1);
+});
+
+test("ack runtime separates scopes that would collide with delimiter grouping", async () => {
+  const firstToken = inputToken(1, {
+    mailbox: "A|B",
+    uidValidity: "C"
+  });
+  const secondToken = inputToken(2, {
+    mailbox: "A",
+    uidValidity: "B|C"
+  });
+  registry.clearQueue(firstToken.queueKey);
+  registry.clearQueue(secondToken.queueKey);
+  registry.markInflight(firstToken.queueKey, firstToken, { now: 1000 });
+  registry.markInflight(secondToken.queueKey, secondToken, { now: 1000 });
+  const locks = [];
+  const deletes = [];
+  const { node, handlers } = createAckNode({
+    actionMode: "delete",
+    batchSize: 100,
+    flushMs: 60000,
+    diagnostics: "off"
+  }, () => ({
+    capabilities: imapCaps("UIDPLUS"),
+    mailbox: { uidValidity: "" },
+    async connect() {},
+    async getMailboxLock(mailbox) {
+      locks.push(mailbox);
+      this.mailbox.uidValidity = mailbox === "A|B" ? "C" : "B|C";
+      return { release() {} };
+    },
+    async messageDelete(range) {
+      deletes.push([this.mailbox.uidValidity, range]);
+      return true;
+    },
+    async logout() {}
+  }));
+
+  const first = enqueueInput(handlers, { imap: { ackToken: firstToken } });
+  const second = enqueueInput(handlers, { imap: { ackToken: secondToken } });
+  if (node.timer) {
+    clearTimeout(node.timer);
+    node.timer = null;
+  }
+  await node.flush();
+
+  assert.deepEqual(locks, ["A|B", "A"]);
+  assert.deepEqual(deletes, [["C", "1"], ["B|C", "2"]]);
+  const outputs = [...first.outputs, ...second.outputs];
+  assert.equal(outputs.filter((output) => output[0]).length, 2);
+  assert.equal(outputs.filter((output) => output[1]).length, 0);
 });
 
 test("ack runtime releases token claims after IMAP failures", async () => {

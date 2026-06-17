@@ -83,3 +83,63 @@ test("runtime registry claims, completes and releases exact ACK token generation
   assert.equal(registry.completeAckToken(key, token), true);
   assert.equal(registry.countAllInflight(key), 0);
 });
+
+test("runtime registry does not overwrite or remove claimed inflight messages", () => {
+  const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
+  registry.clearQueue(key);
+  const token = tokenFor(key, 1);
+  const replacement = tokenFor(key, 1);
+
+  registry.markInflight(key, token, { now: 1000 });
+  assert.equal(!!registry.claimAckToken(key, token, 2000), true);
+
+  assert.equal(registry.markInflight(key, replacement, { now: 3000 }), null);
+  assert.equal(registry.removeInflight(key, "v1", 1), false);
+  assert.equal(registry.matchesAckToken(key, token), true);
+  assert.equal(registry.matchesAckToken(key, replacement), false);
+  assert.equal(registry.completeAckToken(key, token, 4000), true);
+  assert.equal(registry.countAllInflight(key), 0);
+});
+
+test("runtime registry completion guards reject old token generations", () => {
+  const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
+  registry.clearQueue(key);
+  const token = tokenFor(key, 1);
+  token.issuedAt = 1000;
+  token.signature = "issued-1000";
+
+  registry.markInflight(key, token, { now: 1000 });
+  assert.equal(!!registry.claimAckToken(key, token, 1500), true);
+  assert.equal(registry.completeAckToken(key, token, 2000), true);
+
+  const staleToken = tokenFor(key, 1);
+  staleToken.issuedAt = 2000;
+  staleToken.signature = "issued-2000";
+  assert.equal(registry.markInflight(key, staleToken, { now: 2500 }), null);
+
+  const freshToken = tokenFor(key, 1);
+  freshToken.issuedAt = 2001;
+  freshToken.signature = "issued-2001";
+  assert.notEqual(registry.markInflight(key, freshToken, { now: 3000 }), null);
+  assert.equal(registry.matchesAckToken(key, freshToken), true);
+  assert.equal(registry.removeInflight(key, "v1", 1), true);
+});
+
+test("runtime registry clearQueue removes completion guards", () => {
+  const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
+  registry.clearQueue(key);
+  const token = tokenFor(key, 1);
+  token.issuedAt = 1000;
+  token.signature = "issued-1000";
+
+  registry.markInflight(key, token, { now: 1000 });
+  assert.equal(!!registry.claimAckToken(key, token, 1500), true);
+  assert.equal(registry.completeAckToken(key, token, 2000), true);
+  registry.clearQueue(key);
+
+  const oldToken = tokenFor(key, 1);
+  oldToken.issuedAt = 1500;
+  oldToken.signature = "issued-1500";
+  assert.notEqual(registry.markInflight(key, oldToken, { now: 3000 }), null);
+  assert.equal(registry.matchesAckToken(key, oldToken), true);
+});

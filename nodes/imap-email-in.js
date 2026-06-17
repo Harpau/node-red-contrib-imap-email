@@ -558,6 +558,10 @@ module.exports = function registerImapEmailIn(RED) {
           node.retryAfterMs
         );
         const entry = markInflight(ackToken, meta);
+        if (!entry) {
+          stats.filteredByInflight += 1;
+          return null;
+        }
         if (entry && !wasActive) {
           activeInflightForStatus += 1;
         }
@@ -1051,9 +1055,11 @@ module.exports = function registerImapEmailIn(RED) {
           const messageSize = Number(imapMessage.size);
           if (node.maxMessageBytes > 0 && Number.isFinite(messageSize) && messageSize > node.maxMessageBytes) {
             const err = buildTooLargeError(node.maxMessageBytes);
-            markInflightForFetch(ackToken, {
+            if (!markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
-            });
+            })) {
+              continue;
+            }
             stats.tooLarge += 1;
             send([
               null,
@@ -1075,18 +1081,20 @@ module.exports = function registerImapEmailIn(RED) {
             });
             addTiming(timing, "downloadMs", started);
           } catch (err) {
-            markInflightForFetch(ackToken, {
+            const markedInflight = markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
-            stats.parseErrors += 1;
-            send([
-              null,
-              {
-                error: diagnostics.errorToObject(err),
-                imap: buildImapMeta(fetchedUid, uidValidity, imapMessage, ackToken)
-              },
-              null
-            ]);
+            if (markedInflight) {
+              stats.parseErrors += 1;
+              send([
+                null,
+                {
+                  error: diagnostics.errorToObject(err),
+                  imap: buildImapMeta(fetchedUid, uidValidity, imapMessage, ackToken)
+                },
+                null
+              ]);
+            }
             if (isTransientImapConnectionError(err)) {
               noteConnectionError(stats, err, "IMAP download");
               connectionInterrupted = true;
@@ -1096,10 +1104,12 @@ module.exports = function registerImapEmailIn(RED) {
           }
 
           if (!download || !download.content) {
-            stats.missingSource += 1;
-            markInflightForFetch(ackToken, {
+            if (!markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
-            });
+            })) {
+              continue;
+            }
+            stats.missingSource += 1;
             stats.parseErrors += 1;
             send([
               null,
@@ -1124,10 +1134,12 @@ module.exports = function registerImapEmailIn(RED) {
             });
             addTiming(timing, "parseMs", started);
 
-            markInflightForFetch(ackToken, {
+            if (!markInflightForFetch(ackToken, {
               messageId: parsed.messageId,
               subject: parsed.subject
-            });
+            })) {
+              continue;
+            }
 
             const out = {
               topic: parsed.subject || "",
@@ -1173,24 +1185,26 @@ module.exports = function registerImapEmailIn(RED) {
             updateSentStatus();
             send([out, null, null]);
           } catch (err) {
-            markInflightForFetch(ackToken, {
+            const markedInflight = markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
 
-            if (isTooLargeError(err)) {
-              stats.tooLarge += 1;
-            } else {
-              stats.parseErrors += 1;
-            }
+            if (markedInflight) {
+              if (isTooLargeError(err)) {
+                stats.tooLarge += 1;
+              } else {
+                stats.parseErrors += 1;
+              }
 
-            send([
-              null,
-              {
-                error: diagnostics.errorToObject(err),
-                imap: buildImapMeta(fetchedUid, uidValidity, imapMessage, ackToken)
-              },
-              null
-            ]);
+              send([
+                null,
+                {
+                  error: diagnostics.errorToObject(err),
+                  imap: buildImapMeta(fetchedUid, uidValidity, imapMessage, ackToken)
+                },
+                null
+              ]);
+            }
             if (isTransientImapConnectionError(err)) {
               noteConnectionError(stats, err, "IMAP parse");
               connectionInterrupted = true;

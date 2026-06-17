@@ -21,6 +21,18 @@ const diagnostics = require("../lib/diagnostics");
 
 const DEFAULT_CLOSE_TIMEOUT_MS = 10000;
 
+function makeAckGroupKey(token, plan) {
+  return [
+    "imap-ack-group",
+    registry.encodePart(token.accountId),
+    registry.encodePart(token.host),
+    registry.encodePart(token.user),
+    registry.encodePart(token.mailbox),
+    registry.encodePart(token.uidValidity),
+    registry.encodePart(actionPlanKey(plan))
+  ].join(":");
+}
+
 module.exports = function registerImapEmailAck(RED) {
   function ImapEmailAckNode(config) {
     RED.nodes.createNode(this, config);
@@ -267,14 +279,7 @@ module.exports = function registerImapEmailAck(RED) {
 
       for (const item of items) {
         const token = item.token;
-        const key = [
-          token.accountId,
-          token.host,
-          token.user,
-          token.mailbox,
-          token.uidValidity,
-          actionPlanKey(item.plan)
-        ].join("|");
+        const key = makeAckGroupKey(token, item.plan);
 
         if (!groups.has(key)) {
           groups.set(key, {
