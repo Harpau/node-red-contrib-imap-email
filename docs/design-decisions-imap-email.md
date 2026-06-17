@@ -446,6 +446,14 @@ verbindliche Vertrag. Unsignierte Legacy-Tokens werden als Pre-1.0-
 Sicherheitsumstellung abgelehnt. `queueKey` ist ein internes Scope-Feld und
 keine stabile oeffentliche API.
 
+Nach erfolgreichem ACK wird fuer die abgeschlossene Inflight-Generation ein
+prozesslokaler Completion-Guard gespeichert. Dieser Guard blockiert alte
+Token-Generationen nur bounded/best-effort: Guards haben eine TTL von
+30 Minuten und werden pro Queue hart auf 120000 Eintraege begrenzt. Nach TTL
+oder Cap-Trim darf eine extrem alte Fetch-Generation wieder markieren. Das ist
+ein bewusster Speicher-Sicherheits-Tradeoff passend zur ebenfalls
+prozesslokalen Inflight-Semantik; es ersetzt keine Exactly-once-Garantie.
+
 ### 5.2 `msg.imap.flags`
 
 `msg.imap.flags` ist ein Array von IMAP-Flag-Strings:
@@ -622,8 +630,11 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 
 - Ein Trigger startet hoechstens einen Fetch-Zyklus.
 - Wenn bereits ein Fetch-Zyklus laeuft, wird kein paralleler Fetch gestartet.
-- Es wird nur ein begrenztes Cursor-Fenster gelesen.
-- Flag-Selektion wird auf die im Cursor-Fenster gelesenen Flags angewendet.
+- Es werden nur begrenzte Cursor-Fenster gelesen; pro Trigger koennen mehrere
+  Fenster gelesen werden, solange Batch-/Inflight-Kapazitaet, Mailbox-Ende und
+  `scanTimeLimitMs` dies erlauben.
+- Flag-Selektion wird auf die in den begrenzten Fenstern gelesenen Flags
+  angewendet.
 - Full-Fetch-Flags werden erneut validiert.
 - Ausgegebene Nachrichten werden im volatile Inflight-Registry markiert.
 

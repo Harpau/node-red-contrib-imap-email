@@ -15,6 +15,10 @@ All notable changes to `@compeso/node-red-contrib-imap-email` are documented her
   source message before applying configured flag changes to the source message.
 - Updated `mailparser` to 3.9.10, which uses `nodemailer` 9.0.0 and removes
   the transitive Nodemailer audit path for `nodemailer <=8.0.8`.
+- Hardened ACK inflight handling with bounded completion guards, active
+  inflight protection during re-fetch and expunge, signed opaque ACK tokens,
+  collision-resistant queue keys and prototype-safe parsed headers.
+- Made the example account and editor defaults provider-neutral.
 
 ## 0.1.0 - Initial development release
 

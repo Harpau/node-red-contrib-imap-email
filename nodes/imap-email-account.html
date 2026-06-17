@@ -3,7 +3,7 @@
     category: 'config',
     defaults: {
       name: { value: '' },
-      host: { value: 'imap.strato.de', required: true },
+      host: { value: '', required: true },
       port: { value: 993, required: true, validate: RED.validators.number() },
       secure: { value: true },
       tlsRejectUnauthorized: { value: true },
@@ -29,7 +29,7 @@
   </div>
   <div class="form-row">
     <label for="node-config-input-host"><i class="fa fa-server"></i> Host</label>
-    <input type="text" id="node-config-input-host" placeholder="imap.strato.de">
+    <input type="text" id="node-config-input-host" placeholder="imap.example.test">
   </div>
   <div class="form-row">
     <label for="node-config-input-port"><i class="fa fa-plug"></i> Port</label>
@@ -82,7 +82,7 @@
     <dt>Name <span class="property-type">string</span></dt>
     <dd>Optional display name for this account configuration.</dd>
     <dt>Host <span class="property-type">string</span></dt>
-    <dd>IMAP server host, for example <code>imap.strato.de</code>.</dd>
+    <dd>IMAP server host, for example <code>imap.example.test</code>.</dd>
     <dt>Port <span class="property-type">number</span></dt>
     <dd>IMAP server port. Usually <code>993</code> when TLS is enabled.</dd>
     <dt>TLS <span class="property-type">boolean</span></dt>
@@ -90,7 +90,7 @@
     <dt>Verify cert <span class="property-type">boolean</span></dt>
     <dd>Reject unauthorized TLS certificates. Keep this enabled for production systems.</dd>
     <dt>Username <span class="property-type">credential</span></dt>
-    <dd>IMAP username. For STRATO this is normally the full email address.</dd>
+    <dd>IMAP username. This is often the full email address.</dd>
     <dt>Password <span class="property-type">credential</span></dt>
     <dd>IMAP password.</dd>
     <dt>Access token <span class="property-type">credential</span></dt>

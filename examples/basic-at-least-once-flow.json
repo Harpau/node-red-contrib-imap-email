@@ -213,8 +213,8 @@
   {
     "id": "2b40b931e3ce3d1a",
     "type": "imap-email account",
-    "name": "STRATO test",
-    "host": "imap.strato.de",
+    "name": "Example IMAP account",
+    "host": "imap.example.test",
     "port": "993",
     "secure": true,
     "tlsRejectUnauthorized": true,

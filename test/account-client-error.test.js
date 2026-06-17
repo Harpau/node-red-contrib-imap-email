@@ -58,3 +58,43 @@ test("account-created IMAP clients handle asynchronous error events", () => {
   assert.equal(closeAfterCalls, 0);
   assert.match(warnings[0], /test client IMAP connection error: read ECONNRESET \(ECONNRESET\)/);
 });
+
+test("account createClient fails clearly when host is missing", () => {
+  let AccountCtor;
+
+  const RED = {
+    nodes: {
+      createNode(node) {
+        node.id = "account-1";
+        node.warn = () => {};
+        node.error = () => {};
+        node.status = () => {};
+      },
+      registerType(type, ctor) {
+        if (type === "imap-email account") {
+          AccountCtor = ctor;
+        }
+      }
+    }
+  };
+
+  registerAccount(RED);
+  const account = new AccountCtor({
+    host: "",
+    port: "993",
+    secure: true,
+    tlsRejectUnauthorized: true,
+    connectionTimeout: "30000",
+    greetingTimeout: "30000",
+    socketTimeout: "300000"
+  });
+  account.credentials = {
+    username: "user@example.test",
+    password: "secret"
+  };
+
+  assert.throws(
+    () => account.createClient(),
+    /IMAP host is missing in imap email account configuration/
+  );
+});

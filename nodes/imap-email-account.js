@@ -9,7 +9,7 @@ module.exports = function registerImapEmailAccount(RED) {
     RED.nodes.createNode(this, config);
 
     this.name = config.name || "";
-    this.host = config.host || "imap.strato.de";
+    this.host = String(config.host || "").trim();
     this.port = parseNumber(config.port, 993, 1, 65535);
     this.secure = parseBoolean(config.secure, true);
     this.tlsRejectUnauthorized = parseBoolean(config.tlsRejectUnauthorized, true);
@@ -23,9 +23,14 @@ module.exports = function registerImapEmailAccount(RED) {
   };
 
   ImapEmailAccountNode.prototype.createClient = function createClient(options = {}) {
+    const host = String(options.host !== undefined ? options.host : this.host || "").trim();
     const user = options.user || this.getUsername();
     const accessToken = options.accessToken || this.credentials && this.credentials.accessToken;
     const password = options.password || this.credentials && this.credentials.password;
+
+    if (!host) {
+      throw new Error("IMAP host is missing in imap email account configuration");
+    }
 
     if (!user) {
       throw new Error("IMAP username is missing in imap email account credentials");
@@ -40,7 +45,7 @@ module.exports = function registerImapEmailAccount(RED) {
     }
 
     const client = new ImapFlow({
-      host: options.host || this.host,
+      host,
       port: options.port || this.port,
       secure: options.secure !== undefined ? options.secure : this.secure,
       auth,

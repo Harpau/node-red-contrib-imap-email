@@ -214,6 +214,58 @@ test("release documentation exists", () => {
   }
 });
 
+test("release documentation describes npm install and current audit command", () => {
+  const root = path.resolve(__dirname, "..");
+  const docs = {
+    "README.md": fs.readFileSync(path.join(root, "README.md"), "utf8"),
+    "docs/INSTALL_DE.md": fs.readFileSync(path.join(root, "docs", "INSTALL_DE.md"), "utf8"),
+    "docs/RELEASE_DE.md": fs.readFileSync(path.join(root, "docs", "RELEASE_DE.md"), "utf8")
+  };
+
+  for (const [file, content] of Object.entries(docs)) {
+    assert.match(content, /npm install @compeso\/node-red-contrib-imap-email/, `${file} should document npm registry installation`);
+  }
+
+  assert.match(docs["docs/RELEASE_DE.md"], /npm audit --omit=dev/);
+  assert.doesNotMatch(docs["docs/RELEASE_DE.md"], /npm audit --audit-level=moderate/);
+  assert.match(docs["docs/RELEASE_DE.md"], /Strato und\s+IONOS wurden am 2026-06-17 manuell erfolgreich getestet/);
+});
+
+test("front window documentation describes bounded windows per trigger", () => {
+  const root = path.resolve(__dirname, "..");
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  const help = fs.readFileSync(path.join(root, "nodes", "imap-email-in.html"), "utf8");
+  const design = fs.readFileSync(path.join(root, "docs", "design-decisions-imap-email.md"), "utf8");
+
+  assert.match(readme, /Front window\s+maximum messages inspected per bounded window/);
+  assert.match(readme, /0 means exactly one cursor window/);
+  assert.match(help, /A trigger may read multiple bounded windows/);
+  assert.match(design, /pro Trigger koennen mehrere\s+Fenster gelesen werden/);
+  assert.match(design, /bounded\/best-effort/);
+
+  assert.doesNotMatch(readme, /Front window\s+maximum messages inspected per trigger from the current cursor/);
+  assert.doesNotMatch(help, /filters are applied only inside the bounded cursor window/i);
+  assert.doesNotMatch(design, /Es wird nur ein begrenztes Cursor-Fenster gelesen/);
+});
+
+test("account defaults and example flow are provider-neutral", () => {
+  const root = path.resolve(__dirname, "..");
+  const checked = {
+    "nodes/imap-email-account.js": fs.readFileSync(path.join(root, "nodes", "imap-email-account.js"), "utf8"),
+    "nodes/imap-email-account.html": fs.readFileSync(path.join(root, "nodes", "imap-email-account.html"), "utf8"),
+    "examples/basic-at-least-once-flow.json": fs.readFileSync(path.join(root, "examples", "basic-at-least-once-flow.json"), "utf8")
+  };
+
+  for (const [file, content] of Object.entries(checked)) {
+    assert.doesNotMatch(content, /imap\.strato\.de/i, `${file} must not contain a provider default`);
+    assert.doesNotMatch(content, /STRATO/i, `${file} must not contain a provider-specific example name`);
+  }
+
+  assert.match(checked["nodes/imap-email-account.html"], /placeholder="imap\.example\.test"/);
+  assert.match(checked["examples/basic-at-least-once-flow.json"], /"name": "Example IMAP account"/);
+  assert.match(checked["examples/basic-at-least-once-flow.json"], /"host": "imap\.example\.test"/);
+});
+
 test("ack documentation describes copy and fail-closed capability rules", () => {
   const root = path.resolve(__dirname, "..");
   const docs = {

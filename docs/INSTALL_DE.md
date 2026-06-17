@@ -30,7 +30,18 @@ npm test
 npm run pack:check
 ```
 
-## 3. GitHub-Repository
+## 3. Installation in Node-RED aus npm Registry
+
+Im Node-RED User-Verzeichnis:
+
+```powershell
+cd $env:USERPROFILE\.node-red
+npm install @compeso/node-red-contrib-imap-email
+```
+
+Danach Node-RED neu starten.
+
+## 4. GitHub-Repository
 
 Das neue Repository ist:
 
@@ -40,7 +51,7 @@ Repository name: node-red-contrib-imap-email
 URL: https://github.com/Harpau/node-red-contrib-imap-email
 ```
 
-## 4. Installation in Node-RED aus GitHub
+## 5. Installation in Node-RED aus GitHub fuer Entwicklung
 
 Im Node-RED User-Verzeichnis:
 
@@ -51,7 +62,7 @@ npm install github:Harpau/node-red-contrib-imap-email
 
 Danach Node-RED neu starten.
 
-## 5. Lokale Entwicklung mit npm link
+## 6. Lokale Entwicklung mit npm link
 
 Im Paketordner:
 
@@ -70,7 +81,7 @@ npm link @compeso/node-red-contrib-imap-email
 
 Danach Node-RED neu starten.
 
-## 6. Beispiel-Flow
+## 7. Beispiel-Flow
 
 In Node-RED:
 
@@ -81,7 +92,7 @@ Menu -> Import -> examples/basic-at-least-once-flow.json
 Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen. Der Beispiel-Tab ist absichtlich deaktiviert, der Inject-Node startet nicht automatisch und der ACK-Pfad markiert Nachrichten nur als gesehen.
 Die sichtbaren Palette-Namen verwenden Leerzeichen; in der Flow-JSON werden die gespeicherten technischen Typen mit `imap-email ...` gespeichert.
 
-## 7. Produktiver Minimal-Flow
+## 8. Produktiver Minimal-Flow
 
 ```text
 Inject / Scheduler / HTTP-Trigger
@@ -92,7 +103,7 @@ Inject / Scheduler / HTTP-Trigger
 
 Nur der erfolgreiche Verarbeitungspfad darf zum ACK-Node fuehren. Wenn die Verarbeitung fehlschlaegt und kein ACK erfolgt, bleibt die Mail in der Mailbox und kann spaeter erneut geliefert werden.
 
-## 8. Node-RED-Typen
+## 9. Node-RED-Typen
 
 Dieses Paket registriert diese Node-RED-Typen:
 
@@ -105,6 +116,6 @@ imap-email ack
 Die Palette-Labels werden als `imap email account`, `imap email in`
 und `imap email ack` angezeigt.
 
-## 9. Keine Veroeffentlichung ohne Freigabe
+## 10. Keine Veroeffentlichung ohne Freigabe
 
 Dieses Paket darf nicht auf npm oder flows.nodered.org veroeffentlicht werden, solange keine ausdrueckliche menschliche Freigabe vorliegt.

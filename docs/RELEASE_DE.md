@@ -18,7 +18,7 @@ Wichtig: Diese Datei bereitet keine Veroeffentlichung vor. Ein `npm publish` ode
 
 ```bash
 npm install --no-audit --no-fund
-npm audit --audit-level=moderate
+npm audit --omit=dev
 npm test
 npm run pack:check
 ```
@@ -29,7 +29,7 @@ Erwartung fuer die Tests:
 # fail 0
 ```
 
-`npm audit --audit-level=moderate` sollte keine Findings melden.
+`npm audit --omit=dev` sollte keine Findings melden.
 
 `npm run pack:check` sollte die geplanten Paketdateien zeigen, insbesondere:
 
@@ -45,6 +45,15 @@ package.json
 ```
 
 ## 3. Installation in Node-RED testen
+
+Primaerer Installationsweg nach Veroeffentlichung:
+
+```bash
+cd ~/.node-red
+npm install @compeso/node-red-contrib-imap-email
+```
+
+Entwicklungsinstallation aus GitHub:
 
 In einem Node-RED-User-Verzeichnis:
 
@@ -68,6 +77,8 @@ Danach Node-RED neu starten.
 ## 5. Vor einer spaeteren Veroeffentlichung
 
 - Lokalen Node-RED-Test mit einem dedizierten Testpostfach durchfuehren.
+- Live-Smoke-Test mit dedizierten Testpostfaechern dokumentieren. Strato und
+  IONOS wurden am 2026-06-17 manuell erfolgreich getestet.
 - ACK-Loeschverhalten gegen das Testpostfach pruefen.
 - README, Beispiele und Hilfetexte verwenden ausschliesslich aktuelle Paket- und Node-Namen.
 - Sicherstellen, dass keine Zugangsdaten, Tokens oder privaten Endpunkte enthalten sind.

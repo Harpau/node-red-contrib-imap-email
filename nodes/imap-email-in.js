@@ -352,6 +352,7 @@ module.exports = function registerImapEmailIn(RED) {
         deletedFlagged: 0,
         deletedExpunged: 0,
         deletedExpungeSkipped: 0,
+        deletedExpungeSkippedInflight: 0,
         deletedExpungeErrors: 0,
         deletedExpungeSkipReason: undefined,
         deletedSkippedDuringFetch: 0,
@@ -493,8 +494,23 @@ module.exports = function registerImapEmailIn(RED) {
 
       let expungedAny = false;
       const started = Date.now();
+      const expungeUids = [];
+      const activeCheckNow = Date.now();
 
-      for (const uidChunk of chunkUids(uids, node.maxUidPerCommand)) {
+      for (const uid of uids) {
+        if (registry.isActiveInflight(node.queueKey, uidValidity, uid, node.retryAfterMs, activeCheckNow)) {
+          stats.deletedExpungeSkippedInflight += 1;
+          continue;
+        }
+        expungeUids.push(uid);
+      }
+
+      if (expungeUids.length === 0) {
+        addTiming(timing, "expungeMs", started);
+        return false;
+      }
+
+      for (const uidChunk of chunkUids(expungeUids, node.maxUidPerCommand)) {
         const range = compressUids(uidChunk);
         try {
           const ok = await client.messageDelete(range, { uid: true });
@@ -507,7 +523,10 @@ module.exports = function registerImapEmailIn(RED) {
           expungedAny = true;
 
           for (const uid of uidChunk) {
-            registry.removeInflight(node.queueKey, uidValidity, uid);
+            registry.removeInflight(node.queueKey, uidValidity, uid, {
+              retryAfterMs: node.retryAfterMs,
+              now: Date.now()
+            });
           }
         } catch (err) {
           stats.deletedExpungeErrors += uidChunk.length;
@@ -551,13 +570,19 @@ module.exports = function registerImapEmailIn(RED) {
       }
 
       function markInflightForFetch(ackToken, meta = {}) {
+        const now = Date.now();
         const wasActive = registry.isActiveInflight(
           node.queueKey,
           ackToken.uidValidity,
           ackToken.uid,
-          node.retryAfterMs
+          node.retryAfterMs,
+          now
         );
-        const entry = markInflight(ackToken, meta);
+        const entry = markInflight(ackToken, {
+          ...meta,
+          retryAfterMs: node.retryAfterMs,
+          now
+        });
         if (!entry) {
           stats.filteredByInflight += 1;
           return null;
@@ -569,8 +594,12 @@ module.exports = function registerImapEmailIn(RED) {
       }
 
       function removeInflightForFetch(uidValidity, uid) {
-        const wasActive = registry.isActiveInflight(node.queueKey, uidValidity, uid, node.retryAfterMs);
-        const removed = registry.removeInflight(node.queueKey, uidValidity, uid);
+        const now = Date.now();
+        const wasActive = registry.isActiveInflight(node.queueKey, uidValidity, uid, node.retryAfterMs, now);
+        const removed = registry.removeInflight(node.queueKey, uidValidity, uid, {
+          retryAfterMs: node.retryAfterMs,
+          now
+        });
         if (removed && wasActive && activeInflightForStatus > 0) {
           activeInflightForStatus -= 1;
         }

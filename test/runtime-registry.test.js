@@ -20,6 +20,25 @@ function tokenFor(queueKey, uid = 123, overrides = {}) {
   });
 }
 
+function identityToken(queueKey, uid = 123, issuedAt = 1000, overrides = {}) {
+  return {
+    version: 2,
+    accountId: "a",
+    queueKey,
+    host: "h",
+    port: 993,
+    secure: true,
+    user: "u",
+    mailbox: "INBOX",
+    uid,
+    uidValidity: "v1",
+    issuedAt,
+    nonce: `nonce-${uid}-${issuedAt}`,
+    signature: `sig-${uid}-${issuedAt}`,
+    ...overrides
+  };
+}
+
 test("runtime registry marks, counts and removes inflight messages", () => {
   const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
   registry.clearQueue(key);
@@ -101,6 +120,46 @@ test("runtime registry does not overwrite or remove claimed inflight messages", 
   assert.equal(registry.countAllInflight(key), 0);
 });
 
+test("runtime registry protects active unclaimed entries only with retry context", () => {
+  const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
+  registry.clearQueue(key);
+  const token = identityToken(key, 1, 1000);
+  const replacement = identityToken(key, 1, 2000);
+
+  assert.notEqual(registry.markInflight(key, token, { now: 1000 }), null);
+  assert.equal(registry.markInflight(key, replacement, { now: 2000, retryAfterMs: 5000 }), null);
+  assert.equal(registry.matchesAckToken(key, token), true);
+  assert.equal(registry.matchesAckToken(key, replacement), false);
+
+  assert.notEqual(registry.markInflight(key, replacement, { now: 7000, retryAfterMs: 5000 }), null);
+  assert.equal(registry.matchesAckToken(key, replacement), true);
+
+  const legacyReplacement = identityToken(key, 1, 8000);
+  assert.notEqual(registry.markInflight(key, legacyReplacement, { now: 8000 }), null);
+  assert.equal(registry.matchesAckToken(key, legacyReplacement), true);
+});
+
+test("runtime registry removeInflight preserves active and claimed entries", () => {
+  const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
+  registry.clearQueue(key);
+  const active = identityToken(key, 1, 1000);
+  const claimed = identityToken(key, 2, 1000);
+
+  registry.markInflight(key, active, { now: 1000 });
+  assert.equal(registry.removeInflight(key, "v1", 1, { now: 2000, retryAfterMs: 5000 }), false);
+  assert.equal(registry.matchesAckToken(key, active), true);
+  assert.equal(registry.removeInflight(key, "v1", 1, { now: 2000, retryAfterMs: 5000, force: true }), true);
+
+  registry.markInflight(key, active, { now: 1000 });
+  assert.equal(registry.removeInflight(key, "v1", 1, { now: 7000, retryAfterMs: 5000 }), true);
+
+  registry.markInflight(key, claimed, { now: 1000 });
+  assert.notEqual(registry.claimAckToken(key, claimed, 1500), null);
+  assert.equal(registry.removeInflight(key, "v1", 2, { now: 7000, retryAfterMs: 5000, force: true }), false);
+  assert.equal(registry.matchesAckToken(key, claimed), true);
+  assert.equal(registry.completeAckToken(key, claimed, 8000), true);
+});
+
 test("runtime registry completion guards reject old token generations", () => {
   const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
   registry.clearQueue(key);
@@ -123,6 +182,51 @@ test("runtime registry completion guards reject old token generations", () => {
   assert.notEqual(registry.markInflight(key, freshToken, { now: 3000 }), null);
   assert.equal(registry.matchesAckToken(key, freshToken), true);
   assert.equal(registry.removeInflight(key, "v1", 1), true);
+});
+
+test("runtime registry completion guards expire and are pruned without inflight entries", () => {
+  const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
+  registry.clearQueue(key);
+  const completedAt = 10000;
+  const token = identityToken(key, 1, completedAt - 1000);
+
+  registry.markInflight(key, token, { now: completedAt - 1000 });
+  assert.notEqual(registry.claimAckToken(key, token, completedAt - 500), null);
+  assert.equal(registry.completeAckToken(key, token, completedAt), true);
+  assert.equal(registry.countAllInflight(key), 0);
+
+  const stale = identityToken(key, 1, completedAt);
+  assert.equal(registry.markInflight(key, stale, { now: completedAt + 1 }), null);
+
+  assert.equal(registry.pruneExpiredInflight(key, 5000, completedAt + registry.COMPLETION_GUARD_TTL_MS), 0);
+  assert.notEqual(registry.markInflight(key, stale, {
+    now: completedAt + registry.COMPLETION_GUARD_TTL_MS + 1
+  }), null);
+  assert.equal(registry.matchesAckToken(key, stale), true);
+});
+
+test("runtime registry completion guards are capped per queue", () => {
+  const key = registry.makeQueueKey({ accountId: "a", host: "h", user: "u", mailbox: "INBOX" });
+  registry.clearQueue(key);
+  const max = registry.MAX_COMPLETION_GUARDS_PER_QUEUE;
+  const base = 10000;
+
+  for (let uid = 1; uid <= max + 1; uid += 1) {
+    const completedAt = base + uid;
+    const token = identityToken(key, uid, completedAt - 1);
+    registry.markInflight(key, token, { now: completedAt - 1 });
+    registry.claimAckToken(key, token, completedAt);
+    assert.equal(registry.completeAckToken(key, token, completedAt), true);
+  }
+
+  const trimmed = identityToken(key, 1, base + 1);
+  assert.notEqual(registry.markInflight(key, trimmed, { now: base + max + 2 }), null);
+  assert.equal(registry.matchesAckToken(key, trimmed), true);
+  assert.equal(registry.removeInflight(key, "v1", 1), true);
+
+  const newestCompletedAt = base + max + 1;
+  const stillGuarded = identityToken(key, max + 1, newestCompletedAt);
+  assert.equal(registry.markInflight(key, stillGuarded, { now: newestCompletedAt + 1 }), null);
 });
 
 test("runtime registry clearQueue removes completion guards", () => {

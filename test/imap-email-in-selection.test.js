@@ -499,6 +499,95 @@ test("imap email in outputs both raw flags and flagState", async () => {
   });
 });
 
+test("imap email in successful output contract stays stable", async () => {
+  const internalDate = new Date("2026-06-17T09:00:00Z");
+  const source = [
+    "Subject: Contract subject",
+    "Message-ID: <contract-1@example.test>",
+    "Date: Wed, 17 Jun 2026 10:00:00 +0000",
+    "From: Sender <sender@example.test>",
+    "To: Receiver <receiver@example.test>",
+    "Cc: Copy <copy@example.test>",
+    "Bcc: Blind <blind@example.test>",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/alternative; boundary="contract-boundary"',
+    "",
+    "--contract-boundary",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    "Plain contract",
+    "--contract-boundary",
+    "Content-Type: text/html; charset=utf-8",
+    "",
+    "<p>HTML contract</p>",
+    "--contract-boundary--",
+    ""
+  ].join("\r\n");
+  const { node } = createCursorTestNode({ frontWindowSize: 1, batchSize: 1 }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-contract",
+      front: [{ uid: 42, flags: ["\\Seen"], size: Buffer.byteLength(source) }],
+      messages: [{
+        uid: 42,
+        flags: ["\\Seen"],
+        envelope: { subject: "Contract subject" },
+        internalDate,
+        size: Buffer.byteLength(source),
+        source
+      }]
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  const mail = outputs.find((output) => output && output[0]);
+  assert.ok(mail, "expected one success output");
+  const msg = mail[0];
+
+  assert.equal(msg.topic, "Contract subject");
+  assert.equal(msg.payload.trim(), "Plain contract");
+  assert.equal(msg.email.topic, "Contract subject");
+  assert.equal(msg.email.messageId, "<contract-1@example.test>");
+  assert.equal(msg.email.date.toISOString(), "2026-06-17T10:00:00.000Z");
+  assert.match(msg.email.from, /sender@example\.test/);
+  assert.match(msg.email.to, /receiver@example\.test/);
+  assert.match(msg.email.cc, /copy@example\.test/);
+  assert.match(msg.email.bcc, /blind@example\.test/);
+  assert.equal(msg.email.text.trim(), "Plain contract");
+  assert.match(msg.email.html, /HTML contract/);
+  assert.equal(Object.getPrototypeOf(msg.email.header), null);
+  assert.equal(msg.email.header.subject, "Contract subject");
+  assert.equal(Object.prototype.hasOwnProperty.call(msg.email, "attachments"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(msg, "raw"), false);
+
+  assert.equal(msg.imap.accountId, "account-1");
+  assert.equal(msg.imap.mailbox, "INBOX");
+  assert.equal(msg.imap.uid, 42);
+  assert.equal(msg.imap.uidValidity, "uidv-contract");
+  assert.deepEqual(msg.imap.flags, ["\\Seen"]);
+  assert.deepEqual(msg.imap.flagState, {
+    deleted: false,
+    seen: true,
+    answered: false,
+    flagged: false
+  });
+  assert.equal(msg.imap.internalDate, internalDate);
+  assert.equal(msg.imap.size, Buffer.byteLength(source));
+  assert.deepEqual(msg.imap.delivery, {
+    mode: "at-least-once",
+    duplicatePossible: true
+  });
+  assert.equal(msg.imap.ackToken.version, 2);
+  assert.equal(msg.imap.ackToken.queueKey, node.queueKey);
+  assert.equal(typeof msg.imap.ackToken.signature, "string");
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.emitted, 1);
+  assert.equal(stats.parseErrors, 0);
+});
+
 test("imap email in reads one bounded cursor window per trigger when scanTimeLimitMs is zero", async () => {
   const { node, fetchCalls } = createCursorTestNode({
     frontWindowSize: 500,
@@ -2100,6 +2189,52 @@ test("imap email in suppresses success output when an existing inflight is claim
   assert.equal(stats.parseErrors, 0);
 });
 
+test("imap email in suppresses success output when an unclaimed inflight is still active during parse", async () => {
+  let nodeRef;
+  let oldToken;
+  const { node } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    retryAfterMs: 60000
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-active-race",
+      front: [{ uid: 1, flags: [], size: 100 }],
+      messages: [{
+        uid: 1,
+        flags: [],
+        envelope: { subject: "Active race" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Active race")
+      }],
+      download() {
+        registry.markInflight(nodeRef.queueKey, oldToken, { now: Date.now() });
+        return {
+          meta: { expectedSize: 100 },
+          content: sourceToStream(createMailSource("Active race"))
+        };
+      }
+    }
+  ]);
+  nodeRef = node;
+  oldToken = buildInputAckToken(node, 1, "uidv-active-race");
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(outputs.find((output) => output && output[0]), undefined);
+  assert.equal(outputs.find((output) => output && output[1]), undefined);
+  assert.equal(registry.matchesAckToken(node.queueKey, oldToken), true);
+  assert.equal(registry.isActiveInflight(node.queueKey, "uidv-active-race", 1, 60000, Date.now()), true);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.filteredByInflight, 1);
+  assert.equal(stats.emitted, 0);
+  assert.equal(stats.parseErrors, 0);
+});
+
 test("imap email in suppresses success output when an old inflight completes before re-mark", async () => {
   let nodeRef;
   let oldToken;
@@ -2200,6 +2335,58 @@ test("imap email in preserves transient download retry semantics when race outpu
   assert.equal(stats.parseErrors, 0);
 });
 
+test("imap email in preserves transient download retry semantics when active inflight suppresses output", async () => {
+  const err = createConnectionError("Connection not available", "NoConnection");
+  let nodeRef;
+  let oldToken;
+  const { node, statuses, warnings, errors, releasedLocks, loggedOutClients } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    retryAfterMs: 60000
+  }, [
+    {
+      usable: false,
+      exists: 1,
+      uidValidity: "uidv-active-download",
+      front: [{ uid: 1, flags: [], size: 100 }],
+      messages: [{
+        uid: 1,
+        flags: [],
+        envelope: { subject: "Active download" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Active download")
+      }],
+      download() {
+        registry.markInflight(nodeRef.queueKey, oldToken, { now: Date.now() });
+        throw err;
+      }
+    }
+  ]);
+  nodeRef = node;
+  oldToken = buildInputAckToken(node, 1, "uidv-active-download");
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(node.running, false);
+  assert.equal(errors.length, 0);
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0]), /NoConnection/);
+  assert.deepEqual(releasedLocks, ["INBOX"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.equal(statuses[statuses.length - 1].fill, "red");
+  assert.equal(outputs.find((output) => output && output[1]), undefined);
+  assert.equal(registry.matchesAckToken(node.queueKey, oldToken), true);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.ok, false);
+  assert.equal(stats.connectionErrors, 1);
+  assert.equal(stats.scanCursorAdjusted, true);
+  assert.equal(stats.filteredByInflight, 1);
+  assert.equal(stats.parseErrors, 0);
+});
+
 test("imap email in swallows late download stream errors after parse failure", async () => {
   const firstErr = createConnectionError("Connection not available", "NoConnection");
   const lateErr = createConnectionError("Connection not available", "NoConnection");
@@ -2262,6 +2449,41 @@ test("imap email in swallows late download stream errors after parse failure", a
   const stats = collectStats(outputs)[0];
   assert.equal(stats.ok, false);
   assert.equal(stats.connectionErrors, 1);
+});
+
+test("imap email in emits missing-source errors with an ACK token when marking is allowed", async () => {
+  const { node } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-missing-source",
+      front: [{ uid: 66, flags: [], size: 100 }],
+      messages: [{
+        uid: 66,
+        flags: [],
+        envelope: { subject: "Missing source" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: null
+      }]
+    }
+  ]);
+  const outputs = [];
+
+  await node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(registry.countAllInflight(node.queueKey), 1);
+  const errorOutput = outputs.find((output) => output && output[1]);
+  assert.equal(errorOutput[1].error.code, "IMAP_EMAIL_MISSING_SOURCE");
+  assert.equal(errorOutput[1].imap.uid, 66);
+  assert.equal(errorOutput[1].imap.ackToken.version, 2);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.missingSource, 1);
+  assert.equal(stats.parseErrors, 1);
+  assert.equal(stats.emitted, 0);
 });
 
 test("imap email in rejects known oversized messages without downloading them", async () => {
@@ -2448,7 +2670,7 @@ test("imap email in only expunges deleted front-window UIDs with UIDPLUS", async
   assert.equal(stats.scanCursorNext, 6);
 });
 
-test("imap email in deleted-front expunge does not remove claimed inflight entries", async () => {
+test("imap email in deleted-front expunge skips claimed inflight entries before delete", async () => {
   const expunged = createCursorTestNode({
     frontWindowSize: 5,
     batchSize: 1,
@@ -2470,13 +2692,44 @@ test("imap email in deleted-front expunge does not remove claimed inflight entri
 
   await expunged.node.runFetchCycle({}, (output) => outputs.push(output));
 
-  assert.equal(expunged.messageDeleteCalls.length, 1);
-  assert.equal(expunged.messageDeleteCalls[0].range, "10");
+  assert.equal(expunged.messageDeleteCalls.length, 0);
   assert.equal(registry.matchesAckToken(expunged.node.queueKey, oldToken), true);
   assert.equal(registry.isActiveInflight(expunged.node.queueKey, "uidv-claimed-expunge", 10, 1, Date.now()), true);
 
   const stats = collectStats(outputs)[0];
-  assert.equal(stats.deletedExpunged, 1);
+  assert.equal(stats.deletedExpunged, 0);
+  assert.equal(stats.deletedExpungeSkippedInflight, 1);
+  assert.equal(stats.filteredByFlags >= 1, true);
+});
+
+test("imap email in deleted-front expunge skips active unclaimed inflight entries before delete", async () => {
+  const expunged = createCursorTestNode({
+    frontWindowSize: 5,
+    batchSize: 1,
+    retryAfterMs: 60000,
+    expungeDeletedFront: true,
+    expungeDeletedFrontLimit: 1
+  }, [
+    {
+      exists: 10,
+      uidValidity: "uidv-active-expunge",
+      capabilities: ["UIDPLUS"],
+      front: [{ uid: 10, flags: ["\\Deleted"], size: 10 }]
+    }
+  ]);
+  const oldToken = buildInputAckToken(expunged.node, 10, "uidv-active-expunge");
+  registry.markInflight(expunged.node.queueKey, oldToken, { now: Date.now() });
+  const outputs = [];
+
+  await expunged.node.runFetchCycle({}, (output) => outputs.push(output));
+
+  assert.equal(expunged.messageDeleteCalls.length, 0);
+  assert.equal(registry.matchesAckToken(expunged.node.queueKey, oldToken), true);
+  assert.equal(registry.isActiveInflight(expunged.node.queueKey, "uidv-active-expunge", 10, 60000, Date.now()), true);
+
+  const stats = collectStats(outputs)[0];
+  assert.equal(stats.deletedExpunged, 0);
+  assert.equal(stats.deletedExpungeSkippedInflight, 1);
   assert.equal(stats.filteredByFlags >= 1, true);
 });
 

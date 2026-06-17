@@ -23,6 +23,13 @@ declares. Check the Node-RED runtime requirement when upgrading Node-RED itself.
 
 ## Installation
 
+From the npm registry:
+
+```bash
+cd ~/.node-red
+npm install @compeso/node-red-contrib-imap-email
+```
+
 From GitHub during development:
 
 ```bash
@@ -91,10 +98,10 @@ Important settings:
 
 ```text
 Batch size       maximum messages emitted per trigger
-Front window     maximum messages inspected per trigger from the current cursor
+Front window     maximum messages inspected per bounded window
 Max inflight     maximum emitted but not-yet-ACKed messages tracked in memory
 Retry after ms   time after which an un-ACKed message may be emitted again
-Scan time ms     initial cursor-window soft time budget; 0 means one cursor window
+Scan time ms     initial cursor-window soft time budget; 0 means exactly one cursor window
 UIDs/command     maximum UID count per IMAP command chunk
 Max bytes        maximum RFC822 bytes per message, 0 means unlimited
 Chunk bytes      streamed IMAP download chunk size
@@ -110,7 +117,7 @@ Flagged   Any | Only with flag | Only without flag
 ```
 
 The defaults are `Deleted = Only without flag` and all other flags set to
-`Any`. These filters are applied only inside the bounded cursor window. A
+`Any`. These filters are applied only inside bounded windows. A
 selective filter may emit fewer messages than `Batch size`; it never causes a
 full-mailbox scan to fill the batch. When the cursor reaches the end of the
 mailbox, it wraps back to the first sequence number. The cursor is volatile and
@@ -181,6 +188,12 @@ Exactly once         = not guaranteed
 ```
 
 The inflight registry is volatile process memory. If Node-RED restarts after a message was emitted but before it was ACKed, the message remains in the mailbox and may be emitted again.
+
+Completion guards for successfully ACKed inflight generations are also kept
+only in process memory and are bounded by a per-queue TTL and hard cap. After
+that bounded best-effort window, an extremely old fetch generation may be
+eligible for re-marking again. This keeps memory use bounded and preserves the
+package's at-least-once model; it is not an exactly-once guarantee.
 
 No message is reported as successfully completed if the configured IMAP action
 fails. In that case output 2 receives the original message with
