@@ -231,6 +231,21 @@ test("release documentation describes npm install and current audit command", ()
   assert.match(docs["docs/RELEASE_DE.md"], /Strato und\s+IONOS wurden am 2026-06-17 manuell erfolgreich getestet/);
 });
 
+test("palette nodes share the Node-RED network group and IMAP mail color", () => {
+  const root = path.resolve(__dirname, "..");
+  const paletteNodes = [
+    path.join("nodes", "imap-email-in.html"),
+    path.join("nodes", "imap-email-ack.html")
+  ];
+
+  for (const file of paletteNodes) {
+    const html = fs.readFileSync(path.join(root, file), "utf8");
+
+    assert.match(html, /category:\s*['"]network['"]/, `${file} must appear in the Node-RED network palette group`);
+    assert.match(html, /color:\s*['"]#c4e3f3['"]/, `${file} must use the IMAP mail palette color`);
+  }
+});
+
 test("front window documentation describes bounded windows per trigger", () => {
   const root = path.resolve(__dirname, "..");
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");

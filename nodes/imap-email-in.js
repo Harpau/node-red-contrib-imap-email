@@ -18,6 +18,7 @@ const {
 const {
   formatImapError,
   isTransientImapConnectionError,
+  safeClose,
   safeLogout
 } = require("../lib/imap-connection");
 const diagnostics = require("../lib/diagnostics");
@@ -25,6 +26,7 @@ const diagnostics = require("../lib/diagnostics");
 const DEFAULT_DOWNLOAD_CHUNK_SIZE = 64 * 1024;
 const TOO_LARGE_CODE = "IMAP_EMAIL_MESSAGE_TOO_LARGE";
 const DEFAULT_SCAN_TIME_LIMIT_MS = 10000;
+const DEFAULT_CLOSE_TIMEOUT_MS = 10000;
 
 function buildTooLargeError(limit) {
   const err = new Error(`IMAP message exceeds maxMessageBytes (${limit})`);
@@ -84,42 +86,60 @@ function headersToMailFields(mail) {
   });
 }
 
-function drainAttachment(data, includeAttachments, done) {
+function drainAttachment(data, includeAttachments, done, trackStream, untrackStream) {
+  let settled = false;
+  const content = data.content;
+
+  if (typeof trackStream === "function") {
+    trackStream(content);
+  }
+
+  function finish(err, release) {
+    if (settled) {
+      return;
+    }
+    settled = true;
+
+    if (typeof untrackStream === "function") {
+      untrackStream(content);
+    }
+
+    if (release && typeof data.release === "function") {
+      data.release();
+    }
+
+    done(err);
+  }
+
   if (includeAttachments) {
     const chunks = [];
     let chunkLength = 0;
 
-    data.content.on("readable", () => {
+    content.on("readable", () => {
       let chunk;
-      while ((chunk = data.content.read()) !== null) {
+      while ((chunk = content.read()) !== null) {
         chunks.push(chunk);
         chunkLength += chunk.length;
       }
     });
 
-    data.content.once("end", () => {
+    content.once("end", () => {
       data.content = Buffer.concat(chunks, chunkLength);
-      if (typeof data.release === "function") {
-        data.release();
-      }
-      done();
+      finish(null, true);
     });
   } else {
-    data.content.on("readable", () => {
-      while (data.content.read() !== null) {
+    content.on("readable", () => {
+      while (content.read() !== null) {
         // Drain the stream so MailParser can continue without buffering it.
       }
     });
 
-    data.content.once("end", () => {
-      if (typeof data.release === "function") {
-        data.release();
-      }
-      done();
+    content.once("end", () => {
+      finish(null, true);
     });
   }
 
-  data.content.once("error", done);
+  content.once("error", (err) => finish(err, false));
 }
 
 function parseMailStream(source, options = {}) {
@@ -133,8 +153,22 @@ function parseMailStream(source, options = {}) {
       skipImageLinks: !includeAttachments,
       skipTextToHtml: true
     });
+    const trackStream = typeof options.onStream === "function" ? options.onStream : null;
+    const untrackStream = typeof options.onDone === "function" ? options.onDone : null;
     let settled = false;
     let reading = false;
+
+    function track(stream) {
+      if (trackStream && stream) {
+        trackStream(stream);
+      }
+    }
+
+    function untrack(stream) {
+      if (untrackStream && stream) {
+        untrackStream(stream);
+      }
+    }
 
     function unpipeQuietly(from, to) {
       try {
@@ -146,10 +180,10 @@ function parseMailStream(source, options = {}) {
       }
     }
 
-    function destroyQuietly(stream) {
+    function destroyQuietly(stream, err) {
       try {
         if (stream && typeof stream.destroy === "function" && !stream.destroyed) {
-          stream.destroy();
+          stream.destroy(err);
         }
       } catch (ignored) {
         // ignore
@@ -162,12 +196,16 @@ function parseMailStream(source, options = {}) {
       }
       settled = true;
 
+      untrack(source);
+      untrack(counter);
+      untrack(parser);
+
       if (err) {
         unpipeQuietly(source, counter);
         unpipeQuietly(counter, parser);
-        destroyQuietly(source);
-        destroyQuietly(counter);
-        destroyQuietly(parser);
+        destroyQuietly(source, err);
+        destroyQuietly(counter, err);
+        destroyQuietly(parser, err);
         reject(err);
       } else {
         resolve(value);
@@ -198,7 +236,7 @@ function parseMailStream(source, options = {}) {
               return;
             }
             readNext();
-          });
+          }, track, untrack);
           return;
         }
       }
@@ -251,6 +289,9 @@ function parseMailStream(source, options = {}) {
       finishParsed();
     });
 
+    track(source);
+    track(counter);
+    track(parser);
     source.pipe(counter).pipe(parser);
   });
 }
@@ -286,10 +327,17 @@ module.exports = function registerImapEmailIn(RED) {
     node.includeAttachments = parseBoolean(config.includeAttachments, false);
     node.emitRaw = parseBoolean(config.emitRaw, false);
     node.diagnostics = diagnostics.normalizeDiagnostics(config.diagnostics, "stats");
+    node.closeTimeoutMs = parseInteger(config.closeTimeoutMs, DEFAULT_CLOSE_TIMEOUT_MS, 1, 14000);
 
     node.closed = false;
+    node.closing = false;
     node.running = false;
     node.closeDone = null;
+    node.closeTimer = null;
+    node.closeFinalized = false;
+    node.closeAbortError = null;
+    node.activeClients = new Set();
+    node.activeStreams = new Set();
     node.scanCursor = 1;
     node.scanUidValidity = null;
     node.newUidCursor = null;
@@ -383,6 +431,117 @@ module.exports = function registerImapEmailIn(RED) {
     function addTiming(timing, name, startedAt) {
       const ms = Math.max(0, Date.now() - startedAt);
       timing.marks[name] = Math.max(0, Number(timing.marks[name] || 0) + ms);
+    }
+
+    function buildCloseError() {
+      const err = new Error("IMAP fetch aborted by node close");
+      err.code = "IMAP_EMAIL_IN_CLOSE";
+      return err;
+    }
+
+    function isCloseAbortError(err) {
+      return err && err.code === "IMAP_EMAIL_IN_CLOSE";
+    }
+
+    function getCloseAbortError() {
+      node.closeAbortError = node.closeAbortError || buildCloseError();
+      return node.closeAbortError;
+    }
+
+    function throwIfClosing() {
+      if (node.closing || node.closeAbortError) {
+        throw getCloseAbortError();
+      }
+    }
+
+    function trackClient(client) {
+      if (client) {
+        node.activeClients.add(client);
+      }
+      return client;
+    }
+
+    function untrackClient(client) {
+      if (client) {
+        node.activeClients.delete(client);
+      }
+    }
+
+    function closeActiveClients() {
+      for (const client of Array.from(node.activeClients)) {
+        safeClose(client);
+      }
+    }
+
+    function trackStream(stream) {
+      if (stream) {
+        node.activeStreams.add(stream);
+      }
+    }
+
+    function untrackStream(stream) {
+      if (stream) {
+        node.activeStreams.delete(stream);
+      }
+    }
+
+    function destroyActiveStreams(err) {
+      for (const stream of Array.from(node.activeStreams)) {
+        try {
+          if (stream && typeof stream.destroy === "function" && !stream.destroyed) {
+            stream.destroy(err);
+          }
+        } catch (ignored) {
+          // ignore
+        }
+      }
+    }
+
+    function clearCloseTimer() {
+      if (node.closeTimer) {
+        clearTimeout(node.closeTimer);
+        node.closeTimer = null;
+      }
+    }
+
+    function abortActiveWork() {
+      const err = getCloseAbortError();
+      closeActiveClients();
+      destroyActiveStreams(err);
+    }
+
+    function finishCloseNow() {
+      if (node.closeFinalized) {
+        return;
+      }
+
+      node.closeFinalized = true;
+      clearCloseTimer();
+      abortActiveWork();
+
+      if (node.closeDone) {
+        const done = node.closeDone;
+        node.closeDone = null;
+        done();
+      }
+    }
+
+    function completeCloseIfReady() {
+      if (!node.closeDone || node.closeFinalized || node.running) {
+        return;
+      }
+
+      finishCloseNow();
+    }
+
+    function scheduleCloseDeadline() {
+      if (node.closeTimer) {
+        return;
+      }
+
+      node.closeTimer = setTimeout(() => {
+        finishCloseNow();
+      }, node.closeTimeoutMs);
     }
 
     function buildImapMeta(uid, uidValidity, imapMessage, ackToken) {
@@ -559,6 +718,10 @@ module.exports = function registerImapEmailIn(RED) {
 
       const timing = diagnostics.createTimings();
       const stats = buildBaseStats();
+      const cycleStartScanCursor = node.scanCursor;
+      const cycleStartNewUidCursor = node.newUidCursor;
+      let closeRollbackScanCursor = null;
+      let closeRollbackNewUidCursor = null;
       let activeInflightForStatus = 0;
 
       function finishStats() {
@@ -569,7 +732,33 @@ module.exports = function registerImapEmailIn(RED) {
         return stats;
       }
 
+      function sendIfOpen(output) {
+        if (node.closed || node.closing) {
+          return false;
+        }
+        send(output);
+        return true;
+      }
+
+      function emitStatsIfOpen(statsPayload) {
+        if (node.closed || node.closing) {
+          return;
+        }
+        emitStats(send, statsPayload);
+      }
+
+      function applyCloseRollback() {
+        node.scanCursor = closeRollbackScanCursor !== null ? closeRollbackScanCursor : cycleStartScanCursor;
+        node.newUidCursor = closeRollbackNewUidCursor !== null ? closeRollbackNewUidCursor : cycleStartNewUidCursor;
+        stats.scanCursorAdjusted = true;
+        stats.scanCursorNext = node.scanCursor;
+        stats.scanWrapped = node.scanCursor === 1;
+        stats.newUidCursor = node.newUidCursor;
+      }
+
       function markInflightForFetch(ackToken, meta = {}) {
+        throwIfClosing();
+
         const now = Date.now();
         const wasActive = registry.isActiveInflight(
           node.queueKey,
@@ -607,6 +796,10 @@ module.exports = function registerImapEmailIn(RED) {
       }
 
       function updateSentStatus() {
+        if (node.closed || node.closing) {
+          return;
+        }
+
         node.status({
           fill: "green",
           shape: "dot",
@@ -621,7 +814,7 @@ module.exports = function registerImapEmailIn(RED) {
         finishStats();
 
         node.status({ fill: "yellow", shape: "ring", text: "trigger skipped: running" });
-        emitStats(send, stats);
+        emitStatsIfOpen(stats);
         return;
       }
 
@@ -650,19 +843,21 @@ module.exports = function registerImapEmailIn(RED) {
           finishStats();
 
           node.status({ fill: "yellow", shape: "ring", text: `inflight ${activeInflight}/${node.maxInflight}` });
-          emitStats(send, stats);
+          emitStatsIfOpen(stats);
           return;
         }
 
-        client = node.account.createClient({ node, context: "imap email in" });
+        client = trackClient(node.account.createClient({ node, context: "imap email in" }));
 
         let started = Date.now();
         await client.connect();
         addTiming(timing, "connectMs", started);
+        throwIfClosing();
 
         started = Date.now();
         lock = await client.getMailboxLock(node.mailbox);
         addTiming(timing, "lockMs", started);
+        throwIfClosing();
 
         const mailboxInfo = client.mailbox || {};
         const exists = Number(mailboxInfo.exists || 0);
@@ -686,7 +881,7 @@ module.exports = function registerImapEmailIn(RED) {
           stats.newUidCursor = node.newUidCursor;
           finishStats();
           node.status({ fill: "green", shape: "ring", text: "empty" });
-          emitStats(send, stats);
+          emitStatsIfOpen(stats);
           return;
         }
 
@@ -730,6 +925,10 @@ module.exports = function registerImapEmailIn(RED) {
         }
 
         function updateWindowStatus(window) {
+          if (node.closed || node.closing) {
+            return;
+          }
+
           const label = window.windowPhase === "cursor"
             ? "cursor-window"
             : window.windowPhase === "new-uid"
@@ -758,11 +957,15 @@ module.exports = function registerImapEmailIn(RED) {
           const fetchStarted = Date.now();
           const fetchOptions = window.uid ? { uid: true } : undefined;
 
+          throwIfClosing();
+
           for await (const item of client.fetch(`${window.windowStart}:${window.windowEnd}`, {
             uid: true,
             flags: true,
             size: true
           }, fetchOptions)) {
+            throwIfClosing();
+
             const uid = Number(item.uid);
             if (!isValidUid(uid)) {
               continue;
@@ -821,6 +1024,7 @@ module.exports = function registerImapEmailIn(RED) {
           }
 
           addTiming(timing, "frontFetchMs", fetchStarted);
+          throwIfClosing();
           noteScanWindow(window);
           updateWindowStatus(window);
           return result;
@@ -990,6 +1194,7 @@ module.exports = function registerImapEmailIn(RED) {
         }
 
         await readAdaptiveWindows();
+        throwIfClosing();
 
         stats.newUidCursor = node.newUidCursor;
         if (stats.scanCursorStart === null) {
@@ -999,6 +1204,7 @@ module.exports = function registerImapEmailIn(RED) {
         }
 
         let expungedAny = await expungeDeletedUids(client, uidValidity, deletedUids, stats, timing);
+        throwIfClosing();
         activeInflightForStatus = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
         const deletedSeenDuringFetch = [];
         const deletedSeenSet = new Set();
@@ -1015,14 +1221,29 @@ module.exports = function registerImapEmailIn(RED) {
           deletedSeenDuringFetch.push(uid);
         }
 
-        for (const uid of candidates) {
-          let imapMessage;
-          const candidateRetry = candidateRetryCursors.get(uid) || {};
+        function noteCandidateRollback(candidateRetry) {
           if (Object.prototype.hasOwnProperty.call(candidateRetry, "sequenceRetryCursor")) {
             sequenceRetryCursor = candidateRetry.sequenceRetryCursor;
+            if (candidateRetry.sequenceRetryCursor !== null) {
+              closeRollbackScanCursor = candidateRetry.sequenceRetryCursor;
+            }
           }
           if (Object.prototype.hasOwnProperty.call(candidateRetry, "newUidRetryCursor")) {
             newUidRetryCursor = candidateRetry.newUidRetryCursor;
+            if (candidateRetry.newUidRetryCursor !== null) {
+              closeRollbackNewUidCursor = candidateRetry.newUidRetryCursor;
+            }
+          }
+        }
+
+        for (const uid of candidates) {
+          let imapMessage;
+          const candidateRetry = candidateRetryCursors.get(uid) || {};
+          noteCandidateRollback(candidateRetry);
+
+          if (node.closing || node.closeAbortError) {
+            connectionInterrupted = true;
+            break;
           }
 
           started = Date.now();
@@ -1037,12 +1258,17 @@ module.exports = function registerImapEmailIn(RED) {
             addTiming(timing, "fullFetchMs", started);
           } catch (err) {
             addTiming(timing, "fullFetchMs", started);
+            if (node.closing || isCloseAbortError(err)) {
+              connectionInterrupted = true;
+              break;
+            }
+
             if (!isTransientImapConnectionError(err)) {
               throw err;
             }
 
             noteConnectionError(stats, err, "IMAP fetchOne");
-            send([
+            sendIfOpen([
               null,
               {
                 error: diagnostics.errorToObject(err),
@@ -1053,6 +1279,11 @@ module.exports = function registerImapEmailIn(RED) {
               },
               null
             ]);
+            connectionInterrupted = true;
+            break;
+          }
+
+          if (node.closing || node.closeAbortError) {
             connectionInterrupted = true;
             break;
           }
@@ -1090,7 +1321,7 @@ module.exports = function registerImapEmailIn(RED) {
               continue;
             }
             stats.tooLarge += 1;
-            send([
+            sendIfOpen([
               null,
               {
                 error: diagnostics.errorToObject(err),
@@ -1110,12 +1341,17 @@ module.exports = function registerImapEmailIn(RED) {
             });
             addTiming(timing, "downloadMs", started);
           } catch (err) {
+            if (node.closing || isCloseAbortError(err)) {
+              connectionInterrupted = true;
+              break;
+            }
+
             const markedInflight = markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
             if (markedInflight) {
               stats.parseErrors += 1;
-              send([
+              sendIfOpen([
                 null,
                 {
                   error: diagnostics.errorToObject(err),
@@ -1132,6 +1368,11 @@ module.exports = function registerImapEmailIn(RED) {
             continue;
           }
 
+          if (node.closing || node.closeAbortError) {
+            connectionInterrupted = true;
+            break;
+          }
+
           if (!download || !download.content) {
             if (!markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
@@ -1140,7 +1381,7 @@ module.exports = function registerImapEmailIn(RED) {
             }
             stats.missingSource += 1;
             stats.parseErrors += 1;
-            send([
+            sendIfOpen([
               null,
               {
                 error: {
@@ -1159,9 +1400,16 @@ module.exports = function registerImapEmailIn(RED) {
             const parsed = await parseMailStream(download.content, {
               includeAttachments: node.includeAttachments,
               emitRaw: node.emitRaw,
-              maxMessageBytes: node.maxMessageBytes
+              maxMessageBytes: node.maxMessageBytes,
+              onStream: trackStream,
+              onDone: untrackStream
             });
             addTiming(timing, "parseMs", started);
+
+            if (node.closing || node.closeAbortError) {
+              connectionInterrupted = true;
+              break;
+            }
 
             if (!markInflightForFetch(ackToken, {
               messageId: parsed.messageId,
@@ -1212,8 +1460,13 @@ module.exports = function registerImapEmailIn(RED) {
 
             stats.emitted += 1;
             updateSentStatus();
-            send([out, null, null]);
+            sendIfOpen([out, null, null]);
           } catch (err) {
+            if (node.closing || isCloseAbortError(err)) {
+              connectionInterrupted = true;
+              break;
+            }
+
             const markedInflight = markInflightForFetch(ackToken, {
               subject: imapMessage.envelope && imapMessage.envelope.subject
             });
@@ -1225,7 +1478,7 @@ module.exports = function registerImapEmailIn(RED) {
                 stats.parseErrors += 1;
               }
 
-              send([
+              sendIfOpen([
                 null,
                 {
                   error: diagnostics.errorToObject(err),
@@ -1242,9 +1495,10 @@ module.exports = function registerImapEmailIn(RED) {
           }
         }
 
-        if (!connectionInterrupted && deletedSeenDuringFetch.length > 0) {
+        if (!connectionInterrupted && !node.closing && deletedSeenDuringFetch.length > 0) {
           const didExpunge = await expungeDeletedUids(client, uidValidity, deletedSeenDuringFetch, stats, timing);
           expungedAny = expungedAny || didExpunge;
+          throwIfClosing();
         }
 
         if (connectionInterrupted) {
@@ -1275,14 +1529,23 @@ module.exports = function registerImapEmailIn(RED) {
         node.scanCursor = cursorAfterCycle;
         node.scanUidValidity = uidValidity;
 
+        if (node.closing || node.closeAbortError) {
+          return;
+        }
+
         finishStats();
-        emitStats(send, stats);
+        emitStatsIfOpen(stats);
         node.status({
           fill: stats.ok ? (stats.emitted > 0 ? "green" : "grey") : "red",
           shape: stats.ok ? "dot" : "ring",
           text: stats.ok ? `sent ${stats.emitted}, inflight ${stats.activeInflightAfter}/${node.maxInflight}` : stats.error
         });
       } catch (err) {
+        if (node.closing || isCloseAbortError(err)) {
+          applyCloseRollback();
+          return;
+        }
+
         const transientConnectionError = isTransientImapConnectionError(err);
         stats.ok = false;
         stats.error = err.message;
@@ -1292,7 +1555,7 @@ module.exports = function registerImapEmailIn(RED) {
         finishStats();
 
         node.status({ fill: "red", shape: "ring", text: err.message });
-        send([
+        sendIfOpen([
           null,
           {
             error: diagnostics.errorToObject(err),
@@ -1303,7 +1566,7 @@ module.exports = function registerImapEmailIn(RED) {
           },
           null
         ]);
-        emitStats(send, stats);
+        emitStatsIfOpen(stats);
         if (transientConnectionError) {
           diagnostics.warn(node, `IMAP fetch failed for ${node.mailbox}: ${formatImapError(err)}`);
         } else {
@@ -1318,7 +1581,7 @@ module.exports = function registerImapEmailIn(RED) {
           // ignore
         }
         try {
-          if (client) {
+          if (client && !node.closing) {
             const started = Date.now();
             const result = await safeLogout(client);
             if (!result.skipped) {
@@ -1327,15 +1590,12 @@ module.exports = function registerImapEmailIn(RED) {
           }
         } catch (err) {
           // ignore
+        } finally {
+          untrackClient(client);
         }
 
         node.running = false;
-
-        if (node.closeDone) {
-          const done = node.closeDone;
-          node.closeDone = null;
-          done();
-        }
+        completeCloseIfReady();
       }
     };
 
@@ -1356,10 +1616,13 @@ module.exports = function registerImapEmailIn(RED) {
 
     node.on("close", function onClose(removed, done) {
       node.closed = true;
-      if (node.running) {
-        node.closeDone = done;
-      } else {
-        done();
+      node.closing = true;
+      node.closeDone = done;
+      scheduleCloseDeadline();
+      abortActiveWork();
+
+      if (!node.running) {
+        finishCloseNow();
       }
     });
 

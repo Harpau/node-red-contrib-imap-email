@@ -38,6 +38,7 @@ function createInputNode(config = {}, options = {}) {
   const statuses = options.statuses || [];
   const warnings = options.warnings || [];
   const errors = options.errors || [];
+  const handlers = options.handlers || {};
   const account = {
     id: "account-1",
     host: "imap.example.test",
@@ -53,7 +54,9 @@ function createInputNode(config = {}, options = {}) {
         node.status = (status) => statuses.push(status);
         node.warn = (message) => warnings.push(message);
         node.error = (err) => errors.push(err);
-        node.on = () => {};
+        node.on = (event, handler) => {
+          handlers[event] = handler;
+        };
       },
       getNode(id) {
         return id === "account-1" ? account : null;
@@ -103,6 +106,8 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
   const commandsDuringFetch = [];
   const releasedLocks = [];
   const loggedOutClients = [];
+  const closedClients = [];
+  const handlers = {};
   let mailboxIndex = 0;
   let currentMailbox = mailboxes[0];
 
@@ -198,6 +203,14 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
             return currentMailbox.logout();
           }
           loggedOutClients.push(currentMailbox.uidValidity);
+        },
+        close() {
+          closedClients.push(currentMailbox.uidValidity);
+          this.isClosed = true;
+          this.usable = false;
+          if (typeof currentMailbox.close === "function") {
+            return currentMailbox.close();
+          }
         }
       };
     }
@@ -208,7 +221,7 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
     includeAttachments: false,
     emitRaw: false,
     ...config
-  }, { account, statuses, warnings, errors });
+  }, { account, statuses, warnings, errors, handlers });
   registry.clearQueue(node.queueKey);
 
   return {
@@ -222,7 +235,9 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
     messageDeleteCalls,
     commandsDuringFetch,
     releasedLocks,
-    loggedOutClients
+    loggedOutClients,
+    closedClients,
+    handlers
   };
 }
 
@@ -2140,6 +2155,283 @@ test("imap email in handles transient download errors without node.error", async
   assert.equal(stats.ok, false);
   assert.equal(stats.connectionErrors, 1);
   assert.equal(stats.scanCursorAdjusted, true);
+});
+
+test("imap email in close aborts a blocked front-window fetch without outputs", async () => {
+  let rejectFetch;
+  let fetchStarted;
+  const fetchStartedPromise = new Promise((resolve) => {
+    fetchStarted = resolve;
+  });
+  const { node, handlers, closedClients, loggedOutClients } = createCursorTestNode({
+    frontWindowSize: 10,
+    batchSize: 1,
+    closeTimeoutMs: 100
+  }, [
+    {
+      exists: 10,
+      uidValidity: "uidv-close-front-fetch",
+      fetch: async function* fetch() {
+        await new Promise((resolve, reject) => {
+          rejectFetch = reject;
+          fetchStarted();
+        });
+      },
+      close() {
+        if (rejectFetch) {
+          rejectFetch(createConnectionError("Connection not available", "NoConnection"));
+        }
+      }
+    }
+  ]);
+  const outputs = [];
+  const runPromise = node.runFetchCycle({}, (output) => outputs.push(output));
+  await fetchStartedPromise;
+
+  let closeDoneCount = 0;
+  const closePromise = new Promise((resolve) => {
+    handlers.close(false, () => {
+      closeDoneCount += 1;
+      resolve();
+    });
+  });
+
+  await Promise.all([runPromise, closePromise]);
+
+  assert.equal(closeDoneCount, 1);
+  assert.deepEqual(closedClients, ["uidv-close-front-fetch"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.equal(outputs.length, 0);
+  assert.equal(node.running, false);
+  assert.equal(node.scanCursor, 1);
+  assert.equal(node.newUidCursor, null);
+  assert.equal(registry.countAllInflight(node.queueKey), 0);
+});
+
+test("imap email in close aborts a blocked download without marking inflight", async () => {
+  let rejectDownload;
+  let downloadStarted;
+  const downloadStartedPromise = new Promise((resolve) => {
+    downloadStarted = resolve;
+  });
+  const { node, handlers, closedClients, releasedLocks, loggedOutClients } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    closeTimeoutMs: 100
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-close-download",
+      front: [{ uid: 31, flags: [], size: 100 }],
+      messages: [{
+        uid: 31,
+        flags: [],
+        envelope: { subject: "Close download" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Close download")
+      }],
+      download() {
+        return new Promise((resolve, reject) => {
+          rejectDownload = reject;
+          downloadStarted();
+        });
+      },
+      close() {
+        if (rejectDownload) {
+          rejectDownload(createConnectionError("Connection not available", "NoConnection"));
+        }
+      }
+    }
+  ]);
+  const outputs = [];
+  const runPromise = node.runFetchCycle({}, (output) => outputs.push(output));
+  await downloadStartedPromise;
+
+  let closeDoneCount = 0;
+  const closePromise = new Promise((resolve) => {
+    handlers.close(false, () => {
+      closeDoneCount += 1;
+      resolve();
+    });
+  });
+
+  await Promise.all([runPromise, closePromise]);
+
+  assert.equal(closeDoneCount, 1);
+  assert.deepEqual(closedClients, ["uidv-close-download"]);
+  assert.deepEqual(releasedLocks, ["INBOX"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.equal(outputs.length, 0);
+  assert.equal(node.running, false);
+  assert.equal(node.scanCursor, 1);
+  assert.equal(node.newUidCursor, null);
+  assert.equal(registry.countAllInflight(node.queueKey), 0);
+});
+
+test("imap email in close deadline finalizes once when active work ignores close", async () => {
+  let rejectDownload;
+  let downloadStarted;
+  const downloadStartedPromise = new Promise((resolve) => {
+    downloadStarted = resolve;
+  });
+  const { node, handlers, closedClients, loggedOutClients } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    closeTimeoutMs: 5
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-close-deadline",
+      front: [{ uid: 33, flags: [], size: 100 }],
+      messages: [{
+        uid: 33,
+        flags: [],
+        envelope: { subject: "Close deadline" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Close deadline")
+      }],
+      download() {
+        return new Promise((resolve, reject) => {
+          rejectDownload = reject;
+          downloadStarted();
+        });
+      }
+    }
+  ]);
+  const outputs = [];
+  const runPromise = node.runFetchCycle({}, (output) => outputs.push(output));
+  await downloadStartedPromise;
+
+  let closeDoneCount = 0;
+  const closePromise = new Promise((resolve) => {
+    handlers.close(false, () => {
+      closeDoneCount += 1;
+      resolve();
+    });
+  });
+
+  await closePromise;
+  rejectDownload(createConnectionError("Connection not available", "NoConnection"));
+  await runPromise;
+
+  assert.equal(closeDoneCount, 1);
+  assert.deepEqual(closedClients, ["uidv-close-deadline"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.equal(outputs.length, 0);
+  assert.equal(node.running, false);
+  assert.equal(node.closeFinalized, true);
+  assert.equal(registry.countAllInflight(node.queueKey), 0);
+});
+
+test("imap email in close destroys an active parse stream and suppresses outputs", async () => {
+  let source;
+  let downloadStarted;
+  const downloadStartedPromise = new Promise((resolve) => {
+    downloadStarted = resolve;
+  });
+  const { node, handlers, closedClients, loggedOutClients } = createCursorTestNode({
+    frontWindowSize: 1,
+    batchSize: 1,
+    closeTimeoutMs: 100
+  }, [
+    {
+      exists: 1,
+      uidValidity: "uidv-close-parse",
+      front: [{ uid: 32, flags: [], size: 100 }],
+      messages: [{
+        uid: 32,
+        flags: [],
+        envelope: { subject: "Close parse" },
+        internalDate: new Date("2026-01-01T00:00:00Z"),
+        size: 100,
+        source: createMailSource("Close parse")
+      }],
+      download() {
+        source = new PassThrough();
+        downloadStarted();
+        return {
+          meta: { expectedSize: 100 },
+          content: source
+        };
+      }
+    }
+  ]);
+  const outputs = [];
+  const runPromise = node.runFetchCycle({}, (output) => outputs.push(output));
+  await downloadStartedPromise;
+  await new Promise((resolve) => setImmediate(resolve));
+
+  let closeDoneCount = 0;
+  const closePromise = new Promise((resolve) => {
+    handlers.close(false, () => {
+      closeDoneCount += 1;
+      resolve();
+    });
+  });
+
+  await Promise.all([runPromise, closePromise]);
+
+  assert.equal(closeDoneCount, 1);
+  assert.equal(source.destroyed, true);
+  assert.deepEqual(closedClients, ["uidv-close-parse"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.equal(outputs.length, 0);
+  assert.equal(node.running, false);
+  assert.equal(node.scanCursor, 1);
+  assert.equal(registry.countAllInflight(node.queueKey), 0);
+});
+
+test("imap email in close after one output keeps sent mail inflight and retries the rest", async () => {
+  const { node, handlers, closedClients, loggedOutClients } = createCursorTestNode({
+    frontWindowSize: 2,
+    batchSize: 2,
+    closeTimeoutMs: 100
+  }, [
+    {
+      exists: 2,
+      uidValidity: "uidv-close-after-output",
+      front: [
+        { uid: 1, flags: [], size: 100 },
+        { uid: 2, flags: [], size: 100 }
+      ],
+      messages: [
+        createMessage(1, "Close first"),
+        createMessage(2, "Close second")
+      ]
+    }
+  ]);
+  const outputs = [];
+  let closeRequested = false;
+  let closeDoneCount = 0;
+  let resolveClose;
+  const closePromise = new Promise((resolve) => {
+    resolveClose = resolve;
+  });
+
+  await node.runFetchCycle({}, (output) => {
+    outputs.push(output);
+    if (!closeRequested && output && output[0] && output[0].imap.uid === 1) {
+      closeRequested = true;
+      handlers.close(false, () => {
+        closeDoneCount += 1;
+        resolveClose();
+      });
+    }
+  });
+  await closePromise;
+
+  assert.equal(closeDoneCount, 1);
+  assert.deepEqual(closedClients, ["uidv-close-after-output"]);
+  assert.equal(loggedOutClients.length, 0);
+  assert.equal(outputs.length, 1);
+  assert.equal(outputs[0][0].imap.uid, 1);
+  assert.equal(collectStats(outputs).length, 0);
+  assert.equal(registry.isActiveInflight(node.queueKey, "uidv-close-after-output", 1, node.retryAfterMs, Date.now()), true);
+  assert.equal(registry.isActiveInflight(node.queueKey, "uidv-close-after-output", 2, node.retryAfterMs, Date.now()), false);
+  assert.equal(node.running, false);
+  assert.equal(node.scanCursor, 1);
 });
 
 test("imap email in suppresses success output when an existing inflight is claimed during parse", async () => {
