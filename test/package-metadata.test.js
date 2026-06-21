@@ -108,7 +108,7 @@ test("stable package metadata is complete", () => {
   const pkg = require(path.join(root, "package.json"));
 
   assert.equal(pkg.name, "@compeso/node-red-contrib-imap-email");
-  assert.equal(pkg.version, "1.0.0");
+  assert.equal(pkg.version, "1.0.1");
   assert.equal(pkg.license, "MIT");
   assert.equal(pkg.publishConfig && pkg.publishConfig.access, "public");
   assert.equal(pkg.engines && pkg.engines.node, ">=22.0.0");
