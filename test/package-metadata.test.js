@@ -115,8 +115,8 @@ test("stable package metadata is complete", () => {
   assert.equal(pkg["node-red"] && pkg["node-red"].version, ">=4.0.0");
   assert.ok(pkg.keywords.includes("node-red"));
   assert.ok(pkg.keywords.includes("imap-email"));
-  assert.equal(pkg.dependencies.imapflow, "1.0.76");
-  assert.equal(pkg.dependencies.mailparser, "3.9.10");
+  assert.equal(pkg.dependencies.imapflow, "^1.4.2");
+  assert.equal(pkg.dependencies.mailparser, "^3.9.11");
   assert.equal(Object.prototype.hasOwnProperty.call(pkg, "overrides"), false);
   assert.ok(pkg.files.includes("CHANGELOG.md"));
   assert.equal(pkg.homepage, "https://github.com/Harpau/node-red-contrib-imap-email#readme");
