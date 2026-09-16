@@ -1,13 +1,10 @@
 # PRD / Evolution Plan: @compeso/node-red-contrib-imap-email
 
-Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
-Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
-vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
-Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
-ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
-ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
-[RC-](VALIDATION_1_1_0_RC_DE.md) und
-[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
+Stand 16.09.2026: Release `1.1.0` ist abgeschlossen. PR #5 ist gemergt,
+GitHub-Release und Tag sind oeffentlich, npm `latest` und Node-RED-Katalog
+zeigen `1.1.0`; die Registryinstallation ist geprueft. Commit, Artefakt,
+CI und Abnahmen sind im zentralen [Release-Nachweis](RELEASE_1_1_0_DE.md)
+dokumentiert. Die damalige Freigabe gilt nur fuer diesen Release.
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
@@ -89,7 +86,7 @@ Paketierung.
 - CI prueft Node.js 22 und aktuelle Node.js-Versionen.
 - Dokumentation wird bei jeder nutzer-sichtbaren Aenderung aktualisiert.
 
-## 5. Historie und naechster Release
+## 5. Veroeffentlichte Entwicklung und spaetere Ideen
 
 ### Historische Entwicklung
 
@@ -107,19 +104,20 @@ Paketierung.
   Abbruch beim letzten Verbraucher-Close und Schutz vor spaeten Ergebnissen.
 - Fehlerstatus ohne sensible Inhalte; regulaere Verarbeitung bleibt unabhaengig
   und deren Status hat Vorrang. PREAUTH-Grenze und fehlende Mailbox-/ACK-Rechtepruefung
-  werden dokumentiert.
-- Laufzeitabhaengigkeiten und CI pflegen; oeffentliche Flow-Vertraege und
-  Mindestversionen beibehalten.
-- Echte Bibliotheksvertraege und Node-RED-Deploy-Matrix mit lokalem synthetischem
-  IMAP vor technischem Abschluss pruefen.
-- DELETE fuer ACK und Input-Bereinigung mit bestaetigtem STORE, Delete-Ergebnis
-  und begrenztem UID-SEARCH absichern; echte OK-Abschluesse ueber das oeffentliche
-  response-Event pruefen. Partielle Serveraenderungen nicht zurueckrollen.
+  sind dokumentiert.
+- Aktualisierte Laufzeitabhaengigkeiten und CI bei unveraenderten oeffentlichen
+  Flow-Vertraegen und Mindestversionen.
+- Gepruefte echte Bibliotheksvertraege und Node-RED-Deploy-Matrix mit lokalem
+  synthetischem IMAP.
+- DELETE fuer ACK und Input-Bereinigung ist mit bestaetigtem STORE,
+  Delete-Ergebnis und begrenztem UID-SEARCH abgesichert; echte OK-Abschluesse
+  werden ueber das oeffentliche response-Event geprueft. Partielle
+  Serveraenderungen werden nicht zurueckgerollt.
 
-Paket und Lockfile tragen `1.1.0`. Die Provider-Abnahme am 16.09.2026
-pruefte den Kandidaten mit derselben Runtime. Fuer das finale Paket werden
-Dokumentation und Hilfetexte abgeschlossen und passende Pruefungen erneut
-ausgefuehrt. Die Aenderungen sind in `1.0.1` nicht enthalten.
+Diese Aenderungen wurden am 16.09.2026 als `1.1.0` veroeffentlicht und sind in
+`1.0.1` nicht enthalten. Der [Release-Nachweis](RELEASE_1_1_0_DE.md) unterscheidet
+Provider-Kandidat, finales Release-Artefakt und deren jeweilige Pruefungen.
+Historische Protokolle werden nicht nachtraeglich auf neue Staende umgedeutet.
 
 ### Spaetere Ideen ohne Versionszusage
 

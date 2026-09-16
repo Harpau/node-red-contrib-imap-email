@@ -1,13 +1,11 @@
 # Maintainer-Briefing: @compeso/node-red-contrib-imap-email
 
-Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
-Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
-vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
-Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
-ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
-ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
-[RC-](VALIDATION_1_1_0_RC_DE.md) und
-[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
+Stand 16.09.2026: Release `1.1.0` ist abgeschlossen. PR #5 ist gemergt,
+`v1.1.0` und der oeffentliche GitHub-Release sind vorhanden; npm `latest` und
+der Node-RED-Katalog zeigen `1.1.0`. Die Installation aus der Registry ist
+geprueft. Der zentrale [Release-Nachweis](RELEASE_1_1_0_DE.md) ordnet Commit,
+Tarball, CI, Tests und Veroeffentlichung zu. Die damaligen Freigaben gelten
+ausschliesslich fuer diesen Release.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -163,8 +161,8 @@ oder Verbindungsfehlern den Abruf ab. Unbestaetigte UIDs werden nicht als
 entfernt gezaehlt oder aus der Registry entfernt. Es gibt keinen Rollback.
 Die historische Reproduktion und Grenzen stehen in
 [KNOWN_ISSUES.md](../../docs/KNOWN_ISSUES.md). Das fruehere Deploy-Pruefprotokoll
-belegt diesen spaeteren Fix nicht. Ergebnisse fuer den Kandidaten werden im
-[RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md) dem jeweiligen Stand zugeordnet.
+belegt diesen spaeteren Fix nicht. Der [Release-Nachweis](RELEASE_1_1_0_DE.md)
+ordnet die finalen Ergebnisse und die historischen Kandidatenpruefungen zu.
 
 ## 5. Kritische Invarianten
 
@@ -201,9 +199,9 @@ rg "alte Paket- oder Node-Namen" .github README.md docs nodes test
 
 Historie: `0.1.0` war der Entwicklungsstart; `0.2.0` stellte vor dem ersten
 stabilen Release auf Node.js `>=22.0.0` und Node-RED `>=4.0.0` um. `1.0.0` und
-`1.0.1` sind veroeffentlicht. Die Startpruefung und DELETE-Absicherung gehoeren zu
-Release `1.1.0` vom 16.09.2026; der tatsaechliche Veroeffentlichungsstatus
-wird im [Release-Nachweis](RELEASE_1_1_0_DE.md) festgehalten.
+`1.0.1` sind veroeffentlicht. Der abgeschlossene Release `1.1.0` vom 16.09.2026
+enthaelt die Startpruefung, DELETE-Absicherung und aktualisierte
+Laufzeitabhaengigkeiten; Details stehen im [Release-Nachweis](RELEASE_1_1_0_DE.md).
 
 Verbindlicher Ablauf: [Release-Checkliste](../../docs/RELEASE_DE.md).
 Technischer Abschluss verlangt einen frischen Tarball, echte Bibliotheksvertraege,
@@ -211,9 +209,8 @@ die tatsaechliche Node-RED-Deploy-Matrix mit lokalem synthetischem IMAP,
 Regressionstests und einen Produktions-Audit ohne Befunde. Node.js 22.0.0
 wird mit `--engine-strict` fuer Lockfile- und Verbraucherinstallation geprueft.
 
-Der externe Provider-Test des unveraenderten Kandidaten wurde am 16.09.2026
-erfolgreich abgeschlossen; Umfang und Grenzen stehen in der
-[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md). Nachtraegliche Paketaenderungen erfordern erneut passende Nachweise.
-Push, Merge und Veroeffentlichung wurden ausdruecklich freigegeben. Die
-abschliessende Paketpruefung und GitHub-CI werden dem finalen Stand zugeordnet;
-Release-Commit, Tag, npm-Publishing und Katalog-Refresh erfolgen in diesem Umfang.
+Historische RC- und Provider-Protokolle behalten ihren urspruenglichen
+Pruefumfang. Spaetere Repository-Aenderungen veraendern den veroeffentlichten
+Tarball nicht; neue Paketaenderungen erfordern passende Nachweise und eine
+eigene Veroeffentlichungsfreigabe. Fuer die Uebergabe an einen neuen Chat den
+aktuellen Repository-Stand getrennt vom veroeffentlichten Artefakt festhalten.

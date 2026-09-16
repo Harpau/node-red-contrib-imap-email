@@ -10,7 +10,9 @@ Du arbeitest an dem Node-RED-Paket
 
 Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 
-- `agents.md`
+- `AGENTS.md`
+- `.github/maintainer/RELEASE_1_1_0_DE.md`
+- `.github/maintainer/MAINTAINER_BRIEFING_DE.md`
 - `package.json`
 - `README.md`
 - `CHANGELOG.md`
@@ -26,14 +28,30 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 
 ## Projektkontext
 
-Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
-Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
-vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
-Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
-ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
-ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
-[RC-](VALIDATION_1_1_0_RC_DE.md) und
-[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
+Stand 16.09.2026: **Release `1.1.0` ist abgeschlossen und veroeffentlicht**
+(npm `latest`, GitHub-Release, Node-RED-Katalog). Enthalten sind Startpruefung,
+DELETE-Absicherung und aktualisierte Laufzeitabhaengigkeiten.
+Der [Release-Nachweis](RELEASE_1_1_0_DE.md) ist die zentrale Quelle fuer
+Commit, Tag, CI, Artefakt-Pruefsummen, Registry-Installation und lokale
+Testumgebung. Das voruebergehende npm-README-Anzeigeproblem ist laut Nutzer
+erledigt; dafuer keine Reparatur oder weitere Veroeffentlichung planen.
+
+Vor Beginn des neuen Auftrags:
+
+1. `git status --short --branch`, `git log -1 --oneline` und
+   `git rev-parse 'v1.1.0^{}'` lesen. Der Release-Tag zeigt auf
+   `f086643b93155ab6adee17bae6431cf8802b187e`; ein neuerer Arbeitsbaum kann
+   zusaetzliche Uebergabedokumentation oder spaetere Aenderungen enthalten.
+2. Die bisherigen RC-, Deploy- und Provider-Protokolle als datierte historische
+   Nachweise lesen. Ihre damaligen offenen Freigabe-/CI-/Publish-Punkte sind
+   fuer `1.1.0` abgeschlossen. Ihre Testergebnisse nicht als neue Tests ausgeben.
+3. Bei lokalen Tests den tatsaechlich installierten Paketstand pruefen:
+   `~/.node-red` behielt den Provider-Kandidaten mit gleicher Versionsnummer
+   und Runtime, aber aelterer Dokumentation. Nicht ungeprueft den finalen
+   Registry-Tarball als dort installiert annehmen.
+4. Den neuen Nutzerauftrag bestimmen. Release `1.1.0` braucht keine weiteren
+   Schritte. Die dazu erteilten Freigaben gelten nicht pauschal fuer spaetere
+   Releases; vorhandene ausdrueckliche Freigaben im jeweiligen Chat beruecksichtigen.
 
 Das Paket registriert genau diese Node-RED-Typen:
 

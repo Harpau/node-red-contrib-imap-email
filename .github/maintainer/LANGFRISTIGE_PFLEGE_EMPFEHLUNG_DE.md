@@ -43,14 +43,12 @@ Minor  kompatible neue Features
 Major  Breaking Changes
 ```
 
-Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
-Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
-vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
-Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
-ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
-ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
-[RC-](VALIDATION_1_1_0_RC_DE.md) und
-[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
+Stand 16.09.2026: Release `1.1.0` mit Startpruefung, DELETE-Absicherung und
+aktualisierten Laufzeitabhaengigkeiten ist abgeschlossen. PR #5 ist gemergt,
+Tag und GitHub-Release sind oeffentlich; npm `latest` und Node-RED-Katalog
+zeigen `1.1.0`. Die Registryinstallation ist geprueft. Alle Zuordnungen und
+Nachweise stehen zentral im [Release-Nachweis](RELEASE_1_1_0_DE.md).
+Die damaligen Freigaben gelten nicht fuer spaetere Veroeffentlichungen.
 
 ## 4. Pull-Request-Pruefung
 
@@ -140,3 +138,8 @@ Node.js >=22.0.0 und Node-RED >=4.0.0 bleiben unterstuetzt.
 ```
 
 Grosse Aenderungen in kleine, reviewbare Commits schneiden.
+
+Nach jedem Release den Einstieg fuer den naechsten Chat aktualisieren:
+aktueller Repository-Stand, veroeffentlichtes Artefakt und noch offene Arbeit
+getrennt benennen und den zentralen Release-Nachweis verlinken. Historische
+Pruefprotokolle behalten Datum, Artefaktbezug und urspruenglichen Pruefumfang.

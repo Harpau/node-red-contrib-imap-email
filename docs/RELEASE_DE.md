@@ -7,21 +7,17 @@ menschliche Freigaben gelten fuer den jeweils ausdruecklich genehmigten Umfang.
 
 ## Release 1.1.0 am 16. September 2026
 
-Die lokale Abnahme und die ergaenzende Provider-Abnahme sind dokumentiert.
-Der Nutzer hat Merge und Veroeffentlichung von Version `1.1.0` ausdruecklich
-freigegeben. Mit der finalen Release-Dokumentation entsteht ein neuer Tarball;
-dieser muss dem abschliessend geprueften Release-Stand entsprechen.
+Release `1.1.0` ist abgeschlossen: PR #5 ist gemergt, `v1.1.0` und der
+GitHub-Release sind oeffentlich. npm `latest` und der Node-RED-Katalog zeigen
+`1.1.0`; die Installation aus der Registry ist geprueft. Die ausdrueckliche
+menschliche Freigabe galt fuer diesen Release.
 
-Historische Nachweise im Quellrepository:
-
-- `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`: lokale Kandidatenpruefungen.
-- `.github/maintainer/VALIDATION_PROVIDER_1_1_0_DE.md`: Provider-Abnahme des
-  damaligen Kandidaten am 16.09.2026, einschliesslich Umfang und Grenzen.
-
-Der abschliessende Release-Nachweis unter `.github/maintainer/` ordnet den
-finalen Commit, Tarball, GitHub-CI und tatsaechlich ausgefuehrte
-Veroeffentlichungsschritte zu. Eine erteilte Freigabe oder ein Changelog-Datum
-allein bestaetigt noch keine erfolgreiche npm-Veroeffentlichung.
+Der zentrale [Release-Nachweis 1.1.0](https://github.com/Harpau/node-red-contrib-imap-email/blob/main/.github/maintainer/RELEASE_1_1_0_DE.md)
+im Quellrepository dokumentiert Commit, veroeffentlichten Tarball, Pruefsummen,
+GitHub-CI, Installation und Katalogaktualisierung. Er ordnet auch die
+historischen RC- und Provider-Protokolle ihrem jeweiligen Artefakt zu.
+Spaetere Aenderungen dieser Checkliste im Repository sind kein Bestandteil
+des bereits veroeffentlichten Tarballs.
 
 ## 1. Stand und Voraussetzungen
 
@@ -224,3 +220,27 @@ Testumgebung, bleibt der Provider-Test als offene Release-Voraussetzung stehen.
 
 Weder diese Checkliste noch erfolgreiche Tests erlauben eine automatische
 Veroeffentlichung.
+
+## 8. Nach dem Release: Nachweise und Uebergabe
+
+- Einen zentralen Release-Nachweis mit Datum, Paketversion, Merge-Commit,
+  Tag, veroeffentlichtem Tarball und dessen Pruefsumme abschliessen. Erfolgreiche
+  Veroeffentlichung, Registryinstallation und Katalog-Refresh erst nach
+  tatsaechlicher Kontrolle bestaetigen.
+- CI-Links ihrem konkreten Commit und Ereignis (PR, Hauptbranch oder Tag)
+  zuordnen. Lokale Tests und Provider-Abnahme mit dem jeweils geprueften
+  Artefakt und ihren Grenzen auffuehren; Kandidat und finaler Tarball duerfen
+  nicht allein wegen gleicher Versionsnummer gleichgesetzt werden.
+- Maintainer-Briefing, Startprompt und Entwicklungsplan auf den abgeschlossenen
+  Release aktualisieren und den zentralen Nachweis verlinken. Fuer spaetere
+  Chats aktuellen Branch, Commit und uncommittierte Aenderungen erneut lesen.
+  Repository-Dokumentation kann nach dem Release weiterentwickelt werden;
+  sie aendert weder den Tag noch den veroeffentlichten Tarball.
+- Historische Pruefprotokolle unveraendert lassen. Neue Tests oder Aenderungen
+  separat dokumentieren; fruehere Freigaben gelten nur fuer ihren ausdruecklich
+  genehmigten Umfang.
+- Bei einer abweichenden README-Anzeige zuerst den Inhalt des veroeffentlichten
+  Tarballs und die Registry-Metadaten sowie spaeter die Anzeige kontrollieren.
+  Sind die Inhalte vollstaendig, keine neue Paketversion allein zur Korrektur
+  der Anzeige veroeffentlichen. Beim Release `1.1.0` behob sich die anfaenglich
+  fehlende npm-README-Anzeige ohne Paketaenderung.
