@@ -30,8 +30,8 @@
     "pack:check": "npm pack --dry-run"
   },
   "dependencies": {
-    "imapflow": "^1.4.2",
-    "mailparser": "^3.9.11"
+    "imapflow": "^2.0.5",
+    "mailparser": "^3.9.28"
   },
   "files": [
     "nodes",
