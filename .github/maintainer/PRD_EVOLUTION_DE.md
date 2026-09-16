@@ -3,8 +3,10 @@
 Stand: stabile veroeffentlichte Version `1.0.1`; unveroeffentlichter
 Release-Kandidat `1.1.0`. Die folgenden Abnahmekriterien sind Anforderungen,
 keine Bestaetigung bereits erfolgter Tests. Konkrete lokale Ergebnisse stehen
-im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md); Provider-Test und aktuelle
-GitHub-CI bleiben vor der Veroeffentlichungsfreigabe offen.
+im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md). Die ergaenzende
+[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) des unveraenderten Kandidaten
+war am 16.09.2026 erfolgreich. Push-Freigabe, aktuelle GitHub-CI und
+Veroeffentlichungsfreigabe bleiben offen.
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
@@ -114,8 +116,9 @@ Paketierung.
   response-Event pruefen. Partielle Serveraenderungen nicht zurueckrollen.
 
 Paket und Lockfile tragen fuer die Kandidatenpruefung bereits `1.1.0`.
-Dieser Stand wird vor dem externen Provider-Test vorbereitet und ist nicht
-veroeffentlicht. Die Aenderungen sind im veroeffentlichten `1.0.1` nicht enthalten.
+Dieser Stand wurde vor dem externen Provider-Test vorbereitet und ist nicht
+veroeffentlicht. Seine ergaenzende Provider-Abnahme am 16.09.2026 veraenderte den
+Kandidaten nicht. Die Aenderungen sind im veroeffentlichten `1.0.1` nicht enthalten.
 
 ### Spaetere Ideen ohne Versionszusage
 

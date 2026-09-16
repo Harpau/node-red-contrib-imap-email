@@ -18,6 +18,7 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 - `docs/INSTALL_DE.md`
 - `docs/RELEASE_DE.md`
 - `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`
+- `.github/maintainer/VALIDATION_PROVIDER_1_1_0_DE.md`
 - alle Dateien in `nodes/`
 - alle Dateien in `lib/`
 - die relevanten Tests in `test/`
@@ -26,8 +27,10 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 ## Projektkontext
 
 Der aktuelle lokale Release-Kandidat hat Paketversion `1.1.0` und ist
-unveroeffentlicht; letzte veroeffentlichte Version ist `1.0.1`. Provider-Test,
-aktuelle GitHub-CI-Laeufe und Veroeffentlichungsfreigabe bleiben offen.
+unveroeffentlicht; letzte veroeffentlichte Version ist `1.0.1`. Die ergaenzende
+[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) des unveraenderten Kandidaten
+war am 16.09.2026 erfolgreich. Push-Freigabe, aktuelle GitHub-CI-Laeufe und
+Veroeffentlichungsfreigabe bleiben offen.
 Konkrete lokale Nachweise stehen im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md);
 Paketnummer und historische Tests allein sind kein Release-Nachweis.
 

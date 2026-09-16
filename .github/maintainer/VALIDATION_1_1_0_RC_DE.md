@@ -90,19 +90,28 @@ Versionen `1.0.0` und `1.0.1`; `1.1.0` war zu diesem Zeitpunkt noch unbenutzt.
   meldete keine offenen Blocker. Regressionstests prüfen auch die Entfernung
   temporärer Listener sowie unveränderte fremde, bereits gelöschte Nachrichten.
 
-Alle IMAP-Tests verwendeten lokale synthetische Server, Nachrichten und
-Zugangsdaten. Dies ersetzt keinen Test mit einem externen Mailanbieter.
+Die oben aufgeführten automatischen IMAP-Tests verwendeten lokale synthetische
+Server, Nachrichten und Zugangsdaten. Die ergänzende
+[Provider-Abnahme vom 16. September 2026](VALIDATION_PROVIDER_1_1_0_DE.md)
+prüfte denselben unveränderten Tarball erfolgreich auf der vorgesehenen
+Testinstallation mit Node-RED 5.0.7 und einem echten IMAP-Testkonto.
+
+## Ergänzende Provider-Abnahme
+
+Anmeldung einschließlich Fehlerstatus und Credential-Wiederherstellung,
+vollständiger und partieller Deploy, Empfang sowie ACK `flag`, `copy`, `move`
+und `delete` sind für die dokumentierten Provider-Fälle erfolgreich geprüft.
+Der tatsächliche Serverzustand wurde kontrolliert; eine separate gelöschte
+Kontrollnachricht blieb beim gezielten DELETE erhalten. Testflows, Testordner
+und deren Abonnements wurden entfernt; die ursprünglichen Flow-Konfigurationen
+und Credentials des ursprünglichen IMAP-Kontos sind unverändert.
+Umfang, zwei Prüfläufe und Grenzen stehen im verlinkten Provider-Nachweis.
 
 ## Offene Release-Voraussetzungen
 
-1. Dediziertes Testpostfach auf der vorgesehenen Zielinstallation: gültige und
-   falsche Anmeldung, Credential-Änderung und Deploy, Empfang sowie ACK `flag`,
-   `copy`, `move` und `delete`. Destruktive Aktionen nur auf Testnachrichten.
-   Versionen, Paketprüfsumme und Ergebnisse festhalten; keine Secrets speichern.
-   Angaben zur Zielinstallation und zum Testkonto stehen noch aus.
-2. Gesondert freigegebener Push/PR und erfolgreiche GitHub-Actions-Läufe für
+1. Gesondert freigegebener Push/PR und erfolgreiche GitHub-Actions-Läufe für
    diesen Stand. Lokale Ergebnisse belegen keine bereits gelaufene Remote-CI.
-3. Prüfung der finalen Release-Dokumentation, separate Freigabe für Merge, Tag,
+2. Prüfung der finalen Release-Dokumentation, separate Freigabe für Merge, Tag,
    npm-Veröffentlichung und Aktualisierung des Node-RED-Katalogs.
 
 Die Startprüfung bestätigt keine Mailbox-/ACK-Rechte und ist keine dauerhafte
@@ -111,6 +120,7 @@ können die erneute Auswahl beeinflussen. Details:
 [bekannte Probleme](../../docs/KNOWN_ISSUES.md) und
 [Release-Checkliste](../../docs/RELEASE_DE.md).
 
-Empfohlener nächster Commit nach erfolgreichem Praxistest:
-`docs: record provider acceptance for 1.1.0`. Bei einem Fehler zuerst eine
-gezielte Korrektur samt Regressionstest und einen neuen Kandidaten erstellen.
+Die Provider-Ergebnisse werden mit `docs: record provider acceptance for 1.1.0`
+gesichert. Danach folgt der freizugebende Push/PR-Schritt. Ein späterer
+Release-Commit darf erst den konkret abgestimmten Veröffentlichungsstand
+festhalten; bei geänderten Paketdateien ist ein neuer Kandidat zu prüfen.

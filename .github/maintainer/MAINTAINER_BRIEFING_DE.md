@@ -2,9 +2,11 @@
 
 Stand: veroeffentlichte stabile Version `1.0.1`; **unveroeffentlichter
 Release-Kandidat `1.1.0`** mit dieser Version in Paket und Lockfile. Die
-Kandidatenvorbereitung erfolgt vor dem externen Provider-Test. Aktuelle lokale
+Kandidatenvorbereitung erfolgte vor dem externen Provider-Test. Lokale
 Pruefergebnisse stehen im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md).
-Provider-Test, aktuelle GitHub-CI-Laeufe und Veroeffentlichungsfreigabe sind offen.
+Die ergaenzende [Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) desselben
+unveraenderten Kandidaten war am 16.09.2026 erfolgreich. Push-Freigabe,
+aktuelle GitHub-CI-Laeufe und Veroeffentlichungsfreigabe sind offen.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -209,8 +211,11 @@ die tatsaechliche Node-RED-Deploy-Matrix mit lokalem synthetischem IMAP,
 Regressionstests und einen Produktions-Audit ohne Befunde. Node.js 22.0.0
 wird mit `--engine-strict` fuer Lockfile- und Verbraucherinstallation geprueft.
 
-Vor dem Release folgen externer Provider-Test und aktuelle GitHub-CI-Laeufe
-nach gesonderter Push-Freigabe. Historische Tests sind kein aktueller Nachweis.
+Der externe Provider-Test des unveraenderten Kandidaten wurde am 16.09.2026
+erfolgreich abgeschlossen; Umfang und Grenzen stehen in der
+[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md). Vor dem Release fehlen
+aktuelle GitHub-CI-Laeufe nach gesonderter Push-Freigabe. Nachtraegliche
+Paketaenderungen erfordern erneut passende Nachweise.
 Der Versionswechsel auf `1.1.0` bereitet den lokalen Kandidaten vor.
 Release-Commit, Tag, npm-Publishing und Katalog-Refresh werden erst im
 dafuer ausdruecklich freigegebenen Umfang ausgefuehrt.

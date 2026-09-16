@@ -45,10 +45,12 @@ Major  Breaking Changes
 
 Veroeffentlicht ist `1.0.1`. Startpruefung, DELETE-Absicherung und Wartung sind
 dem unveroeffentlichten Release-Kandidaten `1.1.0` zugeordnet; Paket und Lockfile
-tragen bereits diese Version. Die Kandidatenvorbereitung erfolgt vor dem
+tragen bereits diese Version. Die Kandidatenvorbereitung erfolgte vor dem
 externen Provider-Test. Aktuelle lokale Nachweise stehen im
-[RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md). Provider-Test, aktuelle GitHub-CI
-und Veroeffentlichungsfreigabe bleiben offen.
+[RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md). Die ergaenzende
+[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) des unveraenderten Kandidaten
+war am 16.09.2026 erfolgreich. Push-Freigabe, aktuelle GitHub-CI und
+Veroeffentlichungsfreigabe bleiben offen.
 
 ## 4. Pull-Request-Pruefung
 
