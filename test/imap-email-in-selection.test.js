@@ -41,6 +41,7 @@ function createInputNode(config = {}, options = {}) {
   const handlers = options.handlers || {};
   const account = {
     id: "account-1",
+    requestConnectionCheck() { return () => {}; },
     host: "imap.example.test",
     getUsername() {
       return "user@example.test";
@@ -113,6 +114,7 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
 
   const account = {
     id: "account-1",
+    requestConnectionCheck() { return () => {}; },
     host: "imap.example.test",
     port: 993,
     secure: true,

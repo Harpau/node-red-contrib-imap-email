@@ -2,16 +2,16 @@
 
 Status: Architektur- und Verhaltensdokumentation.
 
-Diese Datei beschreibt die getroffenen Designentscheidungen fuer das neue Paket
+Diese Datei beschreibt die getroffenen Designentscheidungen fuer das Paket
 `@compeso/node-red-contrib-imap-email`. Sie ist absichtlich eine technische
 Entscheidungsvorlage und keine Release-Ankuendigung.
 
-## 1. Ziel des neuen Pakets
+## 1. Ziel des Pakets
 
 Das Paket `@compeso/node-red-contrib-imap-email` ist ein eigenstaendiges
 Node-RED npm-Paket fuer IMAP-basierte E-Mail-Verarbeitung.
 
-Die gespeicherten Node-RED-Flow-Typen des neuen Pakets sind:
+Die gespeicherten Node-RED-Flow-Typen des Pakets sind:
 
 ```text
 imap-email account
@@ -668,6 +668,48 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Fehlgeschlagene Chunks geben den Claim frei und behalten Inflight fuer die
   enthaltenen Mails.
 
+### 7.3 Verbindungspruefung beim Start (Unreleased, Ziel 1.1.0)
+
+Jeder aktive Input-/ACK-Node fordert nach Registrierung seiner Handler eine
+asynchrone Probe an. Der verzoegerte Start ist abbrechbar, sodass Close vor
+Ausfuehrung keinen Client erzeugt. Ein Account verwaltet hoechstens eine laufende
+Probe fuer seine Verbraucher. Nach Abschluss wird der Slot geloescht; spaeter
+gestartete Nodes pruefen erneut. Der Zustand wird nicht accountuebergreifend
+oder persistent gespeichert. Unbenutzte oder ausschliesslich deaktiviert
+verwendete Accounts pruefen nicht.
+
+Der Probe-Client verwendet dieselben Kontodaten und TLS-Einstellungen wie
+regulaere Clients, einschliesslich Access-Token-Prioritaet. Nur der Probe-Client
+erhaelt `verifyOnly: true`; `includeMailboxes` bleibt deaktiviert. Der notwendige
+Protokollaufbau darf `LIST "" ""` als NAMESPACE-Fallback enthalten, aber kein
+Wildcard-LIST, SELECT, SEARCH, FETCH oder schreibende Mailbox-Aktion.
+
+Erfolg ist der erfolgreiche Abschluss der oeffentlichen Verify-/Connect-Operation
+mit akzeptierter authentifizierter Sitzung. Bei PREAUTH prueft der Server das
+Secret nicht erneut. Normaler Close kann dem erfolgreichen Connect-Resolve
+vorausgehen. Intern geschluckte reine Logout-Bereinigungsfehler nach Anmeldung
+werden nicht nachtraeglich als Authentifizierungsfehler gewertet; eine bestaetigte
+LOGOUT-Antwort wird nicht garantiert. Echte Bibliotheksvertraege sichern diese
+Unterscheidung ab.
+
+Die feste Gesamtfrist von 30 Sekunden umfasst DNS/TLS, Authentifizierung und
+Bereinigung. Kuerzere konfigurierte Teilfristen bleiben wirksam. Timeout oder
+letzte Verbraucher-Abmeldung schliessen den Client und machen den Slot ungueltig.
+Spaete Ereignisse duerfen weder neue Proben noch alte Statusanzeigen veraendern;
+Timer, Listener und Referenzen werden bereinigt. Regulaere Verbindungen bleiben
+von der Probe und ihrer Frist getrennt.
+
+`checking connection` und `connected` bzw. klassifizierte Fehler werden nur
+angezeigt, solange keine regulaere Statusaenderung die Startphase ersetzt hat.
+ACK-Konfigurationsfehler haben ebenfalls Vorrang. Node-RED-Status-Nodes koennen
+die Ereignisse beobachten; die Probe sendet keine Output-/Stats-Nachrichten.
+Ein Fehlschlag sperrt keine spaetere regulaere Arbeit. Hoechstens eine sichere
+Warnung pro geteilter Fehlprobe; absichtliche Abbrueche warnen nicht.
+
+Die konkrete Abnahmematrix mit echten Node-RED-Deploys und lokalem synthetischem
+IMAP steht in [RELEASE_DE.md](RELEASE_DE.md). Das veroeffentlichte `1.0.1`
+enthaelt diese Startpruefung noch nicht.
+
 ## 8. Fehlerverhalten
 
 ### 8.1 Allgemein
@@ -677,6 +719,13 @@ IMAP-Aktion fehlgeschlagen ist.
 
 Fehler werden ueber Output 2 ausgegeben und in `msg.imapAck.ok = false`
 sichtbar gemacht.
+
+Diese Anforderung ist fuer einen bekannten zusammengesetzten DELETE-Fehler
+noch nicht vollstaendig erfuellt: ImapFlow kann nach abgelehntem Setzen von
+`\Deleted` und erfolgreichem UID EXPUNGE trotzdem `true` liefern. Der bestehende
+ACK-Executor akzeptiert diesen Wert. Reproduktion und Grenzen der Nachweise
+stehen in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); die Startpruefung behebt diesen
+bestehenden Fall nicht.
 
 ### 8.2 Fehler bei `imap-email in`
 

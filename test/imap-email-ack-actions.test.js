@@ -81,6 +81,7 @@ function createAckNode(config = {}, clientFactory) {
   const handlers = {};
   const account = {
     id: "account-1",
+    requestConnectionCheck() { return () => {}; },
     host: "imap.example.test",
     port: 993,
     secure: true,

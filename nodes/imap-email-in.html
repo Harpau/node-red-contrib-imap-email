@@ -160,6 +160,12 @@
   <p>The node starts with bounded cursor windows, then records <code>UIDNEXT</code> after reaching the mailbox end and prioritizes newly arrived UIDs on later triggers. If a window contains more selectable messages than can be emitted, the window is held for a later trigger. Wire the successful processing path to <b>imap email ack</b>.</p>
   <p>If another trigger arrives while a fetch cycle is already running, no parallel IMAP fetch is started. A skipped stats message is emitted on output 3 when Diagnostics is <code>stats</code> or <code>debug</code>.</p>
 
+  <h3>Connection check on start</h3>
+  <p>Unreleased feature, intended for 1.1.0: when this active node starts, it checks its account without an input message. This includes restart and any Deploy that restarts the node. Nodes that keep running are not checked again. A running check is shared with other nodes using the same account instance.</p>
+  <p>The status changes from a yellow <code>checking connection</code> ring to a green <code>connected</code> dot or a red error ring, such as <code>missing credentials</code>, <code>authentication failed</code> or <code>connection timeout</code>. <code>connected</code> records the last successful check; the short-lived connection is closed and is not continuously monitored.</p>
+  <p>The check has a fixed 30-second overall limit, including authentication and cleanup; shorter account timeouts still apply. It does not select a mailbox, fetch mail or change messages. IMAP <code>PREAUTH</code> accepts an already-authenticated session without challenging the configured credentials again.</p>
+  <p>Fetches can start while the check runs and after a failed check. Normal processing statuses take priority over a late check result. The check emits no output or stats messages, but Node-RED Status nodes can observe its status changes. Closing or redeploying this node cancels its pending result. See the account help for shared-check and credential details.</p>
+
   <h3>Inputs</h3>
   <dl class="message-properties">
     <dt>input <span class="property-type">msg</span></dt>
