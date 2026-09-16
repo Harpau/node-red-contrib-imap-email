@@ -2,12 +2,7 @@
 
 All notable changes to `@compeso/node-red-contrib-imap-email` are documented here.
 
-## 1.1.0 - Unpublished release candidate
-
-Package and lockfile version: `1.1.0`. This compatible feature release is being
-prepared as a local candidate and has not been published. No release date is
-assigned. External provider testing, GitHub CI and publication approval remain
-pending; the entries below do not certify release readiness.
+## 1.1.0 - 2026-09-16
 
 ### Added
 

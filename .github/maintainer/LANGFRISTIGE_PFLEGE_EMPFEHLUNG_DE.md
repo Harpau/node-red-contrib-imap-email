@@ -43,14 +43,14 @@ Minor  kompatible neue Features
 Major  Breaking Changes
 ```
 
-Veroeffentlicht ist `1.0.1`. Startpruefung, DELETE-Absicherung und Wartung sind
-dem unveroeffentlichten Release-Kandidaten `1.1.0` zugeordnet; Paket und Lockfile
-tragen bereits diese Version. Die Kandidatenvorbereitung erfolgte vor dem
-externen Provider-Test. Aktuelle lokale Nachweise stehen im
-[RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md). Die ergaenzende
-[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) des unveraenderten Kandidaten
-war am 16.09.2026 erfolgreich. Push-Freigabe, aktuelle GitHub-CI und
-Veroeffentlichungsfreigabe bleiben offen.
+Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
+Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
+vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
+Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
+ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
+ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
+[RC-](VALIDATION_1_1_0_RC_DE.md) und
+[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
 
 ## 4. Pull-Request-Pruefung
 

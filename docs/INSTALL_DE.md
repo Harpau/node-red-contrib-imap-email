@@ -2,10 +2,6 @@
 
 Diese Anleitung gilt fuer das eigenstaendige Paket `@compeso/node-red-contrib-imap-email`.
 
-Aktueller Stand: **unveroeffentlichter Release-Kandidat `1.1.0`**.
-Die letzte veroeffentlichte Version ist `1.0.1`. Provider-Test, aktuelle
-GitHub-CI-Laeufe und Veroeffentlichungsfreigabe stehen noch aus.
-
 ## Voraussetzungen
 
 - Node.js `>=22.0.0`
@@ -38,9 +34,6 @@ npm run pack:check
 ## 3. Installation in Node-RED aus npm Registry
 
 Im Node-RED User-Verzeichnis:
-
-Dieser Registry-Weg installiert die veroeffentlichte Version, nicht den lokalen
-Kandidaten `1.1.0`.
 
 ```powershell
 cd $env:USERPROFILE\.node-red
@@ -100,14 +93,13 @@ Menu -> Import -> examples/basic-at-least-once-flow.json
 Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen. Der Beispiel-Tab ist absichtlich deaktiviert, der Inject-Node startet nicht automatisch und der ACK-Pfad markiert Nachrichten nur als gesehen.
 Die sichtbaren Palette-Namen verwenden Leerzeichen; in der Flow-JSON werden die gespeicherten technischen Typen mit `imap-email ...` gespeichert.
 
-Die Startpruefung im unveroeffentlichten Kandidaten `1.1.0` beginnt
+Die seit Version `1.1.0` verfuegbare Startpruefung beginnt
 erst mit aktiven Input-/ACK-Nodes. Nach dem Aktivieren und Deploy erscheint
 `checking connection`, danach `connected` oder ein konkreter Fehlerstatus.
 Ein Inject ist fuer die Pruefung nicht erforderlich. `connected` beschreibt
 die letzte erfolgreiche Pruefung; ihre kurzlebige Verbindung ist danach
 geschlossen. Das gesamte Zeitlimit betraegt 30 Sekunden, kuerzere konfigurierte
-Account-Zeitlimits gelten weiterhin. Das veroeffentlichte `1.0.1` enthaelt diese
-Startpruefung noch nicht.
+Account-Zeitlimits gelten weiterhin.
 
 ## 8. Produktiver Minimal-Flow
 
@@ -133,9 +125,7 @@ imap-email ack
 Die Palette-Labels werden als `imap email account`, `imap email in`
 und `imap email ack` angezeigt.
 
-## 10. Keine Veroeffentlichung ohne Freigabe
-
-Dieses Paket darf nicht auf npm oder flows.nodered.org veroeffentlicht werden, solange keine ausdrueckliche menschliche Freigabe vorliegt.
+## 10. Release-Pruefung
 
 Fuer Release-Pruefungen einen frischen Tarball in einer isolierten
 Node-RED-Testinstanz verwenden. Die verbindliche Deploy-/Credential-/Subflow-Matrix,
@@ -143,10 +133,9 @@ strikte Installationspruefungen auf Node.js 22.0.0 und der zusaetzliche externe
 Provider-Test stehen in [RELEASE_DE.md](RELEASE_DE.md). Ein Test per `npm link`
 ersetzt den abschliessenden Tarballtest nicht.
 
-## 11. Lokalen Kandidaten 1.1.0 installieren
+## 11. Lokalen Tarball installieren
 
-Den Kandidaten vor dem Provider-Test aus genau der zu pruefenden Arbeitskopie
-packen:
+Fuer Entwicklungs- oder Release-Tests genau die zu pruefende Arbeitskopie packen:
 
 ```powershell
 npm pack
@@ -157,12 +146,11 @@ produktiven Flows oder Credentials verwendet:
 
 ```powershell
 cd C:\path\to\isolated-node-red-user-directory
-npm install --engine-strict C:\path\to\compeso-node-red-contrib-imap-email-1.1.0.tgz
+npm install --engine-strict C:\path\to\compeso-node-red-contrib-imap-email-<version>.tgz
 npm audit --omit=dev
 ```
 
-Die isolierte Node-RED-Instanz mit diesem User-Verzeichnis starten. Die
-Paketnummer `1.1.0` bezeichnet hier den unveroeffentlichten Kandidaten, keinen
-npm-Release und keine Semver-Version mit `-rc`-Suffix. Git-Stand und
+`<version>` durch die Paketversion im erzeugten Dateinamen ersetzen. Die
+isolierte Node-RED-Instanz mit diesem User-Verzeichnis starten. Git-Stand und
 Tarball-Pruefsumme mit den Ergebnissen dokumentieren; jeden spaeter geaenderten
-Tarball erneut pruefen.
+Tarball erneut pruefen. Die Paketnummer allein belegt keine Veroeffentlichung.

@@ -1,23 +1,36 @@
 # Release-Checkliste
 
-Diese Checkliste beschreibt Pruefung und spaetere Veroeffentlichung von
-`@compeso/node-red-contrib-imap-email`. Sie ist kein Testprotokoll und erteilt
-keine Freigabe fuer Push, Merge, Tags, GitHub-Releases oder Veroeffentlichung.
-Ein `npm publish` und die Aktualisierung auf flows.nodered.org erfolgen erst
-nach ausdruecklicher menschlicher Freigabe des konkreten Release-Stands.
+Diese wiederverwendbare Checkliste beschreibt Pruefung und Veroeffentlichung
+von `@compeso/node-red-contrib-imap-email`. Ihre Pruefpunkte sind Anforderungen,
+keine pauschale Bestaetigung bereits abgeschlossener Schritte. Vorhandene
+menschliche Freigaben gelten fuer den jeweils ausdruecklich genehmigten Umfang.
+
+## Release 1.1.0 am 16. September 2026
+
+Die lokale Abnahme und die ergaenzende Provider-Abnahme sind dokumentiert.
+Der Nutzer hat Merge und Veroeffentlichung von Version `1.1.0` ausdruecklich
+freigegeben. Mit der finalen Release-Dokumentation entsteht ein neuer Tarball;
+dieser muss dem abschliessend geprueften Release-Stand entsprechen.
+
+Historische Nachweise im Quellrepository:
+
+- `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`: lokale Kandidatenpruefungen.
+- `.github/maintainer/VALIDATION_PROVIDER_1_1_0_DE.md`: Provider-Abnahme des
+  damaligen Kandidaten am 16.09.2026, einschliesslich Umfang und Grenzen.
+
+Der abschliessende Release-Nachweis unter `.github/maintainer/` ordnet den
+finalen Commit, Tarball, GitHub-CI und tatsaechlich ausgefuehrte
+Veroeffentlichungsschritte zu. Eine erteilte Freigabe oder ein Changelog-Datum
+allein bestaetigt noch keine erfolgreiche npm-Veroeffentlichung.
 
 ## 1. Stand und Voraussetzungen
 
-- Letzte veroeffentlichte Version: `1.0.1`. Der lokale kompatible
-  Release-Kandidat hat in Paket und Lockfile die Version `1.1.0` und ist
-  **nicht veroeffentlicht**. Es gibt noch kein Veroeffentlichungsdatum.
-- Die Kandidatenvorbereitung erfolgt vor dem externen Provider-Test.
+- Version in Paket, Lockfile, Changelog und Dokumentation konsistent halten.
   Git-Commit, Working-Tree-Aenderungen und Tarball-Pruefsumme dokumentieren;
   die Paketnummer allein belegt keinen getesteten oder veroeffentlichten Stand.
-- Externer Provider-Test, aktuelle GitHub-CI-Laeufe und menschliche
-  Veroeffentlichungsfreigabe bleiben offen. Aktuelle lokale Nachweise werden
-  im Repository in `.github/maintainer/VALIDATION_1_1_0_RC_DE.md` gesammelt;
-  das fruehere Deploy-Protokoll bleibt historisch.
+- Lokale Tests, Provider-Abnahme, aktuelle GitHub-CI und erteilte Freigaben
+  dem konkreten Release-Stand zuordnen. Historische Nachweise behalten ihren
+  urspruenglichen Pruefumfang.
 - Paketname: `@compeso/node-red-contrib-imap-email`.
 - Repository, Homepage und Issues zeigen auf
   `https://github.com/Harpau/node-red-contrib-imap-email`.
@@ -28,7 +41,7 @@ nach ausdruecklicher menschlicher Freigabe des konkreten Release-Stands.
 - README, Hilfetexte, Beispiele und Changelog passen zum zu pruefenden Code.
   Keine Zugangsdaten, Tokens oder privaten Endpunkte im Paket oder Pruefprotokoll.
 - [Bekannte Probleme](KNOWN_ISSUES.md) in die Release-Entscheidung einbeziehen.
-  Der historische DELETE-Fehler wird im Kandidaten `1.1.0` durch einen gemeinsamen
+  Der historische DELETE-Fehler wird seit `1.1.0` durch einen gemeinsamen
   Loeschhelfer abgesichert. Seine Regressionstests und finale Abnahme muessen
   zum aktuellen Code passen; ein erfolgreicher Verbindungscheck oder das
   historische Deploy-Pruefprotokoll liefert hierzu keinen Nachweis.
@@ -173,20 +186,21 @@ Testumgebung, bleibt der Provider-Test als offene Release-Voraussetzung stehen.
 
 ## 6. Release vorbereiten und gesondert freigeben
 
-1. Kandidat `1.1.0` ist fuer die kompatible Funktion und Fehlerbehebungen
-   vorbereitet. Paket, Lockfile, Changelog und Hilfen muessen denselben
-   unveroeffentlichten Stand beschreiben; Kandidatenvorbereitung ist keine Freigabe.
-2. Finalen Kandidaten erneut pruefen und einen frischen Tarball erzeugen. Den
-   externen Provider-Test aus Abschnitt 5 mit diesem Tarball abschliessen.
+1. Semver waehlen: Patch fuer kompatible Fehlerbehebung, Minor fuer kompatible
+   Funktion, Major fuer oeffentliche Vertragsaenderungen. Paket, Lockfile,
+   Changelog und Hilfen auf denselben Stand bringen.
+2. Finalen Stand erneut pruefen und einen frischen Tarball erzeugen. Den
+   Provider-Nachweis aus Abschnitt 5 dem geprueften Stand zuordnen.
 3. Den konkreten Release-Stand aus allen Nachweisen bestimmen. Jede nachtraegliche
    Aenderung am Paketinhalt erfordert einen neuen Tarball und passende Pruefungen.
-   Kandidatenhinweise und Release-Datum erst im freigegebenen Release-Ablauf
-   anpassen; der freigegebene Tarball muss dem geprueften Stand entsprechen.
+   Kandidatenhinweise entfernen und Release-Datum im freigegebenen Ablauf
+   setzen; der freigegebene Tarball muss dem geprueften Stand entsprechen.
 4. Release-Commit mit sauberem Working-Tree vorbereiten und unabhaengig pruefen.
 5. Nach gesonderter Push-Freigabe aktuelle GitHub-Actions-Laeufe auf dem finalen
    Stand abwarten. Alte PR-Laeufe und lokale Tests ersetzen diesen Nachweis nicht.
-6. Konkreten Stand, Version, Tarball und Nachweise fuer die menschliche
-   Veroeffentlichungsfreigabe vorlegen. npm-Zugang fuer `@compeso`, erforderliche
+6. Konkreten Stand, Version, Tarball und Nachweise mit der menschlichen
+   Veroeffentlichungsfreigabe abgleichen; eine bestehende ausdrueckliche
+   Freigabe fuer diesen Umfang beruecksichtigen. npm-Zugang fuer `@compeso`, erforderliche
    Authentifizierung und eine noch nicht verwendete Versionsnummer pruefen;
    niemals Zugangsdaten oder Tokens in Dokumentation uebernehmen.
 

@@ -2,11 +2,6 @@
 
 Node-RED nodes for externally triggered IMAP email processing with bounded cursor-window fetch and at-least-once ACK handling.
 
-**Release candidate 1.1.0 — not published.** This checkout prepares the next
-compatible feature release. The latest published version remains `1.0.1`.
-External provider testing, GitHub CI and publication approval are still pending;
-see the [release checklist](docs/RELEASE_DE.md).
-
 ## Nodes
 
 The package registers these Node-RED types:
@@ -55,9 +50,9 @@ npm link @compeso/node-red-contrib-imap-email
 
 Restart Node-RED after installation.
 
-To test the unpublished `1.1.0` candidate, pack this checkout and install the
-resulting tarball in an isolated Node-RED test instance. Registry installation
-does not install this candidate. See [local test instructions](docs/INSTALL_DE.md).
+For development or release testing, pack the checkout and install the resulting
+tarball in an isolated Node-RED test instance. See
+[local test instructions](docs/INSTALL_DE.md).
 
 ## Example Flow
 
@@ -97,8 +92,7 @@ delete action.
 
 ## Connection Check on Start
 
-Included in the unpublished `1.1.0` candidate; the published `1.0.1` does not
-perform this check.
+Available since version `1.1.0`.
 
 Each active `imap email in` and `imap email ack` node automatically checks its
 account when it starts, without needing an input message. This includes restart,
@@ -263,7 +257,7 @@ action fails closed on output 2. `copy` keeps the source message, copies it to
 the target mailbox first, and then applies any configured flag changes to the
 source message only.
 
-In the unpublished **1.1.0 candidate**, ACK `delete` and input `Expunge window`
+Since version **1.1.0**, ACK `delete` and input `Expunge window`
 explicitly confirm setting `\Deleted`, require a successful delete result and
 then search only the UIDs in the same bounded chunk to confirm that none remain.
 Only a successful search with an empty UID result confirms removal.

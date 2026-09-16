@@ -1,12 +1,13 @@
 # Maintainer-Briefing: @compeso/node-red-contrib-imap-email
 
-Stand: veroeffentlichte stabile Version `1.0.1`; **unveroeffentlichter
-Release-Kandidat `1.1.0`** mit dieser Version in Paket und Lockfile. Die
-Kandidatenvorbereitung erfolgte vor dem externen Provider-Test. Lokale
-Pruefergebnisse stehen im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md).
-Die ergaenzende [Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) desselben
-unveraenderten Kandidaten war am 16.09.2026 erfolgreich. Push-Freigabe,
-aktuelle GitHub-CI-Laeufe und Veroeffentlichungsfreigabe sind offen.
+Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
+Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
+vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
+Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
+ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
+ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
+[RC-](VALIDATION_1_1_0_RC_DE.md) und
+[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -39,8 +40,7 @@ Node.js:        >=22.0.0
 Node-RED:       >=4.0.0
 Lizenz:         MIT
 Startversion:   0.1.0
-Stabil:        1.0.1
-Kandidat:      1.1.0, unveroeffentlicht
+Release:       1.1.0 (Nachweise: RELEASE_1_1_0_DE.md)
 ```
 
 Keine Veroeffentlichung auf npm oder flows.nodered.org ohne ausdrueckliche
@@ -78,7 +78,7 @@ Config-Node fuer IMAP-Zugangsdaten und Verbindungseinstellungen:
 - Benutzername und Passwort als Node-RED-Credentials
 - IMAP-Timeouts
 
-Die unveroeffentlichte Startpruefung verwaltet pro Account-Instanz hoechstens
+Die Startpruefung verwaltet pro Account-Instanz hoechstens
 eine laufende kurzlebige Probe. Aktive Input-/ACK-Nodes fordern sie nach ihrer
 Initialisierung an; unbenutzte Accounts verbinden sich nicht. Es gibt keinen
 dauerhaften Erfolgs-Cache. Gleiche Account-Instanzen teilen eine laufende Probe,
@@ -149,7 +149,7 @@ einen Retry erhalten und `msg.imapAck.partial` ist gesetzt. Ein Retry kann eine
 weitere Zielkopie erzeugen.
 
 Der historische ImapFlow-Fall mit DELETE-Erfolg nach abgelehntem Setzen von
-`\Deleted` wird im Kandidaten `1.1.0` im Paket abgesichert. ACK und Input-Expunge
+`\Deleted` wird seit `1.1.0` im Paket abgesichert. ACK und Input-Expunge
 verwenden `lib/imap-delete.js` mit expliziter Flag-Bestaetigung, Delete-Pruefung
 und begrenzter UID-Nachkontrolle. Verbindung, ausgewaehlte Mailbox und
 UIDVALIDITY muessen dabei gueltig bleiben. Ein temporaerer Guard des oeffentlichen
@@ -201,9 +201,9 @@ rg "alte Paket- oder Node-Namen" .github README.md docs nodes test
 
 Historie: `0.1.0` war der Entwicklungsstart; `0.2.0` stellte vor dem ersten
 stabilen Release auf Node.js `>=22.0.0` und Node-RED `>=4.0.0` um. `1.0.0` und
-`1.0.1` sind veroeffentlicht. Die Startpruefung und DELETE-Absicherung sind im
-unveroeffentlichten Kandidaten `1.1.0` enthalten. Ein Veroeffentlichungsdatum
-steht noch nicht fest.
+`1.0.1` sind veroeffentlicht. Die Startpruefung und DELETE-Absicherung gehoeren zu
+Release `1.1.0` vom 16.09.2026; der tatsaechliche Veroeffentlichungsstatus
+wird im [Release-Nachweis](RELEASE_1_1_0_DE.md) festgehalten.
 
 Verbindlicher Ablauf: [Release-Checkliste](../../docs/RELEASE_DE.md).
 Technischer Abschluss verlangt einen frischen Tarball, echte Bibliotheksvertraege,
@@ -213,9 +213,7 @@ wird mit `--engine-strict` fuer Lockfile- und Verbraucherinstallation geprueft.
 
 Der externe Provider-Test des unveraenderten Kandidaten wurde am 16.09.2026
 erfolgreich abgeschlossen; Umfang und Grenzen stehen in der
-[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md). Vor dem Release fehlen
-aktuelle GitHub-CI-Laeufe nach gesonderter Push-Freigabe. Nachtraegliche
-Paketaenderungen erfordern erneut passende Nachweise.
-Der Versionswechsel auf `1.1.0` bereitet den lokalen Kandidaten vor.
-Release-Commit, Tag, npm-Publishing und Katalog-Refresh werden erst im
-dafuer ausdruecklich freigegebenen Umfang ausgefuehrt.
+[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md). Nachtraegliche Paketaenderungen erfordern erneut passende Nachweise.
+Push, Merge und Veroeffentlichung wurden ausdruecklich freigegeben. Die
+abschliessende Paketpruefung und GitHub-CI werden dem finalen Stand zugeordnet;
+Release-Commit, Tag, npm-Publishing und Katalog-Refresh erfolgen in diesem Umfang.

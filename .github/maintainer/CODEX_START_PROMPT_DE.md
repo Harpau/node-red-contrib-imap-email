@@ -26,13 +26,14 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 
 ## Projektkontext
 
-Der aktuelle lokale Release-Kandidat hat Paketversion `1.1.0` und ist
-unveroeffentlicht; letzte veroeffentlichte Version ist `1.0.1`. Die ergaenzende
-[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) des unveraenderten Kandidaten
-war am 16.09.2026 erfolgreich. Push-Freigabe, aktuelle GitHub-CI-Laeufe und
-Veroeffentlichungsfreigabe bleiben offen.
-Konkrete lokale Nachweise stehen im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md);
-Paketnummer und historische Tests allein sind kein Release-Nachweis.
+Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
+Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
+vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
+Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
+ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
+ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
+[RC-](VALIDATION_1_1_0_RC_DE.md) und
+[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
 
 Das Paket registriert genau diese Node-RED-Typen:
 

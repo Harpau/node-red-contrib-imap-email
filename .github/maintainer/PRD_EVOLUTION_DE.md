@@ -1,12 +1,13 @@
 # PRD / Evolution Plan: @compeso/node-red-contrib-imap-email
 
-Stand: stabile veroeffentlichte Version `1.0.1`; unveroeffentlichter
-Release-Kandidat `1.1.0`. Die folgenden Abnahmekriterien sind Anforderungen,
-keine Bestaetigung bereits erfolgter Tests. Konkrete lokale Ergebnisse stehen
-im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md). Die ergaenzende
-[Provider-Abnahme](VALIDATION_PROVIDER_1_1_0_DE.md) des unveraenderten Kandidaten
-war am 16.09.2026 erfolgreich. Push-Freigabe, aktuelle GitHub-CI und
-Veroeffentlichungsfreigabe bleiben offen.
+Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
+Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
+vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
+Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
+ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
+ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
+[RC-](VALIDATION_1_1_0_RC_DE.md) und
+[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
@@ -76,7 +77,7 @@ Paketierung.
 - README und Node-RED-Hilfe erklaeren Delivery-Semantik und Grenzen.
 - Beispiel-Flow bleibt deaktiviert und nicht destruktiv.
 - Fehlerausgaenge sind maschinenlesbar und enthalten genug IMAP-Metadaten.
-- Die unveroeffentlichte Startpruefung zeigt Verbindungs-/Anmeldeprobleme ohne
+- Die Startpruefung zeigt Verbindungs-/Anmeldeprobleme ohne
   Trigger an. Ihre Statusereignisse koennen von Status-Nodes beobachtet werden.
 - `connected` bedeutet letzter erfolgreicher Check einer authentifizierten
   Sitzung, keine dauerhaft offene Verbindung und keine bestaetigten Mailboxrechte.
@@ -99,7 +100,7 @@ Paketierung.
 - `1.0.1`: Input-Close-Abbruch und Stream-Bereinigung, Netzwerk-Palettengruppe
   und aktualisierte Laufzeitabhaengigkeiten. Details stehen im CHANGELOG.
 
-### Unveroeffentlichter Release-Kandidat 1.1.0
+### Release 1.1.0
 
 - Automatische kurzlebige Verbindungspruefung beim Start aktiver Input-/ACK-Nodes.
 - Gemeinsame laufende Probe pro Account-Instanz, 30 Sekunden Gesamtfrist,
@@ -115,10 +116,10 @@ Paketierung.
   und begrenztem UID-SEARCH absichern; echte OK-Abschluesse ueber das oeffentliche
   response-Event pruefen. Partielle Serveraenderungen nicht zurueckrollen.
 
-Paket und Lockfile tragen fuer die Kandidatenpruefung bereits `1.1.0`.
-Dieser Stand wurde vor dem externen Provider-Test vorbereitet und ist nicht
-veroeffentlicht. Seine ergaenzende Provider-Abnahme am 16.09.2026 veraenderte den
-Kandidaten nicht. Die Aenderungen sind im veroeffentlichten `1.0.1` nicht enthalten.
+Paket und Lockfile tragen `1.1.0`. Die Provider-Abnahme am 16.09.2026
+pruefte den Kandidaten mit derselben Runtime. Fuer das finale Paket werden
+Dokumentation und Hilfetexte abgeschlossen und passende Pruefungen erneut
+ausgefuehrt. Die Aenderungen sind in `1.0.1` nicht enthalten.
 
 ### Spaetere Ideen ohne Versionszusage
 
