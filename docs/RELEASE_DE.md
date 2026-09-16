@@ -8,11 +8,16 @@ nach ausdruecklicher menschlicher Freigabe des konkreten Release-Stands.
 
 ## 1. Stand und Voraussetzungen
 
-- Letzte veroeffentlichte Version: `1.0.1`. Neue Aenderungen stehen unter
-  `Unreleased`; Ziel des kompatiblen Funktionsreleases ist `1.1.0`.
-- Die Paketversion bleibt waehrend der Entwicklung `1.0.1`. Ein Entwicklungstarball
-  mit dieser Nummer ist nicht mit dem bereits veroeffentlichten Paket identisch.
-  Git-Commit, Working-Tree-Aenderungen und Tarball-Pruefsumme mit dokumentieren.
+- Letzte veroeffentlichte Version: `1.0.1`. Der lokale kompatible
+  Release-Kandidat hat in Paket und Lockfile die Version `1.1.0` und ist
+  **nicht veroeffentlicht**. Es gibt noch kein Veroeffentlichungsdatum.
+- Die Kandidatenvorbereitung erfolgt vor dem externen Provider-Test.
+  Git-Commit, Working-Tree-Aenderungen und Tarball-Pruefsumme dokumentieren;
+  die Paketnummer allein belegt keinen getesteten oder veroeffentlichten Stand.
+- Externer Provider-Test, aktuelle GitHub-CI-Laeufe und menschliche
+  Veroeffentlichungsfreigabe bleiben offen. Aktuelle lokale Nachweise werden
+  im Repository in `.github/maintainer/VALIDATION_1_1_0_RC_DE.md` gesammelt;
+  das fruehere Deploy-Protokoll bleibt historisch.
 - Paketname: `@compeso/node-red-contrib-imap-email`.
 - Repository, Homepage und Issues zeigen auf
   `https://github.com/Harpau/node-red-contrib-imap-email`.
@@ -23,7 +28,7 @@ nach ausdruecklicher menschlicher Freigabe des konkreten Release-Stands.
 - README, Hilfetexte, Beispiele und Changelog passen zum zu pruefenden Code.
   Keine Zugangsdaten, Tokens oder privaten Endpunkte im Paket oder Pruefprotokoll.
 - [Bekannte Probleme](KNOWN_ISSUES.md) in die Release-Entscheidung einbeziehen.
-  Der historische DELETE-Fehler wird in `Unreleased` durch einen gemeinsamen
+  Der historische DELETE-Fehler wird im Kandidaten `1.1.0` durch einen gemeinsamen
   Loeschhelfer abgesichert. Seine Regressionstests und finale Abnahme muessen
   zum aktuellen Code passen; ein erfolgreicher Verbindungscheck oder das
   historische Deploy-Pruefprotokoll liefert hierzu keinen Nachweis.
@@ -168,13 +173,15 @@ Testumgebung, bleibt der Provider-Test als offene Release-Voraussetzung stehen.
 
 ## 6. Release vorbereiten und gesondert freigeben
 
-1. Nach erfolgreichem Praxistest Semver waehlen: Patch fuer kompatible Fehlerbehebung,
-   Minor fuer kompatible Funktion, Major fuer oeffentliche Vertragsaenderungen.
-   Fuer die Startpruefung ist `1.1.0` vorgesehen.
-2. Version in Paket und Lockfile konsistent erhoehen; `Unreleased`-Eintraege mit
-   Release-Datum uebernehmen und Entwicklungshinweise in README/Hilfen anpassen.
-3. Finalen Versionsstand erneut pruefen und einen neuen Tarball erzeugen. Der
-   freigegebene Tarball muss genau dem geprueften Release-Stand entsprechen.
+1. Kandidat `1.1.0` ist fuer die kompatible Funktion und Fehlerbehebungen
+   vorbereitet. Paket, Lockfile, Changelog und Hilfen muessen denselben
+   unveroeffentlichten Stand beschreiben; Kandidatenvorbereitung ist keine Freigabe.
+2. Finalen Kandidaten erneut pruefen und einen frischen Tarball erzeugen. Den
+   externen Provider-Test aus Abschnitt 5 mit diesem Tarball abschliessen.
+3. Den konkreten Release-Stand aus allen Nachweisen bestimmen. Jede nachtraegliche
+   Aenderung am Paketinhalt erfordert einen neuen Tarball und passende Pruefungen.
+   Kandidatenhinweise und Release-Datum erst im freigegebenen Release-Ablauf
+   anpassen; der freigegebene Tarball muss dem geprueften Stand entsprechen.
 4. Release-Commit mit sauberem Working-Tree vorbereiten und unabhaengig pruefen.
 5. Nach gesonderter Push-Freigabe aktuelle GitHub-Actions-Laeufe auf dem finalen
    Stand abwarten. Alte PR-Laeufe und lokale Tests ersetzen diesen Nachweis nicht.

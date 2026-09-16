@@ -43,9 +43,12 @@ Minor  kompatible neue Features
 Major  Breaking Changes
 ```
 
-Veroeffentlicht ist `1.0.1`. Die Startpruefung und Wartung werden unter
-`Unreleased` mit Ziel `1.1.0` entwickelt; die Paketversion bleibt bis zur
-gesonderten Release-Vorbereitung `1.0.1`.
+Veroeffentlicht ist `1.0.1`. Startpruefung, DELETE-Absicherung und Wartung sind
+dem unveroeffentlichten Release-Kandidaten `1.1.0` zugeordnet; Paket und Lockfile
+tragen bereits diese Version. Die Kandidatenvorbereitung erfolgt vor dem
+externen Provider-Test. Aktuelle lokale Nachweise stehen im
+[RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md). Provider-Test, aktuelle GitHub-CI
+und Veroeffentlichungsfreigabe bleiben offen.
 
 ## 4. Pull-Request-Pruefung
 

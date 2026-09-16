@@ -2,6 +2,10 @@
 
 Diese Anleitung gilt fuer das eigenstaendige Paket `@compeso/node-red-contrib-imap-email`.
 
+Aktueller Stand: **unveroeffentlichter Release-Kandidat `1.1.0`**.
+Die letzte veroeffentlichte Version ist `1.0.1`. Provider-Test, aktuelle
+GitHub-CI-Laeufe und Veroeffentlichungsfreigabe stehen noch aus.
+
 ## Voraussetzungen
 
 - Node.js `>=22.0.0`
@@ -34,6 +38,9 @@ npm run pack:check
 ## 3. Installation in Node-RED aus npm Registry
 
 Im Node-RED User-Verzeichnis:
+
+Dieser Registry-Weg installiert die veroeffentlichte Version, nicht den lokalen
+Kandidaten `1.1.0`.
 
 ```powershell
 cd $env:USERPROFILE\.node-red
@@ -93,7 +100,7 @@ Menu -> Import -> examples/basic-at-least-once-flow.json
 Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen. Der Beispiel-Tab ist absichtlich deaktiviert, der Inject-Node startet nicht automatisch und der ACK-Pfad markiert Nachrichten nur als gesehen.
 Die sichtbaren Palette-Namen verwenden Leerzeichen; in der Flow-JSON werden die gespeicherten technischen Typen mit `imap-email ...` gespeichert.
 
-Die unveroeffentlichte Startpruefung fuer den geplanten Release `1.1.0` beginnt
+Die Startpruefung im unveroeffentlichten Kandidaten `1.1.0` beginnt
 erst mit aktiven Input-/ACK-Nodes. Nach dem Aktivieren und Deploy erscheint
 `checking connection`, danach `connected` oder ein konkreter Fehlerstatus.
 Ein Inject ist fuer die Pruefung nicht erforderlich. `connected` beschreibt
@@ -135,3 +142,27 @@ Node-RED-Testinstanz verwenden. Die verbindliche Deploy-/Credential-/Subflow-Mat
 strikte Installationspruefungen auf Node.js 22.0.0 und der zusaetzliche externe
 Provider-Test stehen in [RELEASE_DE.md](RELEASE_DE.md). Ein Test per `npm link`
 ersetzt den abschliessenden Tarballtest nicht.
+
+## 11. Lokalen Kandidaten 1.1.0 installieren
+
+Den Kandidaten vor dem Provider-Test aus genau der zu pruefenden Arbeitskopie
+packen:
+
+```powershell
+npm pack
+```
+
+Danach in einem separaten Node-RED-Testverzeichnis installieren, das keine
+produktiven Flows oder Credentials verwendet:
+
+```powershell
+cd C:\path\to\isolated-node-red-user-directory
+npm install --engine-strict C:\path\to\compeso-node-red-contrib-imap-email-1.1.0.tgz
+npm audit --omit=dev
+```
+
+Die isolierte Node-RED-Instanz mit diesem User-Verzeichnis starten. Die
+Paketnummer `1.1.0` bezeichnet hier den unveroeffentlichten Kandidaten, keinen
+npm-Release und keine Semver-Version mit `-rc`-Suffix. Git-Stand und
+Tarball-Pruefsumme mit den Ergebnissen dokumentieren; jeden spaeter geaenderten
+Tarball erneut pruefen.

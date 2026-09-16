@@ -1,8 +1,10 @@
 # Maintainer-Briefing: @compeso/node-red-contrib-imap-email
 
-Stand: veroeffentlichte stabile Version 1.0.1; unveroeffentlichte Weiterentwicklung
-mit Ziel 1.1.0. Die Paketversion bleibt bis zur gesonderten Release-Vorbereitung
-1.0.1. Aktuelle Pruefergebnisse werden separat protokolliert.
+Stand: veroeffentlichte stabile Version `1.0.1`; **unveroeffentlichter
+Release-Kandidat `1.1.0`** mit dieser Version in Paket und Lockfile. Die
+Kandidatenvorbereitung erfolgt vor dem externen Provider-Test. Aktuelle lokale
+Pruefergebnisse stehen im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md).
+Provider-Test, aktuelle GitHub-CI-Laeufe und Veroeffentlichungsfreigabe sind offen.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -36,7 +38,7 @@ Node-RED:       >=4.0.0
 Lizenz:         MIT
 Startversion:   0.1.0
 Stabil:        1.0.1
-Entwicklung:   Unreleased, Ziel 1.1.0
+Kandidat:      1.1.0, unveroeffentlicht
 ```
 
 Keine Veroeffentlichung auf npm oder flows.nodered.org ohne ausdrueckliche
@@ -145,7 +147,7 @@ einen Retry erhalten und `msg.imapAck.partial` ist gesetzt. Ein Retry kann eine
 weitere Zielkopie erzeugen.
 
 Der historische ImapFlow-Fall mit DELETE-Erfolg nach abgelehntem Setzen von
-`\Deleted` wird in `Unreleased` im Paket abgesichert. ACK und Input-Expunge
+`\Deleted` wird im Kandidaten `1.1.0` im Paket abgesichert. ACK und Input-Expunge
 verwenden `lib/imap-delete.js` mit expliziter Flag-Bestaetigung, Delete-Pruefung
 und begrenzter UID-Nachkontrolle. Verbindung, ausgewaehlte Mailbox und
 UIDVALIDITY muessen dabei gueltig bleiben. Ein temporaerer Guard des oeffentlichen
@@ -159,7 +161,8 @@ oder Verbindungsfehlern den Abruf ab. Unbestaetigte UIDs werden nicht als
 entfernt gezaehlt oder aus der Registry entfernt. Es gibt keinen Rollback.
 Die historische Reproduktion und Grenzen stehen in
 [KNOWN_ISSUES.md](../../docs/KNOWN_ISSUES.md). Das fruehere Deploy-Pruefprotokoll
-belegt diesen spaeteren Fix nicht; finale Regressionstests bleiben erforderlich.
+belegt diesen spaeteren Fix nicht. Ergebnisse fuer den Kandidaten werden im
+[RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md) dem jeweiligen Stand zugeordnet.
 
 ## 5. Kritische Invarianten
 
@@ -196,8 +199,9 @@ rg "alte Paket- oder Node-Namen" .github README.md docs nodes test
 
 Historie: `0.1.0` war der Entwicklungsstart; `0.2.0` stellte vor dem ersten
 stabilen Release auf Node.js `>=22.0.0` und Node-RED `>=4.0.0` um. `1.0.0` und
-`1.0.1` sind veroeffentlicht. Neue Funktionen und Wartung werden unter
-`Unreleased` gesammelt; die Startpruefung ist fuer `1.1.0` vorgesehen.
+`1.0.1` sind veroeffentlicht. Die Startpruefung und DELETE-Absicherung sind im
+unveroeffentlichten Kandidaten `1.1.0` enthalten. Ein Veroeffentlichungsdatum
+steht noch nicht fest.
 
 Verbindlicher Ablauf: [Release-Checkliste](../../docs/RELEASE_DE.md).
 Technischer Abschluss verlangt einen frischen Tarball, echte Bibliotheksvertraege,
@@ -207,5 +211,6 @@ wird mit `--engine-strict` fuer Lockfile- und Verbraucherinstallation geprueft.
 
 Vor dem Release folgen externer Provider-Test und aktuelle GitHub-CI-Laeufe
 nach gesonderter Push-Freigabe. Historische Tests sind kein aktueller Nachweis.
-Version, Release-Commit, Tag, npm-Publishing und Katalog-Refresh werden erst im
+Der Versionswechsel auf `1.1.0` bereitet den lokalen Kandidaten vor.
+Release-Commit, Tag, npm-Publishing und Katalog-Refresh werden erst im
 dafuer ausdruecklich freigegebenen Umfang ausgefuehrt.

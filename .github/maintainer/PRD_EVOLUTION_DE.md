@@ -1,8 +1,10 @@
 # PRD / Evolution Plan: @compeso/node-red-contrib-imap-email
 
-Stand: stabile veroeffentlichte Version 1.0.1; unveroeffentlichte Weiterentwicklung
-mit Ziel 1.1.0. Die folgenden Abnahmekriterien sind Anforderungen, keine
-Bestaetigung bereits erfolgter Tests.
+Stand: stabile veroeffentlichte Version `1.0.1`; unveroeffentlichter
+Release-Kandidat `1.1.0`. Die folgenden Abnahmekriterien sind Anforderungen,
+keine Bestaetigung bereits erfolgter Tests. Konkrete lokale Ergebnisse stehen
+im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md); Provider-Test und aktuelle
+GitHub-CI bleiben vor der Veroeffentlichungsfreigabe offen.
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
@@ -95,7 +97,7 @@ Paketierung.
 - `1.0.1`: Input-Close-Abbruch und Stream-Bereinigung, Netzwerk-Palettengruppe
   und aktualisierte Laufzeitabhaengigkeiten. Details stehen im CHANGELOG.
 
-### Unreleased: Ziel 1.1.0
+### Unveroeffentlichter Release-Kandidat 1.1.0
 
 - Automatische kurzlebige Verbindungspruefung beim Start aktiver Input-/ACK-Nodes.
 - Gemeinsame laufende Probe pro Account-Instanz, 30 Sekunden Gesamtfrist,
@@ -107,10 +109,13 @@ Paketierung.
   Mindestversionen beibehalten.
 - Echte Bibliotheksvertraege und Node-RED-Deploy-Matrix mit lokalem synthetischem
   IMAP vor technischem Abschluss pruefen.
+- DELETE fuer ACK und Input-Bereinigung mit bestaetigtem STORE, Delete-Ergebnis
+  und begrenztem UID-SEARCH absichern; echte OK-Abschluesse ueber das oeffentliche
+  response-Event pruefen. Partielle Serveraenderungen nicht zurueckrollen.
 
-Die Paketversion bleibt waehrend der Entwicklung `1.0.1`. Erst nach den
-erforderlichen Praxistests wird `1.1.0` gesondert fuer den Release vorbereitet.
-Die Aenderung ist im bereits veroeffentlichten `1.0.1` nicht enthalten.
+Paket und Lockfile tragen fuer die Kandidatenpruefung bereits `1.1.0`.
+Dieser Stand wird vor dem externen Provider-Test vorbereitet und ist nicht
+veroeffentlicht. Die Aenderungen sind im veroeffentlichten `1.0.1` nicht enthalten.
 
 ### Spaetere Ideen ohne Versionszusage
 

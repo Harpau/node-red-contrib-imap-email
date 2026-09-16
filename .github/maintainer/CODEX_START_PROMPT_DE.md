@@ -17,12 +17,19 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 - `docs/design-decisions-imap-email.md`
 - `docs/INSTALL_DE.md`
 - `docs/RELEASE_DE.md`
+- `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`
 - alle Dateien in `nodes/`
 - alle Dateien in `lib/`
 - die relevanten Tests in `test/`
 - `examples/basic-at-least-once-flow.json`
 
 ## Projektkontext
+
+Der aktuelle lokale Release-Kandidat hat Paketversion `1.1.0` und ist
+unveroeffentlicht; letzte veroeffentlichte Version ist `1.0.1`. Provider-Test,
+aktuelle GitHub-CI-Laeufe und Veroeffentlichungsfreigabe bleiben offen.
+Konkrete lokale Nachweise stehen im [RC-Pruefprotokoll](VALIDATION_1_1_0_RC_DE.md);
+Paketnummer und historische Tests allein sind kein Release-Nachweis.
 
 Das Paket registriert genau diese Node-RED-Typen:
 

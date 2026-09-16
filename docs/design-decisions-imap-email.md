@@ -290,7 +290,7 @@ set by msg.imap.ackAction message
 - Ist die Default-Aktion fuer erfolgreich verarbeitete Mails.
 - Wird nur ausgefuehrt, wenn der Server `UIDPLUS` unterstuetzt, damit kein
   unsicheres plain `EXPUNGE` verwendet wird.
-- In `Unreleased` (Ziel `1.1.0`) bestaetigt der gemeinsame Loeschhelfer zuerst
+- Im unveroeffentlichten Kandidaten `1.1.0` bestaetigt der gemeinsame Loeschhelfer zuerst
   das Setzen von `\Deleted`, dann das Delete-Ergebnis und zuletzt per streng
   UID-begrenztem SEARCH, dass keine UID des Chunks verbleibt. Verbindung, ausgewaehlter
   Mailbox-Pfad und UIDVALIDITY muessen waehrenddessen gueltig bleiben.
@@ -708,7 +708,7 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Fehlgeschlagene Chunks geben den Claim frei und behalten Inflight fuer die
   enthaltenen Mails.
 
-### 7.3 Verbindungspruefung beim Start (Unreleased, Ziel 1.1.0)
+### 7.3 Verbindungspruefung beim Start (unveroeffentlichter Kandidat 1.1.0)
 
 Jeder aktive Input-/ACK-Node fordert nach Registrierung seiner Handler eine
 asynchrone Probe an. Der verzoegerte Start ist abbrechbar, sodass Close vor
@@ -762,7 +762,7 @@ sichtbar gemacht.
 
 Ein historischer zusammengesetzter DELETE-Fehler in ImapFlow lieferte nach
 abgelehntem Setzen von `\Deleted` und erfolgreichem UID EXPUNGE trotzdem `true`.
-Der gemeinsame Loeschhelfer in `Unreleased` bestaetigt deshalb die einzelnen
+Der gemeinsame Loeschhelfer im Kandidaten `1.1.0` bestaetigt deshalb die einzelnen
 Schritte und die Entfernung fuer den begrenzten UID-Chunk. Historische Evidenz
 und Grenzen stehen in [KNOWN_ISSUES.md](KNOWN_ISSUES.md). Die Startpruefung prueft
 keine DELETE-Berechtigungen; ihre fruehere Abnahme belegt diesen spaeteren Fix nicht.

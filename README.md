@@ -2,6 +2,11 @@
 
 Node-RED nodes for externally triggered IMAP email processing with bounded cursor-window fetch and at-least-once ACK handling.
 
+**Release candidate 1.1.0 — not published.** This checkout prepares the next
+compatible feature release. The latest published version remains `1.0.1`.
+External provider testing, GitHub CI and publication approval are still pending;
+see the [release checklist](docs/RELEASE_DE.md).
+
 ## Nodes
 
 The package registers these Node-RED types:
@@ -50,6 +55,10 @@ npm link @compeso/node-red-contrib-imap-email
 
 Restart Node-RED after installation.
 
+To test the unpublished `1.1.0` candidate, pack this checkout and install the
+resulting tarball in an isolated Node-RED test instance. Registry installation
+does not install this candidate. See [local test instructions](docs/INSTALL_DE.md).
+
 ## Example Flow
 
 Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password. The example tab is disabled by default, the Inject node does not run automatically, and the ACK path only marks messages as seen. The visible palette labels use spaces; the stored Flow-JSON types use the `imap-email ...` prefix.
@@ -86,10 +95,10 @@ already existed on the source message. Use `delete` to delete mail; setting
 `\Deleted` as a raw flag is an advanced flag operation and does not replace the
 delete action.
 
-## Connection Check on Start (Unreleased)
+## Connection Check on Start
 
-This development change is intended for the next compatible feature release,
-`1.1.0`; the published `1.0.1` does not perform this check.
+Included in the unpublished `1.1.0` candidate; the published `1.0.1` does not
+perform this check.
 
 Each active `imap email in` and `imap email ack` node automatically checks its
 account when it starts, without needing an input message. This includes restart,
@@ -254,7 +263,7 @@ action fails closed on output 2. `copy` keeps the source message, copies it to
 the target mailbox first, and then applies any configured flag changes to the
 source message only.
 
-In **Unreleased** (target `1.1.0`), ACK `delete` and input `Expunge window`
+In the unpublished **1.1.0 candidate**, ACK `delete` and input `Expunge window`
 explicitly confirm setting `\Deleted`, require a successful delete result and
 then search only the UIDs in the same bounded chunk to confirm that none remain.
 Only a successful search with an empty UID result confirms removal.

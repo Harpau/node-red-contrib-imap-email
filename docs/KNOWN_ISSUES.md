@@ -5,13 +5,14 @@ It is not a release-readiness statement.
 
 ## Historical DELETE false success after a rejected Deleted flag
 
-**Status:** fixed at the package level in **Unreleased**, target `1.1.0`;
-final regression and release validation remain required. The development
-package still has version `1.0.1`; this fix is not in the published `1.0.1`.
+**Status:** fixed at the package level in the **unpublished `1.1.0` release
+candidate**. The package version is `1.1.0`; this fix is not in the published
+`1.0.1`. External provider testing, GitHub CI and publication approval remain
+pending.
 The underlying ImapFlow behavior described below has not been changed upstream
 by this package.
 
-### Package protection in Unreleased
+### Package protection in the 1.1.0 candidate
 
 ACK `delete` and input `Expunge window` share the same bounded deletion helper:
 
@@ -65,7 +66,7 @@ Message UID 1 remains in INBOX.
 ```
 
 The library does not propagate the failed flag update in this path. Before the
-Unreleased fix, the package's ACK executor accepted the returned `true`;
+1.1.0 candidate fix, the package's ACK executor accepted the returned `true`;
 consequently an ACK could report success and remove its inflight entry even
 though the message remained. The retained message could be delivered again.
 Server support for `UIDPLUS` prevented a mailbox-wide expunge fallback, but alone
@@ -135,10 +136,12 @@ The earlier library contract checks covered successful deletion, missing
 failure propagation for the compound operation. They do not validate the later
 package fix.
 
-The final fix must be checked against the actual library and local server for
+Regression coverage must check the actual library and local server for
 rejected STORE/EXPUNGE, remaining UIDs, connection/mailbox identity changes,
 failed or throttled confirmation searches, partial side effects, inflight
 retention and stopped subsequent chunks. Both
 ACK and input cleanup require coverage. See the [release checklist](RELEASE_DE.md).
-No completed test run for this fix is claimed here. The startup connection check
-does not test DELETE permissions or outcomes.
+Exact tested package states and local results are recorded separately in the
+repository's `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`. This issue history
+does not certify release readiness. The startup connection check does not test
+DELETE permissions or outcomes.
