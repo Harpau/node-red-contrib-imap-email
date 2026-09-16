@@ -274,10 +274,12 @@ test("github maintainer files describe the current imap email package", () => {
   }
 
   const workflow = fs.readFileSync(path.join(githubDir, "workflows", "test.yml"), "utf8");
-  assert.match(workflow, /22\.x/, "CI must test the minimum supported Node.js version");
+  assert.match(workflow, /22\.0\.0/, "CI must test the minimum supported Node.js version");
+  assert.match(workflow, /22\.x/, "CI must test current Node.js 22");
   assert.doesNotMatch(workflow, /18\.x/, "CI must not test unsupported Node.js 18");
   assert.doesNotMatch(workflow, /20\.x/, "CI must not test unsupported Node.js 20");
-  assert.match(workflow, /npm ci --no-audit --no-fund/, "CI must install from the lockfile");
+  assert.match(workflow, /npm ci --engine-strict --no-audit --no-fund/, "CI must enforce the locked engine requirements");
+  assert.match(workflow, /npm audit --omit=dev/, "CI must audit production dependencies");
   assert.match(workflow, /npm test/, "CI must run the unit tests");
   assert.match(workflow, /npm run pack:check/, "CI must run the package content check");
   assert.doesNotMatch(workflow, /npm publish/, "CI must not publish the package");
