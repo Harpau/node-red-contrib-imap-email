@@ -59,7 +59,8 @@ bounded front-window Strategie. Erfolgreiche Verarbeitung wird ueber
 3. ACK-Aktionen fail-closed halten.
    - `delete` braucht `UIDPLUS`.
    - `move` braucht native `MOVE`-Capability.
-   - `copy` behaelt die Quellmail.
+   - `copy` kopiert zuerst und aendert danach konfigurierte Flags nur auf der Quelle.
+   - Partial-Fehler behalten Inflight; ein COPY-Retry kann eine weitere Kopie erzeugen.
    - `false` und `undefined` aus ImapFlow-Aktionen sind Fehler.
 
 4. Kein persistenter lokaler Status als Pflicht.
@@ -83,6 +84,11 @@ bounded front-window Strategie. Erfolgreiche Verarbeitung wird ueber
    - CHANGELOG, falls release-relevant
    - Tests
 
+8. Die Startpruefung ist kurzlebig, auf 30 Sekunden begrenzt und erzeugt keine
+   regulaeren Output-/Stats-Nachrichten. Laufende Proben werden pro Account-Instanz
+   geteilt. Regulaere Arbeit und ihre Statusanzeigen bleiben unabhaengig;
+   spaete Probe-Ergebnisse duerfen sie nach Close/Redeploy nicht ueberschreiben.
+
 ## Arbeitsweise
 
 Bitte arbeite in kleinen, nachvollziehbaren Schritten:
@@ -102,10 +108,17 @@ Fuer groessere Abschluesse ausfuehren:
 
 ```bash
 npm install
+npm audit --omit=dev
 npm test
 npm run pack:check
 git diff --check
 ```
+
+Fuer Aenderungen an Abhaengigkeiten und Startpruefung gelten ausserdem die
+Bibliotheksvertraege, strikten Minimum-Installationen und echten
+Node-RED-Lifecycle-Tests aus `docs/RELEASE_DE.md`. Externer Provider-Test und
+aktuelle GitHub-CI-Ergebnisse sind zusaetzliche Release-Voraussetzungen.
+Historische Nachweise nicht als neue Testergebnisse ausgeben.
 
 ## Aktuelle Aufgabe
 

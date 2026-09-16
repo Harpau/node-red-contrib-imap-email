@@ -1,6 +1,8 @@
 # PRD / Evolution Plan: @compeso/node-red-contrib-imap-email
 
-Stand: Entwicklungsfassung 0.2.0
+Stand: stabile veroeffentlichte Version 1.0.1; unveroeffentlichte Weiterentwicklung
+mit Ziel 1.1.0. Die folgenden Abnahmekriterien sind Anforderungen, keine
+Bestaetigung bereits erfolgter Tests.
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
@@ -70,6 +72,10 @@ Paketierung.
 - README und Node-RED-Hilfe erklaeren Delivery-Semantik und Grenzen.
 - Beispiel-Flow bleibt deaktiviert und nicht destruktiv.
 - Fehlerausgaenge sind maschinenlesbar und enthalten genug IMAP-Metadaten.
+- Die unveroeffentlichte Startpruefung zeigt Verbindungs-/Anmeldeprobleme ohne
+  Trigger an. Ihre Statusereignisse koennen von Status-Nodes beobachtet werden.
+- `connected` bedeutet letzter erfolgreicher Check einer authentifizierten
+  Sitzung, keine dauerhaft offene Verbindung und keine bestaetigten Mailboxrechte.
 
 ### P1: Wartbarkeit
 
@@ -78,36 +84,39 @@ Paketierung.
 - CI prueft Node.js 22 und aktuelle Node.js-Versionen.
 - Dokumentation wird bei jeder nutzer-sichtbaren Aenderung aktualisiert.
 
-## 5. Moegliche Roadmap
+## 5. Historie und naechster Release
 
-### 0.1.x: Haertung vor oeffentlicher Nutzung
+### Historische Entwicklung
 
-- echte Node-RED-Installation lokal testen
-- weitere Provider-Szenarien sammeln
-- README und Hilfe finalisieren
-- Release-Checkliste weiter schaerfen
+- `0.1.0`: erste Entwicklung der drei Nodes, begrenzter Abruf und ACK-Vertrag.
+- `0.2.0`: dokumentierte Pre-1.0-Umstellung auf Node.js `>=22.0.0` und Node-RED
+  `>=4.0.0`; Node.js 18/20 und Node-RED 3 aus der Support-Matrix entfernt.
+- `1.0.0`: erste stabile oeffentliche Version.
+- `1.0.1`: Input-Close-Abbruch und Stream-Bereinigung, Netzwerk-Palettengruppe
+  und aktualisierte Laufzeitabhaengigkeiten. Details stehen im CHANGELOG.
 
-### 0.2.x: Kompatibilitaetsumstellung, Betrieb und Diagnose
+### Unreleased: Ziel 1.1.0
 
-- Node.js-Mindestversion auf `>=22.0.0` anheben
-- Node-RED-Mindestversion auf `>=4.0.0` anheben
-- Node.js 18/20 und Node-RED 3 als Pre-1.0-Breaking-Change abkuendigen
-- Troubleshooting aus echten Issues aufnehmen
-- Stats-Felder auf Stabilitaet pruefen
-- optional lokale IMAP-Testserver-Evaluation fuer CI
+- Automatische kurzlebige Verbindungspruefung beim Start aktiver Input-/ACK-Nodes.
+- Gemeinsame laufende Probe pro Account-Instanz, 30 Sekunden Gesamtfrist,
+  Abbruch beim letzten Verbraucher-Close und Schutz vor spaeten Ergebnissen.
+- Fehlerstatus ohne sensible Inhalte; regulaere Verarbeitung bleibt unabhaengig
+  und deren Status hat Vorrang. PREAUTH-Grenze und fehlende Mailbox-/ACK-Rechtepruefung
+  werden dokumentiert.
+- Laufzeitabhaengigkeiten und CI pflegen; oeffentliche Flow-Vertraege und
+  Mindestversionen beibehalten.
+- Echte Bibliotheksvertraege und Node-RED-Deploy-Matrix mit lokalem synthetischem
+  IMAP vor technischem Abschluss pruefen.
 
-### 0.3.x: Komfortfunktionen
+Die Paketversion bleibt waehrend der Entwicklung `1.0.1`. Erst nach den
+erforderlichen Praxistests wird `1.1.0` gesondert fuer den Release vorbereitet.
+Die Aenderung ist im bereits veroeffentlichten `1.0.1` nicht enthalten.
+
+### Spaetere Ideen ohne Versionszusage
 
 - zusaetzliche sichere ACK-Varianten nur mit klarer IMAP-Bestaetigung
 - bessere Flow-Beispiele fuer typische Verarbeitungspfade
 - optionale Dokumentation fuer Provider-Besonderheiten
-
-### 1.0.0: Oeffentliche stabile Version
-
-- Node-RED-Test bestanden
-- Installationsweg aus npm/Tarball validiert
-- Semver- und Release-Prozess dokumentiert
-- keine bekannten P1-Sicherheits- oder Datenverlust-Risiken offen
 
 ## 6. Feature-Akzeptanzkriterien
 
@@ -118,10 +127,21 @@ Ein Feature ist erst fertig, wenn:
 - Tests ergaenzt oder bewusst als nicht noetig begruendet wurden.
 - README/Hilfe/Beispiel-Flow aktualisiert sind, falls nutzer-sichtbar.
 - `npm test` gruen ist.
+- `npm audit --omit=dev` keine Produktions-Befunde meldet.
 - `npm run pack:check` plausibel ist.
 - keine neuen unbounded IMAP-Operationen eingefuehrt wurden.
 - Node.js `>=22.0.0` und Node-RED `>=4.0.0` unterstuetzt bleiben oder eine
   Breaking-Change-Entscheidung dokumentiert ist.
+
+Fuer die Startpruefung sind zusaetzlich die tatsaechlichen Bibliotheksvertraege
+und die Node-RED-Deploy-/Credential-/Subflow-Matrix aus
+[RELEASE_DE.md](../../docs/RELEASE_DE.md) Pflicht. Reine Runtime-Stubs reichen
+dafuer nicht. Node.js 22.0.0 wird mit `--engine-strict` fuer Lockfile und
+frische Verbraucherinstallation nachgewiesen.
+
+Release-Bereitschaft setzt einen dokumentierten externen Provider-Test und
+aktuelle GitHub-CI-Ergebnisse auf dem finalen Stand voraus. Push und Release
+benoetigen ihre eigene Freigabe; historische Tests ersetzen diese Nachweise nicht.
 
 ## 7. Breaking-Change-Entscheidung
 

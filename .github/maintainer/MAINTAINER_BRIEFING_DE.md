@@ -1,6 +1,8 @@
 # Maintainer-Briefing: @compeso/node-red-contrib-imap-email
 
-Stand: Entwicklungsfassung 0.2.0
+Stand: veroeffentlichte stabile Version 1.0.1; unveroeffentlichte Weiterentwicklung
+mit Ziel 1.1.0. Die Paketversion bleibt bis zur gesonderten Release-Vorbereitung
+1.0.1. Aktuelle Pruefergebnisse werden separat protokolliert.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -33,7 +35,8 @@ Node.js:        >=22.0.0
 Node-RED:       >=4.0.0
 Lizenz:         MIT
 Startversion:   0.1.0
-Aktuelle Linie: 0.2.0 Pre-1.0-Kompatibilitaetsumstellung
+Stabil:        1.0.1
+Entwicklung:   Unreleased, Ziel 1.1.0
 ```
 
 Keine Veroeffentlichung auf npm oder flows.nodered.org ohne ausdrueckliche
@@ -70,6 +73,24 @@ Config-Node fuer IMAP-Zugangsdaten und Verbindungseinstellungen:
 - Zertifikatspruefung
 - Benutzername und Passwort als Node-RED-Credentials
 - IMAP-Timeouts
+
+Die unveroeffentlichte Startpruefung verwaltet pro Account-Instanz hoechstens
+eine laufende kurzlebige Probe. Aktive Input-/ACK-Nodes fordern sie nach ihrer
+Initialisierung an; unbenutzte Accounts verbinden sich nicht. Es gibt keinen
+dauerhaften Erfolgs-Cache. Gleiche Account-Instanzen teilen eine laufende Probe,
+ein spaeterer neuer Verbraucher startet eine frische Probe.
+
+Die gesamte Probe ist auf 30 Sekunden begrenzt; kuerzere Account-Zeitlimits
+bleiben gueltig. Ein Check selektiert keine Mailbox und aendert keine Mail.
+Erfolg bestaetigt eine akzeptierte authentifizierte Sitzung; PREAUTH kann diese
+ohne erneute Secret-Pruefung bereitstellen. `connected` ist der letzte
+Prueferfolg und keine dauerhafte Verbindung. Regulaere Verarbeitung bleibt
+unabhaengig, deren Status und ACK-Konfigurationsfehler haben Vorrang.
+
+Startauftraege und Verbraucher sind beim Close abzumelden; die letzte Abmeldung
+beendet die Probe. Alte Ergebnisse duerfen keine neue Generation beeinflussen.
+Keine Probe-Output-/Stats-Nachrichten; ein Status-Node darf Statusereignisse
+beobachten. Hoechstens eine sichere Warnung pro Fehlprobe, keine bei Redeploy-Abbruch.
 
 Regel: keine Credentials oder privaten Endpunkte in Logs, Tests, Beispielen
 oder Dokumentation.
@@ -113,9 +134,19 @@ Sicherheitsregeln:
 
 - `delete` nur mit `UIDPLUS`
 - `move` nur mit nativer `MOVE`-Capability
-- `copy` behaelt die Quellmail und setzt Flags vor dem Kopieren
+- `copy` kopiert zuerst und aendert danach konfigurierte Flags nur auf der Quelle
 - `false` oder `undefined` aus ImapFlow-Aktionen gilt als Fehler
 - Partial-Fehler duerfen nicht als Erfolg bestaetigt werden
+
+Scheitert die Quellflag-Aenderung nach erfolgreichem COPY, bleibt Inflight fuer
+einen Retry erhalten und `msg.imapAck.partial` ist gesetzt. Ein Retry kann eine
+weitere Zielkopie erzeugen.
+
+Offener Bibliotheksfall: abgelehntes Setzen von `\Deleted` kann bei folgendem
+erfolgreichem UID EXPUNGE dennoch als DELETE-Erfolg gemeldet werden. Der
+ACK-Executor uebernimmt diesen Rueckgabewert. Umfang, Reproduktion und
+Pruefgrenzen stehen in [KNOWN_ISSUES.md](../../docs/KNOWN_ISSUES.md);
+dies ist keine vollstaendige DELETE-Fehlerabsicherung.
 
 ## 5. Kritische Invarianten
 
@@ -136,7 +167,7 @@ Vor groesseren Abschluessen:
 
 ```bash
 npm install
-npm audit --audit-level=moderate
+npm audit --omit=dev
 npm test
 npm run pack:check
 ```
@@ -150,13 +181,18 @@ rg "alte Paket- oder Node-Namen" .github README.md docs nodes test
 
 ## 7. Release-Hinweise
 
-Die Entwicklungsfassung startete bei `0.1.0`. Die Linie `0.2.0` dokumentiert
-einen Pre-1.0-Breaking-Change fuer Node.js `>=22.0.0` und Node-RED
-`>=4.0.0`. Eine oeffentliche `1.0.0` sollte
-erst vorbereitet werden, wenn mindestens diese Punkte erledigt sind:
+Historie: `0.1.0` war der Entwicklungsstart; `0.2.0` stellte vor dem ersten
+stabilen Release auf Node.js `>=22.0.0` und Node-RED `>=4.0.0` um. `1.0.0` und
+`1.0.1` sind veroeffentlicht. Neue Funktionen und Wartung werden unter
+`Unreleased` gesammelt; die Startpruefung ist fuer `1.1.0` vorgesehen.
 
-- lokaler Node-RED-Test mit realem Testpostfach
-- Installationspruefung aus Tarball oder GitHub
-- README, Beispiele, Hilfetexte und Release-Doku final konsistent
-- CI gruen fuer Node.js 22 und aktuelle Node.js-Versionen
-- keine privaten Daten in Beispielen, Tests oder Dokumentation
+Verbindlicher Ablauf: [Release-Checkliste](../../docs/RELEASE_DE.md).
+Technischer Abschluss verlangt einen frischen Tarball, echte Bibliotheksvertraege,
+die tatsaechliche Node-RED-Deploy-Matrix mit lokalem synthetischem IMAP,
+Regressionstests und einen Produktions-Audit ohne Befunde. Node.js 22.0.0
+wird mit `--engine-strict` fuer Lockfile- und Verbraucherinstallation geprueft.
+
+Vor dem Release folgen externer Provider-Test und aktuelle GitHub-CI-Laeufe
+nach gesonderter Push-Freigabe. Historische Tests sind kein aktueller Nachweis.
+Version, Release-Commit, Tag, npm-Publishing und Katalog-Refresh werden erst im
+dafuer ausdruecklich freigegebenen Umfang ausgefuehrt.
