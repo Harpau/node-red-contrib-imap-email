@@ -54,10 +54,21 @@ bounded front-window Strategie. Erfolgreiche Verarbeitung wird ueber
 2. At-least-once-Semantik beibehalten.
    - Eine Mail darf doppelt verarbeitet werden.
    - Eine Mail darf nicht still verloren gehen.
-   - Ohne erfolgreichen ACK bleibt sie erneut zustellbar.
+   - Ohne erfolgreichen ACK bleibt Inflight erhalten. Partielle Serveraenderungen
+     koennen die erneute Zustellung verhindern, etwa Loeschung oder `\Deleted`
+     bei entsprechendem Eingangsfilter; keinen automatischen Rollback behaupten.
 
 3. ACK-Aktionen fail-closed halten.
    - `delete` braucht `UIDPLUS`.
+   - ACK-Loeschung und Input-Expunge nutzen denselben begrenzten Loeschhelfer:
+     STORE bestaetigen, Delete-Ergebnis pruefen, denselben UID-Chunk per SEARCH
+     auf Rest-UIDs pruefen; nur ein erfolgreiches leeres UID-Array akzeptieren.
+     Keine Wildcards/ALL; Verbindung, Mailbox und UIDVALIDITY validieren.
+     Pro Aufruf echte OK-Abschluesse ohne Non-OK ueber das oeffentliche
+     `response`-Event verlangen; temporaeren Listener immer entfernen.
+   - DELETE-Folgefehler nach bestaetigtem STORE sind partiell und stoppen
+     weitere ACK-Chunks derselben Gruppe. Partielle oder Verbindungsfehler bei
+     Input-Expunge brechen den Abruf ab; unbestaetigte Entfernungen nicht verbuchen.
    - `move` braucht native `MOVE`-Capability.
    - `copy` kopiert zuerst und aendert danach konfigurierte Flags nur auf der Quelle.
    - Partial-Fehler behalten Inflight; ein COPY-Retry kann eine weitere Kopie erzeugen.

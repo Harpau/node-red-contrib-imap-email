@@ -110,9 +110,17 @@ async function startImapServer(input = {}) {
       const [, tag, uid, verb, rawArgs = ""] = match;
       const operation = `${uid || ""}${verb}`.toUpperCase();
       const args = ["LOGIN", "AUTHENTICATE"].includes(operation) ? "[synthetic credentials redacted]" : rawArgs;
-      state.commands.push({ connectionId, tag, operation, args });
-      const failure = options.failOperations[operation];
-      if (failure) { finish(tag, failure === true ? "NO" : failure, "Synthetic operation failure"); return; }
+      const command = { connectionId, tag, operation, args };
+      state.commands.push(command);
+      const configuredFailure = options.failOperations[operation];
+      const failure = typeof configuredFailure === "function"
+        ? configuredFailure({ command, connectionId, mailbox: selected, messages: selectedMessages(), socket, state })
+        : configuredFailure;
+      if (failure) {
+        finish(tag, typeof failure === "object" ? failure.status : failure === true ? "NO" : failure,
+          typeof failure === "object" ? failure.text : "Synthetic operation failure");
+        return;
+      }
       if (operation === "CAPABILITY") { write(`* CAPABILITY ${capabilities()}\r\n`); finish(tag); return; }
       if (operation === "LOGIN") { auth(tag, "LOGIN", rawArgs); return; }
       if (operation === "AUTHENTICATE") {
@@ -169,6 +177,15 @@ async function startImapServer(input = {}) {
             write(chunk); write(")\r\n");
           } else write(`* ${sequence} FETCH (${fields.join(" ")})\r\n`);
         }
+        finish(tag); return;
+      }
+      if (operation === "UID SEARCH") {
+        // Support only an explicit finite UID criterion. This fixture must not
+        // silently accept a regression to SEARCH ALL or a wildcard range.
+        const search = /^UID ([1-9]\d*(?::[1-9]\d*)?(?:,[1-9]\d*(?::[1-9]\d*)?)*)$/.exec(rawArgs);
+        if (!search) { finish(tag, "BAD", "Only a bounded UID criterion is supported"); return; }
+        const uids = matchedMessages(search[1], true).map(({ message }) => message.uid);
+        write(`* SEARCH${uids.length ? ` ${uids.join(" ")}` : ""}\r\n`);
         finish(tag); return;
       }
       if (operation === "STORE" || operation === "UID STORE") {

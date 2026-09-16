@@ -27,11 +27,17 @@ changes and do not certify completed release tests.
 - Update maintenance and release documentation, including the historical 1.0.1
   changes, actual-library checks and isolated Node-RED deploy acceptance tests.
 
-### Known issues
+### Fixed
 
-- Document an existing compound DELETE failure where ImapFlow can return success
-  after a rejected `\Deleted` flag update. This change does not fix that behavior;
-  see [the reproduction and evidence limits](docs/KNOWN_ISSUES.md).
+- Guard ACK deletion and input window expunge against a false success from
+  ImapFlow: confirm setting `\Deleted`, check the delete result and verify that
+  no UIDs remain through a successful search restricted to the same bounded
+  UID chunk, with connection and mailbox identity checks throughout. Retain
+  `UIDPLUS` as a requirement; perform no mailbox-wide search.
+- Preserve ACK inflight and stop later chunks in the group after a partial
+  deletion failure. Abort input cleanup on partial or connection failures
+  without counting unconfirmed removals. Earlier side effects are not rolled
+  back. See [the historical reproduction and validation limits](docs/KNOWN_ISSUES.md).
 
 ## 1.0.1
 

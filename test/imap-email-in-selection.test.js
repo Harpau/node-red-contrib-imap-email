@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const path = require("node:path");
 const { PassThrough, Readable } = require("node:stream");
@@ -104,6 +105,8 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
   const fetchOneCalls = [];
   const downloadCalls = [];
   const messageDeleteCalls = [];
+  const messageFlagsAddCalls = [];
+  const deleteVerificationCalls = [];
   const commandsDuringFetch = [];
   const releasedLocks = [];
   const loggedOutClients = [];
@@ -124,12 +127,18 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
     createClient() {
       currentMailbox = mailboxes[Math.min(mailboxIndex, mailboxes.length - 1)];
       mailboxIndex += 1;
+      const deletedUids = new Set();
+      const containsUid = (range, uid) => String(range).split(",").some(part => {
+        const [first, last = first] = part.split(":").map(Number);
+        return uid >= first && uid <= last;
+      });
 
-      return {
-        usable: currentMailbox.usable,
+      return Object.assign(new EventEmitter(), {
+        usable: currentMailbox.usable === undefined ? true : currentMailbox.usable,
         isClosed: currentMailbox.isClosed,
         capabilities: new Set(currentMailbox.capabilities || []),
         mailbox: {
+          path: currentMailbox.path || config.mailbox || "INBOX",
           exists: currentMailbox.exists,
           uidValidity: currentMailbox.uidValidity,
           uidNext: currentMailbox.uidNext
@@ -148,6 +157,18 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
               releasedLocks.push(mailbox);
             }
           };
+        },
+        async search(query, options) {
+          assert.deepEqual(Object.keys(query), ["uid"], "DELETE confirmation must not widen its UID query");
+          assert.match(query.uid, /^[1-9]\d*(?::[1-9]\d*)?(?:,[1-9]\d*(?::[1-9]\d*)?)*$/);
+          assert.deepEqual(options, { uid: true });
+          deleteVerificationCalls.push({ query, options });
+          const result = typeof currentMailbox.searchVerification === "function"
+            ? await currentMailbox.searchVerification.call(this, query, options)
+            : (currentMailbox.messages || currentMailbox.front || []).filter(message =>
+              containsUid(query.uid, message.uid) && !deletedUids.has(message.uid)).map(message => message.uid);
+          this.emit("response", { response: Array.isArray(result) ? "OK" : "NO" });
+          return result;
         },
         async *fetch(range, query, options) {
           fetchCalls.push({ range, query, options });
@@ -190,15 +211,28 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
             content: sourceToStream(message.source)
           };
         },
+        async messageFlagsAdd(range, flags, options) {
+          if (this.inFetch) commandsDuringFetch.push("messageFlagsAdd");
+          messageFlagsAddCalls.push({ range, flags, options });
+          const result = typeof currentMailbox.messageFlagsAdd === "function"
+            ? await currentMailbox.messageFlagsAdd.call(this, range, flags, options) : true;
+          this.emit("response", { response: result === true ? "OK" : "NO" });
+          return result;
+        },
         async messageDelete(range, options) {
           if (this.inFetch) {
             commandsDuringFetch.push("messageDelete");
           }
           messageDeleteCalls.push({ range, options });
-          if (typeof currentMailbox.messageDelete === "function") {
-            return currentMailbox.messageDelete(range, options);
+          const result = typeof currentMailbox.messageDelete === "function"
+            ? await currentMailbox.messageDelete.call(this, range, options) : true;
+          if (result === true) {
+            for (const message of currentMailbox.messages || currentMailbox.front || []) {
+              if (containsUid(range, message.uid)) deletedUids.add(message.uid);
+            }
           }
-          return true;
+          this.emit("response", { response: result === true ? "OK" : "NO" });
+          return result;
         },
         async logout() {
           if (typeof currentMailbox.logout === "function") {
@@ -214,7 +248,7 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
             return currentMailbox.close();
           }
         }
-      };
+      });
     }
   };
 
@@ -235,6 +269,8 @@ function createCursorTestNode(config = {}, mailboxes = [{ exists: 1200, uidValid
     fetchOneCalls,
     downloadCalls,
     messageDeleteCalls,
+    messageFlagsAddCalls,
+    deleteVerificationCalls,
     commandsDuringFetch,
     releasedLocks,
     loggedOutClients,
@@ -3088,6 +3124,105 @@ test("imap email in does not adjust cursor when expunge returns false", async ()
   assert.equal(stats.deletedExpungeErrors, 1);
   assert.equal(stats.scanCursorAdjusted, false);
   assert.equal(stats.scanCursorNext, 1);
+});
+
+test("deleted-front STORE refusal never reports expunge success or removes registry entries", async () => {
+  for (const failure of [false, undefined, new Error("synthetic STORE refusal")]) {
+    let cleanupStarted = false;
+    const fixture = createCursorTestNode({
+      frontWindowSize: 5, batchSize: 1, maxUidPerCommand: 1,
+      expungeDeletedFront: true, expungeDeletedFrontLimit: 2
+    }, [{
+      exists: 10, uidValidity: "uidv-cleanup-store", capabilities: ["UIDPLUS"],
+      front: [{ uid: 10, flags: ["\\Deleted"] }, { uid: 20, flags: ["\\Deleted"] }],
+      messageFlagsAdd() {
+        cleanupStarted = true;
+        if (failure instanceof Error) throw failure;
+        return failure;
+      }
+    }]);
+    const token = buildInputAckToken(fixture.node, 99, "uidv-cleanup-store");
+    registry.markInflight(token.queueKey, token);
+    assert.ok(registry.claimAckToken(token.queueKey, token));
+    fixture.node.scanCursor = 6;
+    const outputs = [];
+    const originalRemove = registry.removeInflight;
+    const removeCalls = [];
+    // The preceding selection phase already attempts to prune expired entries
+    // for excluded messages. Only cleanup's false completion is under test.
+    registry.removeInflight = (...args) => {
+      if (cleanupStarted) removeCalls.push(args);
+      return originalRemove(...args);
+    };
+    try { await fixture.node.runFetchCycle({}, output => outputs.push(output)); }
+    finally { registry.removeInflight = originalRemove; }
+    const stats = collectStats(outputs)[0];
+    assert.deepEqual(fixture.messageFlagsAddCalls.map(call => call.range), ["10", "20"]);
+    assert.equal(fixture.messageDeleteCalls.length, 0);
+    assert.equal(fixture.deleteVerificationCalls.length, 0);
+    assert.equal(stats.deletedExpunged, 0);
+    assert.equal(stats.deletedExpungeErrors, 2);
+    assert.equal(stats.scanCursorAdjusted, false);
+    assert.equal(removeCalls.length, 0);
+    assert.equal(registry.matchesAckToken(token.queueKey, token), true);
+    assert.equal(outputs.some(output => output[0]), false);
+  }
+});
+
+test("deleted-front failed deletion confirmation stops cleanup and fetching without false success", async () => {
+  for (const failure of ["remaining UID", "search throws", "search false", "search undefined", "search NO swallowed", "DELETE false", "mailbox changed"]) {
+    let verificationCalled = false;
+    let cleanupStarted = false;
+    const fixture = createCursorTestNode({
+      frontWindowSize: 5, batchSize: 1, maxUidPerCommand: 1,
+      expungeDeletedFront: true, expungeDeletedFrontLimit: 2
+    }, [{
+      exists: 10, uidValidity: "uidv-cleanup-partial", capabilities: ["UIDPLUS"],
+      front: [{ uid: 10, flags: ["\\Deleted"] }, { uid: 20, flags: ["\\Deleted"] }, createMessage(30)],
+      messageFlagsAdd() { cleanupStarted = true; return true; },
+      messageDelete() {
+        if (failure === "mailbox changed") this.mailbox.uidValidity = "uidv-replaced";
+        return failure !== "DELETE false";
+      },
+      async searchVerification(query, options) {
+        verificationCalled = true;
+        assert.deepEqual(query, { uid: "10" });
+        assert.deepEqual(options, { uid: true });
+        if (failure === "search throws") throw new Error("synthetic SEARCH failure");
+        if (failure === "search false") return false;
+        if (failure === "search undefined") return undefined;
+        if (failure === "search NO swallowed") { this.emit("response", { response: "NO" }); return []; }
+        return [10];
+      }
+    }]);
+    const token = buildInputAckToken(fixture.node, 99, "uidv-cleanup-partial");
+    registry.markInflight(token.queueKey, token);
+    assert.ok(registry.claimAckToken(token.queueKey, token));
+    fixture.node.scanCursor = 6;
+    const outputs = [];
+    const originalRemove = registry.removeInflight;
+    const removeCalls = [];
+    registry.removeInflight = (...args) => {
+      if (cleanupStarted) removeCalls.push(args);
+      return originalRemove(...args);
+    };
+    try { await fixture.node.runFetchCycle({}, output => outputs.push(output)); }
+    finally { registry.removeInflight = originalRemove; }
+    const stats = collectStats(outputs)[0];
+    assert.deepEqual(fixture.messageFlagsAddCalls.map(call => call.range), ["10"], failure);
+    assert.deepEqual(fixture.messageDeleteCalls.map(call => call.range), ["10"], failure);
+    assert.equal(fixture.downloadCalls.length, 0, failure);
+    assert.equal(stats.ok, false, failure);
+    assert.equal(stats.deletedExpunged, 0, failure);
+    assert.equal(stats.deletedExpungeErrors, 1, failure);
+    assert.equal(stats.scanCursorAdjusted, false, failure);
+    assert.equal(removeCalls.length, 0, failure);
+    assert.equal(registry.matchesAckToken(token.queueKey, token), true, failure);
+    assert.equal(outputs.some(output => output[0]), false, failure);
+    if (["remaining UID", "search throws", "search false", "search undefined", "search NO swallowed"].includes(failure)) {
+      assert.equal(verificationCalled, true, failure);
+    }
+  }
 });
 
 test("imap email in runtime contract uses explicit selection fields", () => {

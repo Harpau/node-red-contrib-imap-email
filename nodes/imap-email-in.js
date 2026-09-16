@@ -23,6 +23,7 @@ const {
 } = require("../lib/imap-connection");
 const diagnostics = require("../lib/diagnostics");
 const { createConnectionStatus } = require("../lib/imap-connection-check");
+const { deleteUidRange } = require("../lib/imap-delete");
 
 const DEFAULT_DOWNLOAD_CHUNK_SIZE = 64 * 1024;
 const TOO_LARGE_CODE = "IMAP_EMAIL_MESSAGE_TOO_LARGE";
@@ -674,11 +675,7 @@ module.exports = function registerImapEmailIn(RED) {
       for (const uidChunk of chunkUids(expungeUids, node.maxUidPerCommand)) {
         const range = compressUids(uidChunk);
         try {
-          const ok = await client.messageDelete(range, { uid: true });
-          if (ok === false) {
-            stats.deletedExpungeErrors += uidChunk.length;
-            continue;
-          }
+          await deleteUidRange(client, range);
 
           stats.deletedExpunged += uidChunk.length;
           expungedAny = true;
@@ -692,6 +689,10 @@ module.exports = function registerImapEmailIn(RED) {
         } catch (err) {
           stats.deletedExpungeErrors += uidChunk.length;
           diagnostics.warn(node, `IMAP expunge failed for ${node.mailbox} ${range}: ${err.message}`);
+          if (err.partial || isTransientImapConnectionError(err)) {
+            addTiming(timing, "expungeMs", started);
+            throw err;
+          }
         }
       }
 

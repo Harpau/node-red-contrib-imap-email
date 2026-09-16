@@ -1,17 +1,26 @@
-# Lokale Abnahme: IMAP-Prüfung beim Deploy
+# Historische lokale Abnahme: IMAP-Prüfung beim Deploy
 
-Stand: 16. September 2026. Dieser Nachweis gilt für den lokal umgesetzten,
-unveröffentlichten Stand auf `codex/imap-deploy-check`, ausgehend von
-`1da7fc3f23ff895f59af977ff9710fad3a55bf4b`. Die Paketversion bleibt `1.0.1`;
-die neuen Änderungen stehen im Changelog unter **Unreleased**, Ziel `1.1.0`.
+Aufzeichnung vom 16. September 2026, **vor der Commit- und DELETE-Fix-Phase**.
+Dieser Nachweis dokumentiert die damalige unveröffentlichte Arbeitskopie auf
+`codex/imap-deploy-check`, ausgehend von
+`1da7fc3f23ff895f59af977ff9710fad3a55bf4b`, mit Paketversion `1.0.1` und
+Changelog-Ziel `1.1.0`. Er belegt weder den heutigen Arbeitsstand noch den
+anschließend ergänzten gemeinsamen DELETE-Schutz. Die unten erhaltenen
+Testergebnisse, Dateizahlen und Tarball-Prüfsumme gelten nur für den damaligen Stand.
 
-## Ergebnis
+Nach dieser Aufzeichnung entstanden die Commits `91e6400` (Abhängigkeiten),
+`5c52099` (Startprüfung), `c0ef88c` (CI) und `3842604` (Dokumentation).
+Der danach ergänzte DELETE-Fix wird unter [KNOWN_ISSUES.md](../../docs/KNOWN_ISSUES.md)
+beschrieben und benötigt einen eigenen aktuellen Validierungsnachweis.
 
-Die automatische Startprüfung und die freigegebenen Wartungsarbeiten sind lokal
-umgesetzt und geprüft. Ein separater bestehender DELETE-Fehler ist dokumentiert.
-Eine Freigabe zur Veröffentlichung ist damit nicht verbunden.
+## Damaliges Ergebnis
 
-| Prüfung | Tatsächliches Ergebnis |
+Die automatische Startprüfung und die freigegebenen Wartungsarbeiten waren lokal
+umgesetzt und geprüft. Ein separater bestehender DELETE-Fehler war dokumentiert
+und damals noch nicht behoben. Eine Freigabe zur Veröffentlichung war und ist
+mit diesem historischen Nachweis nicht verbunden.
+
+| Prüfung des damaligen Stands | Damals festgehaltenes Ergebnis |
 | --- | --- |
 | `npm install --engine-strict` | Erfolgreich |
 | `npm test`, Node.js 22.0.0 | 220 bestanden, keine Fehler oder übersprungenen Tests; aus einer frischen `npm ci --engine-strict`-Installation |
@@ -37,7 +46,7 @@ Er ist nicht mit der bereits veröffentlichten Version 1.0.1 gleichzusetzen.
 SHA-256:
 `dead5f67b5101585ebe1cf392d8ab87fc97145423a6ff72315c177f6dc1ab8bd`
 
-## Was geprüft wurde
+## Was damals geprüft wurde
 
 - Gemeinsame laufende Probe pro tatsächlicher Account-Instanz, frische Probe
   beim späteren Start, keine Probe für unbenutzte/deaktivierte Konfigurationen.
@@ -60,7 +69,7 @@ Alle IMAP-Netzwerktests nutzten ausschließlich lokale synthetische Server und
 Testnachrichten. Die Node-RED-Tests installierten den Tarball in einer isolierten
 Umgebung und verwendeten temporäre Benutzerverzeichnisse.
 
-## Review und geänderte Bereiche
+## Damaliger Review und geänderte Bereiche
 
 Unabhängige Agenten prüften Laufzeitlogik, Bibliotheksverträge und tatsächlichen
 Node-RED-Lifecycle. Der dabei gefundene Rückhalt des geschlossenen Clients über
@@ -75,7 +84,11 @@ während eines synchronen Status-Callbacks abgesichert und getestet.
 | Anwenderdokumentation | `README.md`, `CHANGELOG.md`, Hilfetexte aller drei `nodes/*.html`, `docs/INSTALL_DE.md`, `docs/RELEASE_DE.md`, `docs/design-decisions-imap-email.md`, `docs/KNOWN_ISSUES.md` |
 | Wartungsdokumentation | Die vier bestehenden `.github/maintainer/*.md` und dieser Nachweis |
 
-## Vor einer Veröffentlichung offen
+## Damals vor einer Veröffentlichung offene Punkte
+
+Diese Liste gibt den damaligen Status wieder. Aktuelle Voraussetzungen stehen
+in der [Release-Checkliste](../../docs/RELEASE_DE.md); insbesondere wird der
+DELETE-Fall inzwischen durch Paketcode abgesichert und separat validiert.
 
 1. Test mit dem vorgesehenen externen Mailanbieter und einem dedizierten
    Testpostfach auf der Zielinstallation; reale Mailbox-/ACK-Rechte sind nicht
@@ -86,11 +99,13 @@ während eines synchronen Status-Callbacks abgesichert und getestet.
    Nach abgewiesenem Setzen von `\Deleted` kann ACK Erfolg melden, obwohl die
    Nachricht bleibt. Der entsprechende Quellcodefehler besteht bereits in der
    ursprünglichen ImapFlow-1.4.2-Abhängigkeit; die neue Startprobe verändert den
-   ACK-Executor nicht. Dies ist bei der Release-Entscheidung ausdrücklich offen.
+   ACK-Executor nicht. Dieser Punkt war bei der damaligen Abnahme offen.
 4. Versionsanhebung, Commit-/PR-Abnahme, Tag und Veröffentlichung gesondert
-   durchführen. Es wurden keine Commits, Pushes, Remote-PR-Änderungen, Tags oder
-   Veröffentlichungen vorgenommen.
+   durchführen. Zum Zeitpunkt dieser Aufzeichnung waren noch keine Commits,
+   Pushes, Remote-PR-Änderungen, Tags oder Veröffentlichungen vorgenommen worden.
 
-Empfohlene Commit-Aufteilung: Abhängigkeiten, CI, historische Dokumentation,
+Damals empfohlene Commit-Aufteilung: Abhängigkeiten, CI, historische Dokumentation,
 anschließend `feat: verify IMAP connection when nodes start` mit Tests und Hilfe.
-Der erste empfohlene Commit ist `chore: update and audit runtime dependencies`.
+Der erste damals empfohlene Commit war `chore: update and audit runtime dependencies`.
+Die inzwischen vorhandenen vier Commits sind oben aufgeführt; diese Empfehlung
+ist kein aktueller Arbeitsauftrag.

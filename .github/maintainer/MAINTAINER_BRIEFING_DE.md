@@ -132,7 +132,9 @@ unterstuetzt:
 
 Sicherheitsregeln:
 
-- `delete` nur mit `UIDPLUS`
+- `delete` nur mit `UIDPLUS`, bestaetigtem STORE und Delete-Ergebnis sowie
+  anschliessendem erfolgreichem UID-begrenztem SEARCH desselben Chunks ohne
+  Rest-UIDs; fehlgeschlagenes SEARCH ist kein leerer Erfolg
 - `move` nur mit nativer `MOVE`-Capability
 - `copy` kopiert zuerst und aendert danach konfigurierte Flags nur auf der Quelle
 - `false` oder `undefined` aus ImapFlow-Aktionen gilt als Fehler
@@ -142,11 +144,22 @@ Scheitert die Quellflag-Aenderung nach erfolgreichem COPY, bleibt Inflight fuer
 einen Retry erhalten und `msg.imapAck.partial` ist gesetzt. Ein Retry kann eine
 weitere Zielkopie erzeugen.
 
-Offener Bibliotheksfall: abgelehntes Setzen von `\Deleted` kann bei folgendem
-erfolgreichem UID EXPUNGE dennoch als DELETE-Erfolg gemeldet werden. Der
-ACK-Executor uebernimmt diesen Rueckgabewert. Umfang, Reproduktion und
-Pruefgrenzen stehen in [KNOWN_ISSUES.md](../../docs/KNOWN_ISSUES.md);
-dies ist keine vollstaendige DELETE-Fehlerabsicherung.
+Der historische ImapFlow-Fall mit DELETE-Erfolg nach abgelehntem Setzen von
+`\Deleted` wird in `Unreleased` im Paket abgesichert. ACK und Input-Expunge
+verwenden `lib/imap-delete.js` mit expliziter Flag-Bestaetigung, Delete-Pruefung
+und begrenzter UID-Nachkontrolle. Verbindung, ausgewaehlte Mailbox und
+UIDVALIDITY muessen dabei gueltig bleiben. Ein temporaerer Guard des oeffentlichen
+`response`-Events verlangt pro Aufruf mindestens einen OK-Abschluss und keinen
+Non-OK-Abschluss; dadurch zaehlen auch verschleierte NO-Antworten als Fehler.
+Er speichert nur zwei Boolean-Werte und wird in `finally` entfernt, ohne Raw-Logs.
+Ein initialer STORE-Fehler stoppt
+vor EXPUNGE; nach bestaetigtem STORE sind Folgefehler partiell. ACK behaelt
+Inflight und stoppt Folgechunks derselben Gruppe; Input bricht bei partiellen
+oder Verbindungsfehlern den Abruf ab. Unbestaetigte UIDs werden nicht als
+entfernt gezaehlt oder aus der Registry entfernt. Es gibt keinen Rollback.
+Die historische Reproduktion und Grenzen stehen in
+[KNOWN_ISSUES.md](../../docs/KNOWN_ISSUES.md). Das fruehere Deploy-Pruefprotokoll
+belegt diesen spaeteren Fix nicht; finale Regressionstests bleiben erforderlich.
 
 ## 5. Kritische Invarianten
 

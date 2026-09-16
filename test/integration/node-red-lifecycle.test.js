@@ -379,6 +379,56 @@ test("installed package in actual Node-RED: deploy, credentials and lifecycle", 
     assert.ok(server.mailboxes.get("INBOX")[0].flags.has("\\Seen"), "ACK changed the real synthetic server flag");
   });
 
+  await scenario("DELETE STORE refusal preserves inflight and retry deletes only the requested UID", {
+    messages: [{ uid: 1, flags: [] }, { uid: 9, flags: ["\\Deleted"] }],
+    failOperations: { "UID STORE": "NO" }
+  }, async server => {
+    const flows = change(baseFlow(server, { ack: true }), "ack-main", { actionMode: "delete" });
+    const mark = harness.mark();
+    await harness.deploy(flows);
+    await harness.waitStatus(mark, "ack-main", "connected");
+    harness.node("input-main").receive({ payload: "synthetic DELETE regression" });
+    await waitFor(() => harness.collectedSince(mark, "output").length === 1, "synthetic target mail");
+    const message = harness.collectedSince(mark, "output")[0];
+    assert.equal(message.imap.ackToken.uid, 1);
+    const token = structuredClone(message.imap.ackToken);
+    harness.node("ack-main").receive(message);
+    await waitFor(() => harness.collectedSince(mark, "error").length === 1, "failed DELETE ACK after STORE NO");
+    await settled(server);
+    const failed = harness.collectedSince(mark, "error")[0];
+    assert.equal(failed.imapAck.ok, false);
+    assert.equal(failed.imapAck.completed, false);
+    assert.equal(failed.imapAck.partial, undefined);
+    assert.equal(harness.collectedSince(mark, "ack").length, 0);
+    assert.equal(server.commands.some(command => command.operation.includes("EXPUNGE")), false,
+      "a refused initial STORE must not issue any EXPUNGE");
+    assert.deepEqual(server.mailboxes.get("INBOX").map(entry => entry.uid), [1, 9]);
+    assert.equal(server.mailboxes.get("INBOX")[0].flags.has("\\Deleted"), false);
+
+    const installedRegistry = require(path.join(harness.packagePath, "lib/runtime-registry"));
+    assert.equal(installedRegistry.matchesAckToken(token.queueKey, token), true);
+    assert.ok(installedRegistry.claimAckToken(token.queueKey, token), "real ACK failure releases its token claim");
+    assert.equal(installedRegistry.releaseAckToken(token.queueKey, token), true);
+
+    server.options.failOperations = {};
+    const retryStart = server.commands.length;
+    harness.node("ack-main").receive(structuredClone(failed));
+    await waitFor(() => harness.collectedSince(mark, "ack").length === 1, "successful retry with the same ACK token");
+    await settled(server);
+    const success = harness.collectedSince(mark, "ack")[0];
+    assert.equal(success.imapAck.ok, true);
+    assert.equal(success.imapAck.completed, true);
+    assert.equal(installedRegistry.matchesAckToken(token.queueKey, token), false);
+    assert.deepEqual(server.mailboxes.get("INBOX").map(entry => entry.uid), [9]);
+    assert.ok(server.mailboxes.get("INBOX")[0].flags.has("\\Deleted"), "unrelated pre-deleted sentinel survives");
+    assert.equal(server.commands.some(command => command.operation === "EXPUNGE"), false);
+    assert.deepEqual(server.commands.slice(retryStart).filter(command => command.operation === "UID EXPUNGE")
+      .map(command => command.args), ["1"]);
+    assert.deepEqual(server.commands.slice(retryStart).filter(command => command.operation.includes("SEARCH"))
+      .map(command => [command.operation, command.args]), [["UID SEARCH", "UID 1"]],
+      "success includes only the exact bounded UID SEARCH absence check");
+  });
+
   await scenario("an existing invalid ACK action remains visible throughout deployment", {}, async server => {
     let flows = baseFlow(server, { ack: true });
     flows = change(flows, "ack-main", { actionMode: "move", targetMailbox: "" });

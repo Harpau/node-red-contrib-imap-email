@@ -200,7 +200,7 @@
     <dt>Deleted / Seen / Answered / Flagged <span class="property-type">selection</span></dt>
     <dd>Select <code>Any</code>, <code>Only with flag</code>, or <code>Only without flag</code> for each IMAP flag. The filters are applied only inside bounded windows; the node does not scan the whole mailbox to fill a batch.</dd>
     <dt>Expunge window <span class="property-type">boolean</span></dt>
-    <dd>Permanently remove already-<code>\Deleted</code> messages skipped by <code>Deleted = Only without flag</code> in the current cursor window.</dd>
+    <dd>Permanently remove already-<code>\Deleted</code> messages skipped by <code>Deleted = Only without flag</code> in the current cursor window. Requires <code>UIDPLUS</code>. In Unreleased (target 1.1.0), cleanup confirms the flag update, delete result and a successful empty search restricted to UIDs in the same bounded chunk while checking the connection and selected mailbox identity. Partial results or connection failures abort the current fetch cycle; unconfirmed UIDs are not counted as expunged or removed from the registry. Earlier flag changes or deletions are not rolled back. A later trigger can attempt cleanup again.</dd>
     <dt>Expunge limit <span class="property-type">number</span></dt>
     <dd>Maximum number of already-<code>\Deleted</code> messages expunged per fetch cycle.</dd>
     <dt>Max bytes <span class="property-type">number</span></dt>

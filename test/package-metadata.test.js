@@ -101,6 +101,7 @@ test("installed imapflow exposes the IMAP methods used by the nodes", () => {
     "messageFlagsRemove",
     "fetchOne",
     "fetch",
+    "search",
     "download",
     "logout",
     "close"

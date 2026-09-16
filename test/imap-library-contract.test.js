@@ -5,6 +5,7 @@ const test = require("node:test");
 const { ImapFlow } = require("imapflow");
 const { simpleParser } = require("mailparser");
 const { executeAckActionRange } = require("../lib/imap-ack-actions");
+const { deleteUidRange } = require("../lib/imap-delete");
 const { startImapServer, DEFAULT_SOURCE } = require("./helpers/imap-server");
 
 async function fixture(t, serverOptions = {}, clientOptions = {}) {
@@ -200,7 +201,7 @@ test("real ImapFlow ACK failure values are rejected by the package action execut
       await assert.rejects(executeAckActionRange({
         client, plan: { action, targetMailbox: ["copy", "move"].includes(action) ? "SyntheticTarget" : "", disposition: action === "flag" ? "keep" : action, flags },
         range: "1", mailbox: "INBOX", ensureTargetMailbox: false
-      }), /ACK .* failed/);
+      }), /(?:ACK|IMAP) .*(?:failed|not confirmed)/);
     }
     assert.equal(server.mailboxes.get("INBOX").length, 1);
   } finally { lock.release(); }
@@ -217,7 +218,7 @@ test("real advertised capabilities prevent unsafe MOVE and delete fallbacks", { 
       await assert.rejects(executeAckActionRange({
         client, plan: { action, targetMailbox: action === "move" ? "SyntheticTarget" : "", disposition: action, flags: { add: [], remove: [] } },
         range: "1", mailbox: "INBOX", ensureTargetMailbox: false
-      }), /requires IMAP/);
+      }), /requires (?:IMAP )?(?:MOVE|UIDPLUS)/);
     }
     assert.deepEqual(server.commands.slice(before), []);
   } finally { lock.release(); }
@@ -246,3 +247,209 @@ test("real Mailparser preserves decoded headers, alternative bodies and binary a
   assert.equal(parsed.attachments[0].filename, "synthetic.bin");
   assert.deepEqual(parsed.attachments[0].content, Buffer.from([0, 1, 2, 255, 254]));
 });
+
+test("safe DELETE rejects the original STORE-NO bug before EXPUNGE with real ImapFlow", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t, { failOperations: { "UID STORE": "NO" } });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    await assert.rejects(() => deleteUidRange(client, "1"), (error) => /IMAP delete/.test(error.message) && error.partial !== true);
+    assert.equal(server.mailboxes.get("INBOX").length, 1);
+    assert.equal(server.commands.filter((command) => command.operation === "UID STORE").length, 1);
+    assert.equal(server.commands.some((command) => command.operation.includes("EXPUNGE")), false);
+    assert.equal(server.commands.some((command) => /FETCH|SEARCH/.test(command.operation)), false);
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("safe DELETE detects a removed flag and failed second STORE despite upstream success", { timeout: 5000 }, async (t) => {
+  let storeCount = 0;
+  const { server, client } = await fixture(t, {
+    failOperations: {
+      "UID STORE": ({ messages }) => {
+        storeCount += 1;
+        if (storeCount === 2) {
+          messages[0].flags.delete("\\Deleted");
+          return "NO";
+        }
+      }
+    }
+  });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    await assert.rejects(() => deleteUidRange(client, "1"), (error) => error.partial === true);
+    assert.equal(storeCount, 2);
+    assert.equal(server.mailboxes.get("INBOX").length, 1);
+    assert.ok(server.commands.some((command) => command.operation === "UID EXPUNGE"));
+    assert.equal(server.commands.some((command) => command.operation === "UID SEARCH"), false);
+    assert.equal(server.commands.some((command) => command.operation === "UID STORE" && command.args.includes("-FLAGS")), false);
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("safe DELETE reports a partial chunk, supports retry with missing UIDs and preserves an outside sentinel", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t, {
+    messages: [{ uid: 1 }, { uid: 2 }, { uid: 99, flags: ["\\Deleted"] }],
+    failOperations: {
+      "UID EXPUNGE": ({ messages }) => { messages.find((message) => message.uid === 2).flags.delete("\\Deleted"); }
+    }
+  });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    await assert.rejects(() => deleteUidRange(client, "1:2"), (error) => error.partial === true);
+    assert.deepEqual(server.mailboxes.get("INBOX").map((message) => message.uid), [2, 99]);
+    server.options.failOperations = {};
+    assert.equal(await deleteUidRange(client, "1:2"), true);
+    assert.deepEqual(server.mailboxes.get("INBOX").map((message) => message.uid), [99]);
+    assert.equal(server.mailboxes.get("INBOX")[0].flags.has("\\Deleted"), true);
+    for (const command of server.commands.filter((entry) => /^(?:UID )?(?:STORE|EXPUNGE|FETCH|SEARCH)$/.test(entry.operation))) {
+      assert.ok(["UID STORE", "UID EXPUNGE", "UID SEARCH"].includes(command.operation));
+      assert.match(command.args, command.operation === "UID SEARCH" ? /^UID 1:2$/ : /^1:2(?: |$)/);
+    }
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("safe DELETE confirms already absent UIDs without touching unrelated messages", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t, { messages: [{ uid: 99, flags: ["\\Deleted"] }] });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    assert.equal(await deleteUidRange(client, "1:2"), true);
+    assert.deepEqual(server.mailboxes.get("INBOX").map((message) => message.uid), [99]);
+    assert.ok(server.commands.some((command) => command.operation === "UID SEARCH"));
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("safe DELETE distinguishes failed verification from confirmed absence after real deletion", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t, { failOperations: { "UID SEARCH": "NO" } });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    await assert.rejects(() => deleteUidRange(client, "1"), (error) => error.partial === true);
+    assert.equal(server.mailboxes.get("INBOX").length, 0, "the IMAP mutation may already have completed");
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("safe DELETE reports EXPUNGE refusal as partial after a confirmed flag mutation", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t, { failOperations: { "UID EXPUNGE": "NO" } });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    await assert.rejects(() => deleteUidRange(client, "1"), (error) => error.partial === true);
+    assert.equal(server.mailboxes.get("INBOX")[0].flags.has("\\Deleted"), true);
+    assert.equal(server.commands.some((command) => command.operation === "UID SEARCH"), false);
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("safe DELETE requires a real selected mailbox even though public fetch silently returns no rows", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t);
+  await client.connect();
+  assert.deepEqual(await client.fetchAll("1", { uid: true }, { uid: true }), []);
+  const before = server.commands.length;
+  await assert.rejects(() => deleteUidRange(client, "1"), /selected mailbox/);
+  assert.deepEqual(server.commands.slice(before), []);
+  assert.equal(server.mailboxes.get("INBOX").length, 1);
+  await client.logout();
+});
+
+test("upstream exhausted FETCH throttling looks empty while the requested UID still exists", { timeout: 25000 }, async (t) => {
+  const { server, client } = await fixture(t, {
+    failOperations: {
+      "UID FETCH": { status: "BAD", text: "Request is throttled. Suggested Backoff Time: 1 milliseconds" }
+    }
+  }, { socketTimeout: 20000 });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    // Keep this actual wire-level regression evidence: ImapFlow 2.0.5 retries
+    // four times, then resolves its public iterator as empty instead of failing.
+    // It is therefore not a safe proof that deletion completed.
+    assert.deepEqual(await client.fetchAll("1", { uid: true }, { uid: true }), []);
+    assert.equal(server.commands.filter((command) => command.operation === "UID FETCH").length, 4);
+    assert.equal(server.mailboxes.get("INBOX")[0].uid, 1);
+    assert.equal(client.usable, true);
+    assert.deepEqual(await client.search({ uid: "1" }, { uid: true }), [1]);
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("safe DELETE treats throttled bounded UID SEARCH as an unconfirmed partial result", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t, {
+    failOperations: {
+      "UID SEARCH": { status: "BAD", text: "Request is throttled. Suggested Backoff Time: 1 milliseconds" }
+    }
+  });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    await assert.rejects(() => deleteUidRange(client, "1"), (error) => error.partial === true);
+    assert.deepEqual(server.commands.filter((command) => command.operation === "UID SEARCH").map((command) => command.args), ["UID 1"]);
+    assert.equal(server.mailboxes.get("INBOX").length, 0);
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("upstream special missing-message NO may look like an empty UID SEARCH", { timeout: 5000 }, async (t) => {
+  const { server, client } = await fixture(t, {
+    failOperations: {
+      "UID SEARCH": { status: "NO", text: "Some of the requested messages no longer exist" }
+    }
+  });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    const result = await client.search({ uid: "1" }, { uid: true });
+    assert.deepEqual(result, []);
+    assert.equal(server.mailboxes.get("INBOX")[0].uid, 1);
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+for (const operation of ["UID STORE", "UID EXPUNGE", "UID SEARCH"]) {
+  test(`safe DELETE rejects the SDK's special missing-message NO during ${operation}`, { timeout: 5000 }, async (t) => {
+    const { server, client } = await fixture(t, {
+      failOperations: { [operation]: { status: "NO", text: "Some of the requested messages no longer exist" } }
+    });
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    try {
+      await assert.rejects(() => deleteUidRange(client, "1"), (error) => {
+        assert.equal(error.partial === true, operation !== "UID STORE");
+        assert.doesNotMatch(error.message, /Some of the requested/);
+        return true;
+      });
+      assert.equal(client.listenerCount("response"), 0);
+      if (operation === "UID STORE") assert.equal(server.commands.some((command) => command.operation === "UID EXPUNGE"), false);
+      if (operation === "UID EXPUNGE") assert.equal(server.mailboxes.get("INBOX").length, 1);
+      assert.equal(server.commands.some((command) => command.operation === "UID STORE" && command.args.includes("-FLAGS")), false);
+    } finally { lock.release(); }
+    await client.logout();
+  });
+}
+
+for (const rejectedSearch of [false, true]) {
+  test(`safe DELETE observes replies before an existing throwing listener, rejectedSearch=${rejectedSearch}`, { timeout: 5000 }, async (t) => {
+    const { client } = await fixture(t, rejectedSearch ? {
+      failOperations: { "UID SEARCH": { status: "NO", text: "Some of the requested messages no longer exist" } }
+    } : {});
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    const observer = () => { throw new Error("synthetic observer error"); };
+    client.on("response", observer);
+    try {
+      if (rejectedSearch) await assert.rejects(() => deleteUidRange(client, "1"), (error) => error.partial === true);
+      else assert.equal(await deleteUidRange(client, "1"), true);
+      assert.deepEqual(client.listeners("response"), [observer]);
+    } finally {
+      client.removeListener("response", observer);
+      lock.release();
+    }
+    await client.logout();
+  });
+}

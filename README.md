@@ -254,11 +254,24 @@ action fails closed on output 2. `copy` keeps the source message, copies it to
 the target mailbox first, and then applies any configured flag changes to the
 source message only.
 
-Known limitation: ImapFlow can return success for `delete` when the server
-rejects the preceding `\Deleted` flag update but accepts `UID EXPUNGE`. The
-ACK can then report success while the message remains. See the
-[DELETE known issue](docs/KNOWN_ISSUES.md) for the reproduced sequence and
-remaining test limits.
+In **Unreleased** (target `1.1.0`), ACK `delete` and input `Expunge window`
+explicitly confirm setting `\Deleted`, require a successful delete result and
+then search only the UIDs in the same bounded chunk to confirm that none remain.
+Only a successful search with an empty UID result confirms removal.
+The connection, selected mailbox path and UIDVALIDITY must stay valid throughout.
+This guards against a historical ImapFlow false-success case; see the
+[DELETE history and fix](docs/KNOWN_ISSUES.md). It adds no mailbox-wide scan.
+The safeguard adds two commands per deletion chunk: a checked STORE and a
+UID-constrained SEARCH without message content. Existing `UIDs/command` limits
+still apply; the query uses neither `ALL` nor a wildcard UID range.
+
+A rejected initial flag update stops before EXPUNGE. Once that update succeeds,
+any later failure is partial: flags or deletions may already have taken effect,
+and no rollback is attempted. ACK retains inflight for the affected messages and
+stops later chunks in that group. Input cleanup aborts the current fetch cycle
+on a partial result or connection failure; it does not count unconfirmed UIDs
+as expunged or remove them from the registry. Earlier confirmed chunks remain
+applied. A later input trigger can attempt cleanup again.
 
 ACK tokens are opaque signed bearer capabilities scoped to the configured IMAP
 account and to the current in-memory inflight generation. Pass
@@ -290,7 +303,10 @@ Successful completions add `msg.imapAck` with fields such as `action`,
 `disposition`, `mailbox`, `targetMailbox`, `uid`, `uidValidity`, `flags`,
 `range` and `completed`. Failed completions may include
 `msg.imapAck.partial = true` when a state-changing IMAP step already succeeded
-before a later step failed. For `copy`, a successful copy followed by a failed
+before a later step failed. For `delete`, this includes failure after confirmed
+setting of `\Deleted`, even when final removal could not be confirmed. Retaining
+inflight cannot restore removed messages; remaining `\Deleted` messages are
+excluded by the default input filter. For `copy`, a successful copy followed by a failed
 source flag update is partial; because Inflight is kept for retry, a retry may
 create another copy in the target mailbox.
 

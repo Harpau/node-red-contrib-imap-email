@@ -23,8 +23,10 @@ nach ausdruecklicher menschlicher Freigabe des konkreten Release-Stands.
 - README, Hilfetexte, Beispiele und Changelog passen zum zu pruefenden Code.
   Keine Zugangsdaten, Tokens oder privaten Endpunkte im Paket oder Pruefprotokoll.
 - [Bekannte Probleme](KNOWN_ISSUES.md) in die Release-Entscheidung einbeziehen.
-  Insbesondere ist die DELETE-Fehlerweitergabe nicht vollstaendig abgesichert;
-  ein erfolgreicher Verbindungscheck liefert hierzu keinen Nachweis.
+  Der historische DELETE-Fehler wird in `Unreleased` durch einen gemeinsamen
+  Loeschhelfer abgesichert. Seine Regressionstests und finale Abnahme muessen
+  zum aktuellen Code passen; ein erfolgreicher Verbindungscheck oder das
+  historische Deploy-Pruefprotokoll liefert hierzu keinen Nachweis.
 
 ## 2. Automatische Pruefung
 
@@ -54,6 +56,23 @@ Zusaetzlich in sauberer Testumgebung:
   Attachments pruefen. Client-Doubles allein belegen keine Upstream-Kompatibilitaet.
 - Fuer die Startpruefung Timeout, Redeploy-Abbruch, spaete Ereignisse,
   Ressourcenfreigabe und vollstaendige Status-/Logfolgen pruefen.
+- Fuer ACK `delete` und Input-Fensterbereinigung pruefen: abgelehnter initialer
+  STORE verhindert EXPUNGE; EXPUNGE-Fehler, verbliebene UIDs und Aenderungen von
+  Verbindung, Mailbox oder UIDVALIDITY verhindern Erfolg. Nach bestaetigtem
+  STORE sind Folgefehler partiell; Inflight bleibt, weitere ACK-Chunks derselben
+  Gruppe stoppen. Bei partiellen oder Verbindungsfehlern bricht Input den Abruf
+  ab und zaehlt unbestaetigte UIDs nicht als entfernt. Tatsaechlichen
+  Serverzustand mitpruefen, einschliesslich Teilloeschung ohne Rollback.
+- UIDPLUS-Pflicht und ausschliesslich auf denselben begrenzten UID-Chunk
+  eingeschraenktes Bestaetigungs-SEARCH auch mit der echten Bibliothek nachweisen.
+  Nur ein erfolgreiches leeres UID-Array bestaetigt die Entfernung; NO, BAD und
+  Throttling duerfen nicht als leerer Erfolg gelten. Kein ALL, keine Wildcards
+  und kein mailboxweites SEARCH/FETCH.
+- Den temporaeren `response`-Event-Guard mit echter Bibliothek pruefen: pro
+  STORE-/Delete-/SEARCH-Aufruf mindestens ein OK und kein Non-OK-Abschluss,
+  einschliesslich von ImapFlow sonst als Erfolg behandelter NO-Sondertexte.
+  Der Listener muss bei Erfolg und Fehler entfernt werden; keine Raw-Logs
+  oder gespeicherten Servertexte/Tags hinzufuegen.
 
 ## 3. Frischen Tarball als Verbraucher installieren
 
@@ -121,6 +140,9 @@ Node-RED-Version festhalten; reale Credentials werden nicht benoetigt.
   werden nicht von der Probe ueberschrieben.
 - Download und `flag`, `copy`, `move`, `delete` samt Fehlerfaellen mit
   synthetischen Nachrichten pruefen. Probe- und Arbeitsverbindungen getrennt zaehlen.
+- Den neuen DELETE-Schutz im gepackten Modul pruefen: kein erfolgreicher ACK
+  bei abgelehntem STORE oder unbestaetigter Entfernung; partielle Fehler und
+  der Abbruch der Input-Fensterbereinigung muessen am Node-Ausgang sichtbar sein.
 
 Erfolg bestaetigt eine vom Server akzeptierte authentifizierte Sitzung. Bei
 `PREAUTH` wird das konfigurierte Secret nicht erneut herausgefordert. Die Probe
