@@ -50,6 +50,10 @@ npm link @compeso/node-red-contrib-imap-email
 
 Restart Node-RED after installation.
 
+For development or release testing, pack the checkout and install the resulting
+tarball in an isolated Node-RED test instance. See
+[local test instructions](docs/INSTALL_DE.md).
+
 ## Example Flow
 
 Import [examples/basic-at-least-once-flow.json](examples/basic-at-least-once-flow.json) in Node-RED, open the `imap email account` config node, and enter your IMAP username and password. The example tab is disabled by default, the Inject node does not run automatically, and the ACK path only marks messages as seen. The visible palette labels use spaces; the stored Flow-JSON types use the `imap-email ...` prefix.
@@ -85,6 +89,53 @@ are not applied to the target copy, though the IMAP server may copy flags that
 already existed on the source message. Use `delete` to delete mail; setting
 `\Deleted` as a raw flag is an advanced flag operation and does not replace the
 delete action.
+
+## Connection Check on Start
+
+Available since version `1.1.0`.
+
+Each active `imap email in` and `imap email ack` node automatically checks its
+account when it starts, without needing an input message. This includes restart,
+full Deploy and any partial Deploy that restarts the node, including changes to
+its account, credentials or other settings. Nodes that continue running are not
+checked again. With **Modified Flows**, unchanged nodes in a restarted flow are
+also checked. Unused accounts and accounts used only by disabled nodes or flows
+create no check connection.
+
+Nodes using the same account instance share a check while it is running. The
+check uses the account's current connection settings and stored credentials;
+a static access token takes precedence over a password. The connection is
+short-lived and closes after the check. A later node start requests a fresh
+check; there is no periodic retry or continuous monitoring.
+
+The following status appears on the input or ACK node:
+
+| Status | Meaning |
+| --- | --- |
+| Yellow ring: `checking connection` | The startup check is running. |
+| Green dot: `connected` | The last startup check succeeded; this is not a persistent connection. |
+| Red ring: `missing account`, `missing host`, `missing username`, `missing credentials` | Complete the account configuration. |
+| Red ring: `authentication failed` | The server rejected authentication. |
+| Red ring: `host not found`, `connection refused`, `connection lost` | The server could not be reached or the connection was lost. |
+| Red ring: `TLS certificate error`, `TLS connection error` | Certificate verification or the TLS connection failed. |
+| Red ring: `connection timeout`, `connection failed` | A time limit or another connection error ended the check. |
+
+The whole check has a fixed **30-second limit**, including connection setup,
+authentication and cleanup. Shorter account timeouts still apply. This limit
+does not change the timeouts of normal fetch or ACK connections.
+
+Success confirms a server-accepted authenticated session. A server that sends
+IMAP `PREAUTH` has already authenticated that session and does not challenge the
+configured password or token again. The check does not read messages, change
+flags or test access to a mailbox or permission to perform an ACK action.
+
+Deploy and normal processing can continue while the check runs. A failed check
+does not block later fetch or ACK attempts. Normal processing statuses and ACK
+configuration errors take priority over the check result. Closing or redeploying
+a node cancels its pending result. The check emits no output or stats messages;
+Node-RED **Status** nodes can observe its status changes. Check failures produce
+at most one warning per shared check using fixed error categories and safe
+technical codes. Deliberate cancellation does not produce a warning.
 
 ## Large Mailboxes
 
@@ -195,8 +246,8 @@ that bounded best-effort window, an extremely old fetch generation may be
 eligible for re-marking again. This keeps memory use bounded and preserves the
 package's at-least-once model; it is not an exactly-once guarantee.
 
-No message is reported as successfully completed if the configured IMAP action
-fails. In that case output 2 receives the original message with
+A reported IMAP action failure is not acknowledged as success. In that case
+output 2 receives the original message with
 `msg.imapAck.ok = false`, and the inflight entry remains available for a later
 retry.
 
@@ -205,6 +256,25 @@ To avoid unsafe IMAP fallback behavior, `delete` requires server support for
 action fails closed on output 2. `copy` keeps the source message, copies it to
 the target mailbox first, and then applies any configured flag changes to the
 source message only.
+
+Since version **1.1.0**, ACK `delete` and input `Expunge window`
+explicitly confirm setting `\Deleted`, require a successful delete result and
+then search only the UIDs in the same bounded chunk to confirm that none remain.
+Only a successful search with an empty UID result confirms removal.
+The connection, selected mailbox path and UIDVALIDITY must stay valid throughout.
+This guards against a historical ImapFlow false-success case; see the
+[DELETE history and fix](docs/KNOWN_ISSUES.md). It adds no mailbox-wide scan.
+The safeguard adds two commands per deletion chunk: a checked STORE and a
+UID-constrained SEARCH without message content. Existing `UIDs/command` limits
+still apply; the query uses neither `ALL` nor a wildcard UID range.
+
+A rejected initial flag update stops before EXPUNGE. Once that update succeeds,
+any later failure is partial: flags or deletions may already have taken effect,
+and no rollback is attempted. ACK retains inflight for the affected messages and
+stops later chunks in that group. Input cleanup aborts the current fetch cycle
+on a partial result or connection failure; it does not count unconfirmed UIDs
+as expunged or remove them from the registry. Earlier confirmed chunks remain
+applied. A later input trigger can attempt cleanup again.
 
 ACK tokens are opaque signed bearer capabilities scoped to the configured IMAP
 account and to the current in-memory inflight generation. Pass
@@ -236,7 +306,10 @@ Successful completions add `msg.imapAck` with fields such as `action`,
 `disposition`, `mailbox`, `targetMailbox`, `uid`, `uidValidity`, `flags`,
 `range` and `completed`. Failed completions may include
 `msg.imapAck.partial = true` when a state-changing IMAP step already succeeded
-before a later step failed. For `copy`, a successful copy followed by a failed
+before a later step failed. For `delete`, this includes failure after confirmed
+setting of `\Deleted`, even when final removal could not be confirmed. Retaining
+inflight cannot restore removed messages; remaining `\Deleted` messages are
+excluded by the default input filter. For `copy`, a successful copy followed by a failed
 source flag update is partial; because Inflight is kept for retry, a retry may
 create another copy in the target mailbox.
 
@@ -247,8 +320,16 @@ create another copy in the target mailbox.
 ## Development Checks
 
 ```bash
+npm install
+npm audit --omit=dev
 npm test
 npm run pack:check
+git diff --check
 ```
+
+See [the release checklist](docs/RELEASE_DE.md) for strict minimum-version
+installs, actual-library tests and the required isolated Node-RED deploy tests.
+External provider tests and current GitHub CI results are additional release
+requirements; historical results do not establish readiness for a new version.
 
 Do not publish this package to npm or flows.nodered.org without explicit human approval.

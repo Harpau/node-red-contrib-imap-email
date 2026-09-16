@@ -22,24 +22,40 @@ jobs:
       fail-fast: false
       matrix:
         node-version:
+          - 22.0.0
           - 22.x
           - 24.x
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           package-manager-cache: false
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm ci --engine-strict --no-audit --no-fund
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
 
       - name: Run tests
         run: npm test
 
       - name: Check npm package contents
         run: npm run pack:check
+
+      - name: Install packed package in isolated Node-RED
+        if: matrix.node-version == '22.x'
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          npm install --prefix "$RUNNER_TEMP/imap-email-integration" --engine-strict --no-audit --no-fund node-red@4.1.15 "$RUNNER_TEMP"/compeso-node-red-contrib-imap-email-*.tgz
+
+      - name: Test Node-RED deployments
+        if: matrix.node-version == '22.x'
+        env:
+          NODE_RED_TEST_DIR: ${{ runner.temp }}/imap-email-integration
+        run: npm run test:integration

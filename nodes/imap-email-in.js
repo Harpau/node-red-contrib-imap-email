@@ -22,6 +22,8 @@ const {
   safeLogout
 } = require("../lib/imap-connection");
 const diagnostics = require("../lib/diagnostics");
+const { createConnectionStatus } = require("../lib/imap-connection-check");
+const { deleteUidRange } = require("../lib/imap-delete");
 
 const DEFAULT_DOWNLOAD_CHUNK_SIZE = 64 * 1024;
 const TOO_LARGE_CODE = "IMAP_EMAIL_MESSAGE_TOO_LARGE";
@@ -301,6 +303,7 @@ module.exports = function registerImapEmailIn(RED) {
     RED.nodes.createNode(this, config);
 
     const node = this;
+    const connectionStatus = createConnectionStatus(node);
     node.account = RED.nodes.getNode(config.account);
     node.name = config.name || "";
     node.mailbox = config.mailbox || "INBOX";
@@ -343,7 +346,7 @@ module.exports = function registerImapEmailIn(RED) {
     node.newUidCursor = null;
 
     if (!node.account) {
-      node.status({ fill: "red", shape: "ring", text: "missing account" });
+      connectionStatus.set({ fill: "red", shape: "ring", text: "missing account" });
       node.error("Missing imap email account configuration");
       return;
     }
@@ -672,11 +675,7 @@ module.exports = function registerImapEmailIn(RED) {
       for (const uidChunk of chunkUids(expungeUids, node.maxUidPerCommand)) {
         const range = compressUids(uidChunk);
         try {
-          const ok = await client.messageDelete(range, { uid: true });
-          if (ok === false) {
-            stats.deletedExpungeErrors += uidChunk.length;
-            continue;
-          }
+          await deleteUidRange(client, range);
 
           stats.deletedExpunged += uidChunk.length;
           expungedAny = true;
@@ -690,6 +689,10 @@ module.exports = function registerImapEmailIn(RED) {
         } catch (err) {
           stats.deletedExpungeErrors += uidChunk.length;
           diagnostics.warn(node, `IMAP expunge failed for ${node.mailbox} ${range}: ${err.message}`);
+          if (err.partial || isTransientImapConnectionError(err)) {
+            addTiming(timing, "expungeMs", started);
+            throw err;
+          }
         }
       }
 
@@ -800,7 +803,7 @@ module.exports = function registerImapEmailIn(RED) {
           return;
         }
 
-        node.status({
+        connectionStatus.set({
           fill: "green",
           shape: "dot",
           text: `sent ${stats.emitted}, inflight ${activeInflightForStatus}/${node.maxInflight}`
@@ -813,13 +816,13 @@ module.exports = function registerImapEmailIn(RED) {
         stats.activeInflight = registry.countActiveInflight(node.queueKey, node.retryAfterMs);
         finishStats();
 
-        node.status({ fill: "yellow", shape: "ring", text: "trigger skipped: running" });
+        connectionStatus.set({ fill: "yellow", shape: "ring", text: "trigger skipped: running" });
         emitStatsIfOpen(stats);
         return;
       }
 
       node.running = true;
-      node.status({ fill: "blue", shape: "dot", text: "triggered" });
+      connectionStatus.set({ fill: "blue", shape: "dot", text: "triggered" });
       diagnostics.debug(node, node.diagnostics, "imap email in.triggered", {
         mailbox: node.mailbox,
         queueKey: node.queueKey
@@ -842,7 +845,7 @@ module.exports = function registerImapEmailIn(RED) {
           stats.reason = "max inflight reached";
           finishStats();
 
-          node.status({ fill: "yellow", shape: "ring", text: `inflight ${activeInflight}/${node.maxInflight}` });
+          connectionStatus.set({ fill: "yellow", shape: "ring", text: `inflight ${activeInflight}/${node.maxInflight}` });
           emitStatsIfOpen(stats);
           return;
         }
@@ -880,7 +883,7 @@ module.exports = function registerImapEmailIn(RED) {
           stats.newUidCursorInitialized = node.newUidCursor !== null;
           stats.newUidCursor = node.newUidCursor;
           finishStats();
-          node.status({ fill: "green", shape: "ring", text: "empty" });
+          connectionStatus.set({ fill: "green", shape: "ring", text: "empty" });
           emitStatsIfOpen(stats);
           return;
         }
@@ -936,7 +939,7 @@ module.exports = function registerImapEmailIn(RED) {
               : window.windowPhase === "backlog"
                 ? "backlog"
                 : "window";
-          node.status({
+          connectionStatus.set({
             fill: "blue",
             shape: "ring",
             text: `${label} ${window.windowStart}:${window.windowEnd}, candidates ${candidates.length}/${candidateLimit}`
@@ -1535,7 +1538,7 @@ module.exports = function registerImapEmailIn(RED) {
 
         finishStats();
         emitStatsIfOpen(stats);
-        node.status({
+        connectionStatus.set({
           fill: stats.ok ? (stats.emitted > 0 ? "green" : "grey") : "red",
           shape: stats.ok ? "dot" : "ring",
           text: stats.ok ? `sent ${stats.emitted}, inflight ${stats.activeInflightAfter}/${node.maxInflight}` : stats.error
@@ -1554,7 +1557,7 @@ module.exports = function registerImapEmailIn(RED) {
         }
         finishStats();
 
-        node.status({ fill: "red", shape: "ring", text: err.message });
+        connectionStatus.set({ fill: "red", shape: "ring", text: err.message });
         sendIfOpen([
           null,
           {
@@ -1606,7 +1609,7 @@ module.exports = function registerImapEmailIn(RED) {
           done();
         }
       }).catch((err) => {
-        node.status({ fill: "red", shape: "ring", text: err.message });
+        connectionStatus.set({ fill: "red", shape: "ring", text: err.message });
         node.error(err, msg);
         if (done) {
           done(err);
@@ -1615,6 +1618,7 @@ module.exports = function registerImapEmailIn(RED) {
     });
 
     node.on("close", function onClose(removed, done) {
+      connectionStatus.close();
       node.closed = true;
       node.closing = true;
       node.closeDone = done;
@@ -1626,7 +1630,7 @@ module.exports = function registerImapEmailIn(RED) {
       }
     });
 
-    node.status({ fill: "grey", shape: "ring", text: "waiting for trigger" });
+    connectionStatus.start(node.account);
   }
 
   RED.nodes.registerType("imap-email in", ImapEmailInNode);

@@ -17,12 +17,23 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 - `docs/design-decisions-imap-email.md`
 - `docs/INSTALL_DE.md`
 - `docs/RELEASE_DE.md`
+- `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`
+- `.github/maintainer/VALIDATION_PROVIDER_1_1_0_DE.md`
 - alle Dateien in `nodes/`
 - alle Dateien in `lib/`
 - die relevanten Tests in `test/`
 - `examples/basic-at-least-once-flow.json`
 
 ## Projektkontext
+
+Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
+Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
+vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
+Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
+ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
+ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
+[RC-](VALIDATION_1_1_0_RC_DE.md) und
+[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
 
 Das Paket registriert genau diese Node-RED-Typen:
 
@@ -54,12 +65,24 @@ bounded front-window Strategie. Erfolgreiche Verarbeitung wird ueber
 2. At-least-once-Semantik beibehalten.
    - Eine Mail darf doppelt verarbeitet werden.
    - Eine Mail darf nicht still verloren gehen.
-   - Ohne erfolgreichen ACK bleibt sie erneut zustellbar.
+   - Ohne erfolgreichen ACK bleibt Inflight erhalten. Partielle Serveraenderungen
+     koennen die erneute Zustellung verhindern, etwa Loeschung oder `\Deleted`
+     bei entsprechendem Eingangsfilter; keinen automatischen Rollback behaupten.
 
 3. ACK-Aktionen fail-closed halten.
    - `delete` braucht `UIDPLUS`.
+   - ACK-Loeschung und Input-Expunge nutzen denselben begrenzten Loeschhelfer:
+     STORE bestaetigen, Delete-Ergebnis pruefen, denselben UID-Chunk per SEARCH
+     auf Rest-UIDs pruefen; nur ein erfolgreiches leeres UID-Array akzeptieren.
+     Keine Wildcards/ALL; Verbindung, Mailbox und UIDVALIDITY validieren.
+     Pro Aufruf echte OK-Abschluesse ohne Non-OK ueber das oeffentliche
+     `response`-Event verlangen; temporaeren Listener immer entfernen.
+   - DELETE-Folgefehler nach bestaetigtem STORE sind partiell und stoppen
+     weitere ACK-Chunks derselben Gruppe. Partielle oder Verbindungsfehler bei
+     Input-Expunge brechen den Abruf ab; unbestaetigte Entfernungen nicht verbuchen.
    - `move` braucht native `MOVE`-Capability.
-   - `copy` behaelt die Quellmail.
+   - `copy` kopiert zuerst und aendert danach konfigurierte Flags nur auf der Quelle.
+   - Partial-Fehler behalten Inflight; ein COPY-Retry kann eine weitere Kopie erzeugen.
    - `false` und `undefined` aus ImapFlow-Aktionen sind Fehler.
 
 4. Kein persistenter lokaler Status als Pflicht.
@@ -83,6 +106,11 @@ bounded front-window Strategie. Erfolgreiche Verarbeitung wird ueber
    - CHANGELOG, falls release-relevant
    - Tests
 
+8. Die Startpruefung ist kurzlebig, auf 30 Sekunden begrenzt und erzeugt keine
+   regulaeren Output-/Stats-Nachrichten. Laufende Proben werden pro Account-Instanz
+   geteilt. Regulaere Arbeit und ihre Statusanzeigen bleiben unabhaengig;
+   spaete Probe-Ergebnisse duerfen sie nach Close/Redeploy nicht ueberschreiben.
+
 ## Arbeitsweise
 
 Bitte arbeite in kleinen, nachvollziehbaren Schritten:
@@ -102,10 +130,17 @@ Fuer groessere Abschluesse ausfuehren:
 
 ```bash
 npm install
+npm audit --omit=dev
 npm test
 npm run pack:check
 git diff --check
 ```
+
+Fuer Aenderungen an Abhaengigkeiten und Startpruefung gelten ausserdem die
+Bibliotheksvertraege, strikten Minimum-Installationen und echten
+Node-RED-Lifecycle-Tests aus `docs/RELEASE_DE.md`. Externer Provider-Test und
+aktuelle GitHub-CI-Ergebnisse sind zusaetzliche Release-Voraussetzungen.
+Historische Nachweise nicht als neue Testergebnisse ausgeben.
 
 ## Aktuelle Aufgabe
 

@@ -15,8 +15,8 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    # Runtime dependencies are pinned deliberately; review IMAP-facing updates
-    # instead of accepting automatic bumps without compatibility checks.
+    # Runtime ranges have reviewed minimums; package-lock.json pins CI installs.
+    # Review IMAP-facing updates manually, including protocol compatibility.
     ignore:
       - dependency-name: "imapflow"
     groups:

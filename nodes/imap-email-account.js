@@ -3,6 +3,7 @@
 const { ImapFlow } = require("imapflow");
 const { parseNumber, parseBoolean } = require("../lib/imap-utils");
 const { formatImapError } = require("../lib/imap-connection");
+const { createConnectionChecker } = require("../lib/imap-connection-check");
 
 module.exports = function registerImapEmailAccount(RED) {
   function ImapEmailAccountNode(config) {
@@ -16,6 +17,12 @@ module.exports = function registerImapEmailAccount(RED) {
     this.connectionTimeout = parseNumber(config.connectionTimeout, 30000, 1000, 300000);
     this.greetingTimeout = parseNumber(config.greetingTimeout, 30000, 1000, 300000);
     this.socketTimeout = parseNumber(config.socketTimeout, 300000, 1000, 3600000);
+    const check = createConnectionChecker({
+      createClient: (options) => this.createClient(options),
+      warn: (message) => this.warn(message)
+    });
+    this.requestConnectionCheck = (callback) => check.subscribe(callback);
+    this.on("close", () => check.close());
   }
 
   ImapEmailAccountNode.prototype.getUsername = function getUsername() {
@@ -29,11 +36,11 @@ module.exports = function registerImapEmailAccount(RED) {
     const password = options.password || this.credentials && this.credentials.password;
 
     if (!host) {
-      throw new Error("IMAP host is missing in imap email account configuration");
+      throw Object.assign(new Error("IMAP host is missing in imap email account configuration"), { code: "IMAP_EMAIL_MISSING_HOST" });
     }
 
     if (!user) {
-      throw new Error("IMAP username is missing in imap email account credentials");
+      throw Object.assign(new Error("IMAP username is missing in imap email account credentials"), { code: "IMAP_EMAIL_MISSING_USERNAME" });
     }
 
     const auth = accessToken
@@ -41,7 +48,7 @@ module.exports = function registerImapEmailAccount(RED) {
       : { user, pass: password || "" };
 
     if (!accessToken && !auth.pass) {
-      throw new Error("IMAP password/access token is missing in imap email account credentials");
+      throw Object.assign(new Error("IMAP password/access token is missing in imap email account credentials"), { code: "IMAP_EMAIL_MISSING_CREDENTIALS" });
     }
 
     const client = new ImapFlow({
@@ -50,6 +57,7 @@ module.exports = function registerImapEmailAccount(RED) {
       secure: options.secure !== undefined ? options.secure : this.secure,
       auth,
       logger: false,
+      ...(options.verifyOnly === true ? { verifyOnly: true, includeMailboxes: false } : {}),
       connectionTimeout: this.connectionTimeout,
       greetingTimeout: this.greetingTimeout,
       socketTimeout: this.socketTimeout,
@@ -60,6 +68,7 @@ module.exports = function registerImapEmailAccount(RED) {
 
     const ownerNode = options.node || this;
     const context = options.context || "imap email client";
+    let checkHandlerFailed = false;
 
     // ImapFlow is an EventEmitter and may emit an asynchronous 'error' event
     // after the awaited API call has already returned or while another promise is
@@ -67,7 +76,9 @@ module.exports = function registerImapEmailAccount(RED) {
     // exception and the Node-RED runtime can exit. Keep this handler deliberately
     // small and non-throwing.
     client.on("error", (err) => {
-      const message = `${context} IMAP connection error: ${formatImapError(err)}`;
+      const message = options.verifyOnly
+        ? "IMAP connection check: connection failed"
+        : `${context} IMAP connection error: ${formatImapError(err)}`;
 
       try {
         if (typeof options.onError === "function") {
@@ -79,7 +90,14 @@ module.exports = function registerImapEmailAccount(RED) {
         // Never throw from an EventEmitter error handler.
         try {
           if (ownerNode && typeof ownerNode.warn === "function") {
-            ownerNode.warn(`${context} IMAP error handler failed: ${formatImapError(handlerErr)}`);
+            if (options.verifyOnly) {
+              if (!checkHandlerFailed) {
+                checkHandlerFailed = true;
+                ownerNode.warn("IMAP connection check: error handler failed");
+              }
+            } else {
+              ownerNode.warn(`${context} IMAP error handler failed: ${formatImapError(handlerErr)}`);
+            }
           }
         } catch (ignored) {
           // ignore

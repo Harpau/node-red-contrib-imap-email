@@ -27,7 +27,7 @@ topic/*   manuelle Features oder Bugfixes
 
 ## 3. Semver-Leitlinie
 
-Vor `1.0.0`:
+Historische Entwicklung bis `1.0.0`:
 
 ```text
 0.1.x  Haertung, Bugfixes, Dokumentation
@@ -35,13 +35,22 @@ Vor `1.0.0`:
 1.0.0  erste oeffentliche stabile Version nach Node-RED-Test
 ```
 
-Nach `1.0.0`:
+Fuer die stabile Linie ab `1.0.0`:
 
 ```text
 Patch  Bugfixes ohne API- oder Flow-Vertragsaenderung
 Minor  kompatible neue Features
 Major  Breaking Changes
 ```
+
+Version `1.1.0` enthaelt Startpruefung, DELETE-Absicherung und aktualisierte
+Laufzeitabhaengigkeiten. Die lokale Kandidatenpruefung und die Provider-Abnahme
+vom 16.09.2026 sind erfolgreich dokumentiert. Der Nutzer hat Push, Merge und
+Veroeffentlichung ausdruecklich freigegeben; die CI des bisherigen PR-Stands
+ist erfolgreich. Der abschliessende [Release-Nachweis](RELEASE_1_1_0_DE.md)
+ordnet finalen Tarball, Tests und Veroeffentlichungsstatus zu. Historische
+[RC-](VALIDATION_1_1_0_RC_DE.md) und
+[Provider-Nachweise](VALIDATION_PROVIDER_1_1_0_DE.md) behalten ihren Pruefumfang.
 
 ## 4. Pull-Request-Pruefung
 
@@ -53,7 +62,8 @@ Jeder PR sollte beantworten:
 - Werden Credentials und Mail-Inhalte geschuetzt?
 - Bleiben Node.js >=22.0.0 und Node-RED >=4.0.0 installierbar?
 - Sind README, Hilfetexte, Beispiele oder CHANGELOG betroffen?
-- Sind `npm test` und `npm run pack:check` gruen?
+- Sind Tests, Produktions-Audit und Paketpruefung erfolgreich?
+- Sind echte Bibliotheksvertraege und relevante Node-RED-Lifecycle-Faelle geprueft?
 
 ## 5. Sinnvolle Labels
 
@@ -72,8 +82,8 @@ needs-repro
 
 ## 6. Security
 
-Ein `SECURITY.md` ist sinnvoll, sobald das Paket oeffentlich genutzt wird.
-Bis dahin sollten Issues und Templates klar sagen:
+Das Paket ist oeffentlich. Ein eigener `SECURITY.md` kann den Meldeweg fuer
+Schwachstellen ergaenzen. Issues und Templates sollen weiterhin klar sagen:
 
 - keine Passwoerter, Tokens oder privaten Hostnamen posten
 - Flow-Ausschnitte nur ohne Credentials teilen
@@ -83,16 +93,26 @@ Bis dahin sollten Issues und Templates klar sagen:
 
 Der Standard-Workflow prueft:
 
-- Node.js 22 und 24
-- `npm ci --no-audit --no-fund`
+- Node.js 22.0.0, aktuelles 22.x und 24.x
+- `npm ci --engine-strict --no-audit --no-fund`
+- `npm audit --omit=dev`
 - `npm test`
 - `npm run pack:check`
+- isolierte Node-RED-Integration auf 4.x aus einem frisch gepackten Tarball
 
-CI darf keine Veroeffentlichungsschritte enthalten.
+CI darf keine Veroeffentlichungsschritte enthalten. Aktuelle GitHub-Laeufe
+werden erst nach freigegebenem Push als Nachweis verwendet; alte PR-Laeufe
+und lokale Ausfuehrung der Kommandos werden getrennt ausgewiesen.
 
-## 8. Manuelle Tests, die CI nicht ersetzt
+## 8. Praxistests und Release-Nachweise
 
-Vor relevanten Releases weiterhin manuell pruefen:
+Vor technischem Abschluss der Startpruefung ist die isolierte echte
+Node-RED-Deploy-Matrix mit lokalem synthetischem IMAP verpflichtend:
+Full-/Partial-Deploy, Credential-only-Aenderungen, deaktivierte Flows,
+geteilte Accounts, Subflows, Statusprioritaet und Redeploy-Abbruch.
+
+Vor dem Release zusaetzlich in der vorgesehenen Zielinstallation mit einem
+dedizierten externen Testpostfach pruefen:
 
 - Installation in lokalem Node-RED
 - Import des deaktivierten Beispiel-Flows
@@ -100,6 +120,12 @@ Vor relevanten Releases weiterhin manuell pruefen:
 - `imap-email in` mit bounded Front-Window
 - ACK `flag`, `copy`, `move` und `delete` gegen passende Server-Capabilities
 - Verhalten nach Node-RED-Neustart
+
+Tarball-Pruefsumme, Git-/Paketstand, Runtime-Versionen, Datum und Ergebnisse
+ohne Secrets festhalten. Historische Provider-Tests gelten nicht fuer neue
+Aenderungen. Der verbindliche Ablauf inklusive Versionswahl, Freigabe, npm
+und Refresh des bestehenden Node-RED-Eintrags steht in
+[RELEASE_DE.md](../../docs/RELEASE_DE.md).
 
 ## 9. Codex-Nutzung
 

@@ -26,6 +26,7 @@ Im Paketordner:
 ```powershell
 cd C:\Users\<dein-user>\src\node-red-contrib-imap-email
 npm install
+npm audit --omit=dev
 npm test
 npm run pack:check
 ```
@@ -43,7 +44,7 @@ Danach Node-RED neu starten.
 
 ## 4. GitHub-Repository
 
-Das neue Repository ist:
+Das Repository ist:
 
 ```text
 Owner: Harpau
@@ -92,6 +93,14 @@ Menu -> Import -> examples/basic-at-least-once-flow.json
 Danach den Config-Node `imap email account` oeffnen und Benutzername sowie Passwort eintragen. Der Beispiel-Tab ist absichtlich deaktiviert, der Inject-Node startet nicht automatisch und der ACK-Pfad markiert Nachrichten nur als gesehen.
 Die sichtbaren Palette-Namen verwenden Leerzeichen; in der Flow-JSON werden die gespeicherten technischen Typen mit `imap-email ...` gespeichert.
 
+Die seit Version `1.1.0` verfuegbare Startpruefung beginnt
+erst mit aktiven Input-/ACK-Nodes. Nach dem Aktivieren und Deploy erscheint
+`checking connection`, danach `connected` oder ein konkreter Fehlerstatus.
+Ein Inject ist fuer die Pruefung nicht erforderlich. `connected` beschreibt
+die letzte erfolgreiche Pruefung; ihre kurzlebige Verbindung ist danach
+geschlossen. Das gesamte Zeitlimit betraegt 30 Sekunden, kuerzere konfigurierte
+Account-Zeitlimits gelten weiterhin.
+
 ## 8. Produktiver Minimal-Flow
 
 ```text
@@ -116,6 +125,32 @@ imap-email ack
 Die Palette-Labels werden als `imap email account`, `imap email in`
 und `imap email ack` angezeigt.
 
-## 10. Keine Veroeffentlichung ohne Freigabe
+## 10. Release-Pruefung
 
-Dieses Paket darf nicht auf npm oder flows.nodered.org veroeffentlicht werden, solange keine ausdrueckliche menschliche Freigabe vorliegt.
+Fuer Release-Pruefungen einen frischen Tarball in einer isolierten
+Node-RED-Testinstanz verwenden. Die verbindliche Deploy-/Credential-/Subflow-Matrix,
+strikte Installationspruefungen auf Node.js 22.0.0 und der zusaetzliche externe
+Provider-Test stehen in [RELEASE_DE.md](RELEASE_DE.md). Ein Test per `npm link`
+ersetzt den abschliessenden Tarballtest nicht.
+
+## 11. Lokalen Tarball installieren
+
+Fuer Entwicklungs- oder Release-Tests genau die zu pruefende Arbeitskopie packen:
+
+```powershell
+npm pack
+```
+
+Danach in einem separaten Node-RED-Testverzeichnis installieren, das keine
+produktiven Flows oder Credentials verwendet:
+
+```powershell
+cd C:\path\to\isolated-node-red-user-directory
+npm install --engine-strict C:\path\to\compeso-node-red-contrib-imap-email-<version>.tgz
+npm audit --omit=dev
+```
+
+`<version>` durch die Paketversion im erzeugten Dateinamen ersetzen. Die
+isolierte Node-RED-Instanz mit diesem User-Verzeichnis starten. Git-Stand und
+Tarball-Pruefsumme mit den Ergebnissen dokumentieren; jeden spaeter geaenderten
+Tarball erneut pruefen. Die Paketnummer allein belegt keine Veroeffentlichung.

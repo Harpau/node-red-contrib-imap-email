@@ -2,16 +2,16 @@
 
 Status: Architektur- und Verhaltensdokumentation.
 
-Diese Datei beschreibt die getroffenen Designentscheidungen fuer das neue Paket
+Diese Datei beschreibt die getroffenen Designentscheidungen fuer das Paket
 `@compeso/node-red-contrib-imap-email`. Sie ist absichtlich eine technische
 Entscheidungsvorlage und keine Release-Ankuendigung.
 
-## 1. Ziel des neuen Pakets
+## 1. Ziel des Pakets
 
 Das Paket `@compeso/node-red-contrib-imap-email` ist ein eigenstaendiges
 Node-RED npm-Paket fuer IMAP-basierte E-Mail-Verarbeitung.
 
-Die gespeicherten Node-RED-Flow-Typen des neuen Pakets sind:
+Die gespeicherten Node-RED-Flow-Typen des Pakets sind:
 
 ```text
 imap-email account
@@ -290,6 +290,10 @@ set by msg.imap.ackAction message
 - Ist die Default-Aktion fuer erfolgreich verarbeitete Mails.
 - Wird nur ausgefuehrt, wenn der Server `UIDPLUS` unterstuetzt, damit kein
   unsicheres plain `EXPUNGE` verwendet wird.
+- Seit Version `1.1.0` bestaetigt der gemeinsame Loeschhelfer zuerst
+  das Setzen von `\Deleted`, dann das Delete-Ergebnis und zuletzt per streng
+  UID-begrenztem SEARCH, dass keine UID des Chunks verbleibt. Verbindung, ausgewaehlter
+  Mailbox-Pfad und UIDVALIDITY muessen waehrenddessen gueltig bleiben.
 - Entfernt den Inflight-Eintrag erst nach erfolgreicher IMAP-Aktion.
 
 `move`
@@ -402,12 +406,18 @@ Bei erfolgreicher Tokenvalidierung und Mailbox-Sperre:
 5. Bei `move`: den Chunk verschieben.
 6. Bei `copy`: den Chunk kopieren.
 7. Bei `copy`: optionale Flags auf der Quellmail setzen oder entfernen.
-8. Bei `delete`: den Chunk loeschen.
+8. Bei `delete`: `\Deleted` fuer den Chunk setzen und Erfolg pruefen, loeschen
+   und Ergebnis pruefen, danach denselben Chunk per UID-begrenztem SEARCH auf Rest-UIDs
+   pruefen. Verbindung und Mailbox-Identitaet vor und zwischen diesen Schritten
+   sowie nach dem SEARCH kontrollieren.
 9. Erfolgreiche Chunk-Mails abschliessen und Inflight entfernen.
 10. Fehlgeschlagene Chunk-Mails auf Output 2 ausgeben und Inflight behalten.
 
 Chunks bleiben die Performance-Grenze. Innerhalb eines fehlgeschlagenen Chunks
 wird nicht auf einzelne UIDs heruntergebrochen.
+Ein initialer STORE-Fehler loest kein EXPUNGE aus. Folgefehler nach bestaetigtem
+STORE sind partiell; weitere Chunks derselben ACK-Gruppe werden nicht ausgefuehrt.
+Fruehere Seiteneffekte werden nicht zurueckgerollt.
 
 ## 5. Message Contracts
 
@@ -590,6 +600,12 @@ Flagged   Any
 `Expunge window` und `Expunge limit` werden nur angezeigt, wenn `Deleted =
 Only without flag` gesetzt ist. Runtime-seitig ist Expunge ebenfalls auf
 `deletedSelection=exclude` beschraenkt.
+Input-Fensterbereinigung verwendet denselben `UIDPLUS`-gebundenen Loeschhelfer
+wie ACK und bleibt auf Kandidaten des aktuellen Fensters und UID-Chunks begrenzt.
+Partielle oder Verbindungsfehler brechen den aktuellen Abruf ab. Unbestaetigte
+UIDs zaehlen nicht als expunged und werden nicht aus der Registry entfernt;
+bereits bestaetigte Chunks und sonstige Serveraenderungen bleiben bestehen.
+Ein spaeterer Trigger kann die Bereinigung erneut versuchen.
 
 ### 6.2 `imap-email ack`
 
@@ -653,7 +669,31 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Nachrichten werden nach Mailbox, UIDVALIDITY und Action-Plan gruppiert.
 - Grosse UID-Mengen werden in handhabbare IMAP-Kommandos
   aufgeteilt.
-- `delete` wird nur mit Server-Capability `UIDPLUS` ausgefuehrt.
+- `delete` wird nur mit Server-Capability `UIDPLUS` ueber `lib/imap-delete.js`
+  ausgefuehrt. Derselbe Helfer schuetzt die Input-Fensterbereinigung.
+- Der Helfer akzeptiert ausschliesslich numerische UID-Mengen mit maximal 5000
+  UIDs, ohne Wildcards oder Suchabfragen. Die Aufrufer halten zusaetzlich
+  `maxUidPerCommand` ein. STORE und Delete muessen `true` liefern; erst ein
+  erfolgreiches SEARCH mit leerem UID-Array bestaetigt die Entfernung.
+- Die Nachkontrolle nutzt die oeffentliche SDK-Methode
+  `client.search({ uid: range }, { uid: true })`, die `UID SEARCH UID <range>`
+  erzeugt. `false`, `undefined`, andere Nicht-Arrays und Rest-UIDs sind Fehler.
+  Eine leere/wildcardhaltige Abfrage oder `ALL` ist nicht erlaubt. Insbesondere
+  darf Throttling nicht als leerer Erfolg gewertet werden.
+- Pro awaited STORE-/Delete-/SEARCH-Aufruf beobachtet ein temporaerer
+  `prependListener` das oeffentlich typisierte `response`-Event: mindestens
+  ein tagged OK und kein Non-OK-Abschluss sind erforderlich. Dies faengt auch
+  NO-Sonderfaelle ab, die die Bibliothek als erfolgreichen Methodenwert liefert.
+  Der Helfer arbeitet auf dem exklusiven Arbeitsclient unter Mailbox-Lock;
+  der Listener wird in `finally` entfernt. Nur zwei Boolean-Werte bleiben
+  waehrend des Aufrufs im Speicher, keine Tags, Servertexte oder Raw-Logs.
+- Eine unbrauchbare/geschlossene Verbindung, fehlende ausgewaehlte Mailbox oder
+  Aenderung von Mailbox-Pfad/UIDVALIDITY verhindert eine Erfolgsbestaetigung.
+- Folgefehler nach bestaetigtem DELETE-STORE sind partiell. Inflight bleibt;
+  weitere Chunks derselben Gruppe stoppen. Es erfolgt kein Rollback.
+- Gegenueber `messageDelete()` allein entstehen zwei zusaetzliche Kommandos
+  je Chunk: der gepruefte STORE und UID-begrenztes SEARCH ohne Nachrichteninhalte.
+  Es entsteht weder eine mailboxweite Suche noch eine neue produktive Abhaengigkeit.
 - `move` wird nur mit nativer Server-Capability `MOVE` ausgefuehrt.
 - `copy` behaelt die Quellmail, kopiert zuerst in die Zielmailbox und fuehrt
   optionale Flag-Aenderungen danach nur auf der Quellmail aus.
@@ -668,6 +708,48 @@ einschliesslich Flags und Zielordner. Der Node liest dabei fest
 - Fehlgeschlagene Chunks geben den Claim frei und behalten Inflight fuer die
   enthaltenen Mails.
 
+### 7.3 Verbindungspruefung beim Start (seit 1.1.0)
+
+Jeder aktive Input-/ACK-Node fordert nach Registrierung seiner Handler eine
+asynchrone Probe an. Der verzoegerte Start ist abbrechbar, sodass Close vor
+Ausfuehrung keinen Client erzeugt. Ein Account verwaltet hoechstens eine laufende
+Probe fuer seine Verbraucher. Nach Abschluss wird der Slot geloescht; spaeter
+gestartete Nodes pruefen erneut. Der Zustand wird nicht accountuebergreifend
+oder persistent gespeichert. Unbenutzte oder ausschliesslich deaktiviert
+verwendete Accounts pruefen nicht.
+
+Der Probe-Client verwendet dieselben Kontodaten und TLS-Einstellungen wie
+regulaere Clients, einschliesslich Access-Token-Prioritaet. Nur der Probe-Client
+erhaelt `verifyOnly: true`; `includeMailboxes` bleibt deaktiviert. Der notwendige
+Protokollaufbau darf `LIST "" ""` als NAMESPACE-Fallback enthalten, aber kein
+Wildcard-LIST, SELECT, SEARCH, FETCH oder schreibende Mailbox-Aktion.
+
+Erfolg ist der erfolgreiche Abschluss der oeffentlichen Verify-/Connect-Operation
+mit akzeptierter authentifizierter Sitzung. Bei PREAUTH prueft der Server das
+Secret nicht erneut. Normaler Close kann dem erfolgreichen Connect-Resolve
+vorausgehen. Intern geschluckte reine Logout-Bereinigungsfehler nach Anmeldung
+werden nicht nachtraeglich als Authentifizierungsfehler gewertet; eine bestaetigte
+LOGOUT-Antwort wird nicht garantiert. Echte Bibliotheksvertraege sichern diese
+Unterscheidung ab.
+
+Die feste Gesamtfrist von 30 Sekunden umfasst DNS/TLS, Authentifizierung und
+Bereinigung. Kuerzere konfigurierte Teilfristen bleiben wirksam. Timeout oder
+letzte Verbraucher-Abmeldung schliessen den Client und machen den Slot ungueltig.
+Spaete Ereignisse duerfen weder neue Proben noch alte Statusanzeigen veraendern;
+Timer, Listener und Referenzen werden bereinigt. Regulaere Verbindungen bleiben
+von der Probe und ihrer Frist getrennt.
+
+`checking connection` und `connected` bzw. klassifizierte Fehler werden nur
+angezeigt, solange keine regulaere Statusaenderung die Startphase ersetzt hat.
+ACK-Konfigurationsfehler haben ebenfalls Vorrang. Node-RED-Status-Nodes koennen
+die Ereignisse beobachten; die Probe sendet keine Output-/Stats-Nachrichten.
+Ein Fehlschlag sperrt keine spaetere regulaere Arbeit. Hoechstens eine sichere
+Warnung pro geteilter Fehlprobe; absichtliche Abbrueche warnen nicht.
+
+Die konkrete Abnahmematrix mit echten Node-RED-Deploys und lokalem synthetischem
+IMAP steht in [RELEASE_DE.md](RELEASE_DE.md). Das veroeffentlichte `1.0.1`
+enthaelt diese Startpruefung noch nicht.
+
 ## 8. Fehlerverhalten
 
 ### 8.1 Allgemein
@@ -678,12 +760,23 @@ IMAP-Aktion fehlgeschlagen ist.
 Fehler werden ueber Output 2 ausgegeben und in `msg.imapAck.ok = false`
 sichtbar gemacht.
 
+Ein historischer zusammengesetzter DELETE-Fehler in ImapFlow lieferte nach
+abgelehntem Setzen von `\Deleted` und erfolgreichem UID EXPUNGE trotzdem `true`.
+Der gemeinsame Loeschhelfer seit Version `1.1.0` bestaetigt deshalb die einzelnen
+Schritte und die Entfernung fuer den begrenzten UID-Chunk. Historische Evidenz
+und Grenzen stehen in [KNOWN_ISSUES.md](KNOWN_ISSUES.md). Die Startpruefung prueft
+keine DELETE-Berechtigungen; ihre fruehere Abnahme belegt diesen spaeteren Fix nicht.
+
 ### 8.2 Fehler bei `imap-email in`
 
 - Operative Fetch-Fehler gehen auf Output 2.
 - Parse-Fehler gehen auf Output 2 und enthalten nach Moeglichkeit den
   ACK-Token.
 - Der Node loescht keine normal verarbeiteten Nachrichten.
+- Bei optionaler Fensterbereinigung sind bereits gesetzte Flags oder
+  Teilloeschungen bei einem spaeteren Fehler moeglich. Partielle oder
+  Verbindungsfehler brechen den Abruf ab, ohne unbestaetigte Entfernung als
+  erfolgreich zu verbuchen oder Seiteneffekte zurueckzurollen.
 
 ### 8.3 Fehler bei `imap-email ack`
 
@@ -699,14 +792,19 @@ Fehlerfaelle:
 - Fehlende `UIDPLUS`-Capability bei `delete`.
 - Fehlende native `MOVE`-Capability bei `move`.
 - IMAP-Fehler bei Flag-Aenderung, Move, Copy oder Delete.
+- Rest-UIDs oder ungueltiger Verbindungs-/Mailbox-Zustand bei DELETE-Bestaetigung.
 - `false` oder `undefined` als Rueckgabe einer ACK-IMAP-Aktion.
 
 Bei Fehlern:
 
 - Output 2.
 - `msg.imapAck.ok = false`.
-- Inflight bleibt fuer die betroffenen Mails erhalten. Dadurch kann
-  `imap-email in` die Mail nach Ablauf von `retryAfterMs` erneut ausgeben.
+- Inflight bleibt fuer die betroffenen Mails erhalten. `imap-email in` kann sie
+  nach Ablauf von `retryAfterMs` erneut ausgeben, sofern sie noch vorhanden ist
+  und die Auswahlfilter erfuellt. Ein partieller DELETE-Fehler kann geloeschte
+  oder weiterhin mit `\Deleted` markierte Nachrichten hinterlassen.
+- Folgefehler nach bestaetigtem DELETE-STORE setzen `msg.imapAck.partial = true`
+  und stoppen Folgechunks derselben Gruppe; kein Rollback.
 - Stats enthalten Fehlerzaehler, Chunk-Informationen und Fehlermeldung.
 
 ## 9. Skalierbarkeitsregeln fuer grosse Postfaecher
@@ -800,7 +898,9 @@ imap-email ack:
   Chunk-Ende oder bei transienten Full-Fetch-Fehlern zu ueberspringen.
 - Der interne Cursor wrappt am Mailbox-Ende.
 - Der interne Cursor resetet bei UIDVALIDITY-Wechsel.
-- Mock-Client stellt sicher, dass kein `SEARCH` ausgefuehrt wird.
+- Mock-Client stellt sicher, dass die Nachrichtenselektion kein `SEARCH`
+  verwendet. Nur die Loeschbestaetigung darf ein auf den aktuellen UID-Chunk
+  begrenztes SEARCH ausfuehren; kein ALL und keine Wildcards.
 - Stats enthalten `phase`, `windowPhasesRead`, `selection`, `filteredByFlags`
   und Cursor-Felder.
 - HTML defaults, labels und help text sind konsistent.
@@ -811,6 +911,15 @@ imap-email ack:
   Server `UIDPLUS` unterstuetzt.
 - `delete` ohne `UIDPLUS` ruft `messageDelete` nicht auf, geht auf Output 2 und
   behaelt Inflight.
+- DELETE-STORE wird explizit bestaetigt; initiales NO verhindert EXPUNGE und
+  wird nicht als partiell markiert. EXPUNGE-Fehler oder verbliebene UIDs nach
+  bestaetigtem STORE ergeben einen partiellen Fehler mit erhaltenem Inflight.
+- Bestaetigungs-SEARCH bleibt auf denselben UID-Chunk begrenzt. NO, BAD und
+  Throttling gelten als Fehler. Verbindungsverlust, Mailbox-Wechsel und
+  UIDVALIDITY-Wechsel verhindern auch bei leerem Suchergebnis Erfolg.
+- Partielle DELETE-Fehler stoppen Folgechunks derselben Gruppe. Serverseitige
+  Flags und Teilloeschungen werden nicht zurueckgerollt. Input-Fensterbereinigung
+  verwendet dieselben Pruefungen und bricht bei partiellen/Verbindungsfehlern ab.
 - `move` ruft Zielordner-Erstellung, optionale Flag-Aenderungen und
   `messageMove` in dieser Reihenfolge.
 - `move` ohne native `MOVE`-Capability ruft `messageMove` nicht auf, geht auf
@@ -838,7 +947,7 @@ imap-email ack:
 - IMAP-Fehler bei Flags, Move, Copy oder Delete entfernt Inflight nicht.
 - Rueckgaben `false` oder `undefined` von Flags, Move, Copy oder Delete werden
   als Fehler behandelt.
-- Partielle Move-/Copy-/Flag-Seiteneffekte werden in `msg.imapAck.partial` und
+- Partielle Delete-/Move-/Copy-/Flag-Seiteneffekte werden in `msg.imapAck.partial` und
   Stats sichtbar.
 - Grosse UID-Mengen werden gechunkt.
 - Erfolgreiche Chunks entfernen Inflight und gehen auf Output 1.

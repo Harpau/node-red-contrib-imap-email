@@ -18,6 +18,7 @@ const {
   actionPlanKey
 } = require("../lib/imap-ack-actions");
 const diagnostics = require("../lib/diagnostics");
+const { createConnectionStatus } = require("../lib/imap-connection-check");
 
 const DEFAULT_CLOSE_TIMEOUT_MS = 10000;
 
@@ -38,6 +39,7 @@ module.exports = function registerImapEmailAck(RED) {
     RED.nodes.createNode(this, config);
 
     const node = this;
+    const connectionStatus = createConnectionStatus(node);
     node.account = RED.nodes.getNode(config.account);
     node.name = config.name || "";
     node.batchSize = parseInteger(config.batchSize, 100, 1, 10000);
@@ -70,7 +72,7 @@ module.exports = function registerImapEmailAck(RED) {
     node.inflightItems = new Set();
 
     if (!node.account) {
-      node.status({ fill: "red", shape: "ring", text: "missing account" });
+      connectionStatus.set({ fill: "red", shape: "ring", text: "missing account" });
       node.error("Missing imap email account configuration");
       return;
     }
@@ -91,7 +93,7 @@ module.exports = function registerImapEmailAck(RED) {
         node.actionPlan = normalizeAckAction(actionConfig);
       } catch (err) {
         node.configError = err;
-        node.status({ fill: "red", shape: "ring", text: err.message });
+        connectionStatus.set({ fill: "red", shape: "ring", text: err.message });
         node.error(err);
       }
     }
@@ -268,7 +270,7 @@ module.exports = function registerImapEmailAck(RED) {
       node.timer = setTimeout(() => {
         node.timer = null;
         node.flush().catch((err) => {
-          node.status({ fill: "red", shape: "ring", text: err.message });
+          connectionStatus.set({ fill: "red", shape: "ring", text: err.message });
           node.error(err);
         });
       }, Math.max(1, delayMs));
@@ -328,7 +330,7 @@ module.exports = function registerImapEmailAck(RED) {
         timings: {}
       };
 
-      node.status({ fill: "blue", shape: "dot", text: `ACK batch ${items.length}` });
+      connectionStatus.set({ fill: "blue", shape: "dot", text: `ACK batch ${items.length}` });
 
       function recordAction(plan, field) {
         const action = plan && plan.action || node.actionMode;
@@ -642,7 +644,7 @@ module.exports = function registerImapEmailAck(RED) {
         if (!node.closeFinalized) {
           emitFlushStats(stats);
 
-          node.status({
+          connectionStatus.set({
             fill: stats.errorCount > 0 ? "red" : "green",
             shape: stats.errorCount > 0 ? "ring" : "dot",
             text: `ACK ok ${stats.okCount}, err ${stats.errorCount}, pending ${node.pending.length}`
@@ -714,7 +716,7 @@ module.exports = function registerImapEmailAck(RED) {
         enqueuedAt: Date.now()
       });
 
-      node.status({ fill: "yellow", shape: "ring", text: `ACK pending ${node.pending.length}` });
+      connectionStatus.set({ fill: "yellow", shape: "ring", text: `ACK pending ${node.pending.length}` });
       diagnostics.debug(node, node.diagnostics, "imap email ack.queued", {
         pending: node.pending.length,
         mailbox: token.mailbox,
@@ -729,7 +731,7 @@ module.exports = function registerImapEmailAck(RED) {
           node.timer = null;
         }
         node.flush().catch((err) => {
-          node.status({ fill: "red", shape: "ring", text: err.message });
+          connectionStatus.set({ fill: "red", shape: "ring", text: err.message });
           node.error(err);
         });
       } else {
@@ -738,6 +740,7 @@ module.exports = function registerImapEmailAck(RED) {
     });
 
     node.on("close", function onClose(removed, done) {
+      connectionStatus.close();
       node.closed = true;
       node.closing = true;
       if (node.timer) {
@@ -762,6 +765,8 @@ module.exports = function registerImapEmailAck(RED) {
         completeCloseIfReady();
       }
     });
+
+    connectionStatus.start(node.account);
   }
 
   RED.nodes.registerType("imap-email ack", ImapEmailAckNode);

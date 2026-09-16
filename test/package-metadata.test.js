@@ -5,86 +5,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-const NODE_22_0_0 = [22, 0, 0];
-
-function parseVersionParts(value) {
-  const parts = String(value)
-    .split(".")
-    .map((part) => {
-      if (part === "*" || part.toLowerCase() === "x") {
-        return 0;
-      }
-      return Number(part) || 0;
-    });
-
-  return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
-}
-
-function compareVersions(left, right) {
-  for (let index = 0; index < 3; index += 1) {
-    if (left[index] > right[index]) {
-      return 1;
-    }
-    if (left[index] < right[index]) {
-      return -1;
-    }
-  }
-  return 0;
-}
-
-function comparatorAllowsVersion(operator, candidate, required) {
-  const comparison = compareVersions(candidate, parseVersionParts(required));
-
-  if (operator === ">=") {
-    return comparison >= 0;
-  }
-  if (operator === ">") {
-    return comparison > 0;
-  }
-  if (operator === "<") {
-    return comparison < 0;
-  }
-  if (operator === "<=") {
-    return comparison <= 0;
-  }
-  return true;
-}
-
-function wildcardAlternativeAllowsVersion(alternative, candidate) {
-  const match = String(alternative).match(/^\s*(\d+)(?:\.(\d+|x|\*))?(?:\.(\d+|x|\*))?\s*$/i);
-  if (!match) {
-    return true;
-  }
-
-  const major = Number(match[1]);
-  const minor = match[2];
-  const patch = match[3];
-
-  if (candidate[0] !== major) {
-    return false;
-  }
-  if (minor && minor !== "*" && minor.toLowerCase() !== "x" && candidate[1] !== Number(minor)) {
-    return false;
-  }
-  if (patch && patch !== "*" && patch.toLowerCase() !== "x" && candidate[2] !== Number(patch)) {
-    return false;
-  }
-  return true;
-}
-
-function engineAlternativeAllowsVersion(alternative, candidate) {
-  const comparatorPattern = /(>=|>|<=|<)\s*(\d+(?:\.(?:\d+|x|\*))?(?:\.(?:\d+|x|\*))?)/gi;
-  const comparators = [...String(alternative).matchAll(comparatorPattern)];
-  if (comparators.length === 0) {
-    return wildcardAlternativeAllowsVersion(alternative, candidate);
-  }
-  return comparators.every((match) => comparatorAllowsVersion(match[1], candidate, match[2]));
-}
-
+// Keep this policy check deliberately conservative. npm ci --engine-strict
+// under Node 22.0.0 is the authoritative full SemVer compatibility check.
 function engineRangeAllowsNode22(range) {
-  return String(range || "")
-    .split("||")
-    .some((alternative) => engineAlternativeAllowsVersion(alternative.trim(), NODE_22_0_0));
+  const match = String(range || "").match(/^\s*>=\s*(\d+)(?:\.(\d+|x|\*))?(?:\.(\d+|x|\*))?\s*$/i);
+  assert.ok(match, `Review unfamiliar engine range with npm --engine-strict: ${range}`);
+  const minimum = match.slice(1).map((part) => Number(part) || 0);
+  return minimum[0] < 22 || minimum[0] === 22 && minimum[1] === 0 && minimum[2] === 0;
 }
 
 function listFilesRecursive(directory) {
@@ -108,15 +35,15 @@ test("stable package metadata is complete", () => {
   const pkg = require(path.join(root, "package.json"));
 
   assert.equal(pkg.name, "@compeso/node-red-contrib-imap-email");
-  assert.equal(pkg.version, "1.0.1");
+  assert.match(pkg.version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
   assert.equal(pkg.license, "MIT");
   assert.equal(pkg.publishConfig && pkg.publishConfig.access, "public");
   assert.equal(pkg.engines && pkg.engines.node, ">=22.0.0");
   assert.equal(pkg["node-red"] && pkg["node-red"].version, ">=4.0.0");
   assert.ok(pkg.keywords.includes("node-red"));
   assert.ok(pkg.keywords.includes("imap-email"));
-  assert.equal(pkg.dependencies.imapflow, "^1.4.2");
-  assert.equal(pkg.dependencies.mailparser, "^3.9.11");
+  assert.equal(pkg.dependencies.imapflow, "^2.0.5");
+  assert.equal(pkg.dependencies.mailparser, "^3.9.28");
   assert.equal(Object.prototype.hasOwnProperty.call(pkg, "overrides"), false);
   assert.ok(pkg.files.includes("CHANGELOG.md"));
   assert.equal(pkg.homepage, "https://github.com/Harpau/node-red-contrib-imap-email#readme");
@@ -173,7 +100,11 @@ test("installed imapflow exposes the IMAP methods used by the nodes", () => {
     "messageFlagsAdd",
     "messageFlagsRemove",
     "fetchOne",
-    "fetch"
+    "fetch",
+    "search",
+    "download",
+    "logout",
+    "close"
   ];
 
   for (const method of requiredMethods) {
@@ -344,10 +275,12 @@ test("github maintainer files describe the current imap email package", () => {
   }
 
   const workflow = fs.readFileSync(path.join(githubDir, "workflows", "test.yml"), "utf8");
-  assert.match(workflow, /22\.x/, "CI must test the minimum supported Node.js version");
+  assert.match(workflow, /22\.0\.0/, "CI must test the minimum supported Node.js version");
+  assert.match(workflow, /22\.x/, "CI must test current Node.js 22");
   assert.doesNotMatch(workflow, /18\.x/, "CI must not test unsupported Node.js 18");
   assert.doesNotMatch(workflow, /20\.x/, "CI must not test unsupported Node.js 20");
-  assert.match(workflow, /npm ci --no-audit --no-fund/, "CI must install from the lockfile");
+  assert.match(workflow, /npm ci --engine-strict --no-audit --no-fund/, "CI must enforce the locked engine requirements");
+  assert.match(workflow, /npm audit --omit=dev/, "CI must audit production dependencies");
   assert.match(workflow, /npm test/, "CI must run the unit tests");
   assert.match(workflow, /npm run pack:check/, "CI must run the package content check");
   assert.doesNotMatch(workflow, /npm publish/, "CI must not publish the package");

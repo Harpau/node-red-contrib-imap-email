@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const { buildAckToken, extractAckToken } = require("../lib/ack-token");
 const registry = require("../lib/runtime-registry");
@@ -72,6 +73,56 @@ function imapCaps(...names) {
   return new Set(names);
 }
 
+// Runtime tests below supply only the operation relevant to their scenario.
+// Give DELETE doubles a selected usable mailbox and explicit STORE/SEARCH phases;
+// successful stubbed deletes remove the addressed range from the virtual peer.
+function completeDeleteClient(client) {
+  if (!client || typeof client.messageDelete !== "function") return client;
+  client = Object.assign(new EventEmitter(), client);
+  if (!Object.hasOwn(client, "usable")) client.usable = true;
+  client.mailbox = { path: "INBOX", uidValidity: "uidv-1", ...client.mailbox };
+  const completedRanges = new Set();
+  const originalDelete = client.messageDelete;
+  client.messageDelete = async function(range, options) {
+    const result = await originalDelete.call(this, range, options);
+    if (result === true) completedRanges.add(range);
+    return result;
+  };
+  if (!client.messageFlagsAdd) {
+    client.messageFlagsAdd = async (range, flags, options) => {
+      assert.deepEqual(flags, ["\\Deleted"]);
+      assert.deepEqual(options, { uid: true });
+      completedRanges.delete(range);
+      return true;
+    };
+  }
+  if (!client.search) {
+    client.search = async function(query, options) {
+      assert.deepEqual(Object.keys(query), ["uid"]);
+      assert.deepEqual(options, { uid: true });
+      assert.equal(completedRanges.has(query.uid), true, "verify only a completed DELETE range");
+      return [];
+    };
+  }
+  for (const operation of ["messageFlagsAdd", "messageDelete", "search"]) {
+    const command = client[operation];
+    client[operation] = async function(...args) {
+      const result = await command.apply(this, args);
+      this.emit("response", { response: result === true || Array.isArray(result) ? "OK" : "NO" });
+      return result;
+    };
+  }
+  if (client.getMailboxLock) {
+    const originalLock = client.getMailboxLock;
+    client.getMailboxLock = async function(mailbox) {
+      const lock = await originalLock.call(this, mailbox);
+      this.mailbox.path = mailbox;
+      return lock;
+    };
+  }
+  return client;
+}
+
 function createAckNode(config = {}, clientFactory) {
   let AckCtor;
   const statuses = [];
@@ -81,13 +132,14 @@ function createAckNode(config = {}, clientFactory) {
   const handlers = {};
   const account = {
     id: "account-1",
+    requestConnectionCheck() { return () => {}; },
     host: "imap.example.test",
     port: 993,
     secure: true,
     getUsername() {
       return "user@example.test";
     },
-    createClient: clientFactory
+    createClient: (...args) => completeDeleteClient(clientFactory(...args))
   };
   const RED = {
     nodes: {
@@ -1270,12 +1322,12 @@ test("marks move failures after flag changes as partial", async () => {
 test("does not report success when an IMAP action fails", async () => {
   const { executeAckActionRange, normalizeAckAction } = loadAckActions();
   const plan = normalizeAckAction({ action: "delete" });
-  const client = {
+  const client = completeDeleteClient({
     capabilities: imapCaps("UIDPLUS"),
     async messageDelete() {
       throw new Error("delete failed");
     }
-  };
+  });
 
   await assert.rejects(
     () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
@@ -1283,23 +1335,35 @@ test("does not report success when an IMAP action fails", async () => {
   );
 });
 
-test("executes delete with UIDPLUS and confirmed success", async () => {
+test("executes delete with UIDPLUS, confirmed flagging and exact UID SEARCH absence verification", async () => {
   const { executeAckActionRange, normalizeAckAction } = loadAckActions();
   const calls = [];
   const result = await executeAckActionRange({
-    client: {
+    client: completeDeleteClient({
       capabilities: imapCaps("UIDPLUS"),
+      async messageFlagsAdd(range, flags, options) {
+        calls.push(["messageFlagsAdd", range, flags, options]);
+        return true;
+      },
       async messageDelete(range, options) {
         calls.push(["messageDelete", range, options]);
         return true;
+      },
+      async search(query, options) {
+        calls.push(["search", query, options]);
+        return [];
       }
-    },
+    }),
     plan: normalizeAckAction({ action: "delete" }),
     range: "123",
     mailbox: "INBOX"
   });
 
-  assert.deepEqual(calls, [["messageDelete", "123", { uid: true }]]);
+  assert.deepEqual(calls, [
+    ["messageFlagsAdd", "123", ["\\Deleted"], { uid: true }],
+    ["messageDelete", "123", { uid: true }],
+    ["search", { uid: "123" }, { uid: true }]
+  ]);
   assert.equal(result.ok, true);
   assert.equal(result.action, "delete");
   assert.equal(result.disposition, "delete");
@@ -1536,8 +1600,8 @@ test("rejects false and undefined IMAP action results", async () => {
 
   for (const [label, plan, client] of cases) {
     await assert.rejects(
-      () => executeAckActionRange({ client, plan, range: "123", mailbox: "INBOX" }),
-      /failed/,
+      () => executeAckActionRange({ client: completeDeleteClient(client), plan, range: "123", mailbox: "INBOX" }),
+      label.startsWith("delete") ? /IMAP delete command was not confirmed/ : /failed/,
       label
     );
   }
@@ -1656,6 +1720,177 @@ test("ack runtime handles chunk failures at chunk granularity", async () => {
   assert.equal(registry.isActiveInflight(key, "uidv-1", 2, 10000, 2000), false);
   assert.equal(registry.isActiveInflight(key, "uidv-1", 3, 10000, 2000), true);
   assert.equal(registry.isActiveInflight(key, "uidv-1", 4, 10000, 2000), true);
+});
+
+function deleteProtocolClient(calls, overrides = {}) {
+  return {
+    usable: true,
+    capabilities: imapCaps("UIDPLUS"),
+    mailbox: { path: "INBOX", uidValidity: "uidv-1" },
+    async connect() {},
+    async getMailboxLock() { return { release() {} }; },
+    async messageFlagsAdd(range, flags, options) {
+      calls.push(["STORE", range]);
+      assert.deepEqual(flags, ["\\Deleted"]);
+      assert.deepEqual(options, { uid: true });
+      return true;
+    },
+    async messageDelete(range, options) {
+      calls.push(["DELETE", range]);
+      assert.deepEqual(options, { uid: true });
+      return true;
+    },
+    async search(query, options) {
+      calls.push(["VERIFY", query.uid]);
+      assert.deepEqual(query, { uid: query.uid });
+      assert.deepEqual(options, { uid: true });
+      assert.match(query.uid, /^[1-9]\d*(?::[1-9]\d*)?(?:,[1-9]\d*(?::[1-9]\d*)?)*$/);
+      return [];
+    },
+    async logout() {},
+    ...overrides
+  };
+}
+
+test("DELETE STORE failures never complete ACK and release claims while preserving inflight", async () => {
+  for (const failure of [false, undefined, null, new Error("synthetic STORE refusal")]) {
+    const token = inputToken(1);
+    registry.clearQueue(token.queueKey);
+    registry.markInflight(token.queueKey, token);
+    const calls = [];
+    const { node, handlers, sends } = createAckNode({ batchSize: 100, flushMs: 60000 }, () =>
+      deleteProtocolClient(calls, {
+        async messageFlagsAdd(range) {
+          calls.push(["STORE", range]);
+          if (failure instanceof Error) throw failure;
+          return failure;
+        }
+      }));
+    const result = enqueueInput(handlers, { imap: { ackToken: token } });
+    clearTimeout(node.timer);
+    node.timer = null;
+    await node.flush();
+    assert.deepEqual(calls, [["STORE", "1"]]);
+    assert.equal(result.doneCount, 1);
+    assert.equal(result.outputs.length, 1);
+    assert.equal(result.outputs[0][0], null);
+    assert.equal(result.outputs[0][1].imapAck.ok, false);
+    assert.equal(result.outputs[0][1].imapAck.completed, false);
+    assert.equal(result.outputs[0][1].imapAck.partial, undefined);
+    assert.equal(registry.matchesAckToken(token.queueKey, token), true);
+    assert.ok(registry.claimAckToken(token.queueKey, token), "failed action releases the claim");
+    registry.releaseAckToken(token.queueKey, token);
+    const stats = sends.find(output => output[2])[2].payload;
+    assert.equal(stats.okCount, 0);
+    assert.equal(stats.errorCount, 1);
+  }
+});
+
+test("DELETE retries the same token successfully after a STORE refusal", async () => {
+  const token = inputToken(1);
+  registry.clearQueue(token.queueKey);
+  registry.markInflight(token.queueKey, token);
+  let acceptStore = false;
+  const calls = [];
+  const { node, handlers } = createAckNode({ batchSize: 100, flushMs: 60000 }, () =>
+    deleteProtocolClient(calls, {
+      async messageFlagsAdd(range) { calls.push(["STORE", range]); return acceptStore; }
+    }));
+  const attempt = async msg => {
+    const result = enqueueInput(handlers, msg);
+    clearTimeout(node.timer);
+    node.timer = null;
+    await node.flush();
+    return result;
+  };
+  const first = await attempt({ imap: { ackToken: token } });
+  assert.equal(first.outputs[0][1].imapAck.ok, false);
+  assert.equal(registry.matchesAckToken(token.queueKey, token), true);
+  acceptStore = true;
+  const retried = await attempt(structuredClone(first.outputs[0][1]));
+  assert.equal(retried.doneCount, 1);
+  assert.equal(retried.outputs.length, 1);
+  assert.equal(retried.outputs[0][0].imapAck.ok, true);
+  assert.equal(retried.outputs[0][0].imapAck.completed, true);
+  assert.equal(registry.matchesAckToken(token.queueKey, token), false);
+  assert.deepEqual(calls, [["STORE", "1"], ["STORE", "1"], ["DELETE", "1"], ["VERIFY", "1"]]);
+});
+
+test("DELETE STORE failure remains chunk-local with no hidden per-UID fallback", async () => {
+  const calls = [];
+  const { node, sends } = createAckNode({ batchSize: 4, maxUidPerCommand: 2, flushMs: 60000 }, () =>
+    deleteProtocolClient(calls, {
+      async messageFlagsAdd(range) { calls.push(["STORE", range]); return range !== "1:2"; }
+    }));
+  const outputs = [];
+  let done = 0;
+  pushPendingAckItems(node, [1, 2, 3, 4], outputs, () => { done += 1; });
+  const tokens = node.pending.map(item => item.token);
+  await node.flush();
+  assert.deepEqual(calls, [["STORE", "1:2"], ["STORE", "3:4"], ["DELETE", "3:4"], ["VERIFY", "3:4"]]);
+  assert.equal(done, 4);
+  assert.deepEqual(outputs.filter(output => output[1]).map(output => output[1].imapAck.uid), [1, 2]);
+  assert.deepEqual(outputs.filter(output => output[0]).map(output => output[0].imapAck.uid), [3, 4]);
+  for (const token of tokens) {
+    assert.equal(registry.matchesAckToken(token.queueKey, token), token.uid <= 2);
+    if (token.uid <= 2) {
+      assert.ok(registry.claimAckToken(token.queueKey, token));
+      registry.releaseAckToken(token.queueKey, token);
+    }
+  }
+  const stats = sends.find(output => output[2])[2].payload;
+  assert.equal(stats.okCount, 2);
+  assert.equal(stats.errorCount, 2);
+});
+
+test("DELETE failures after confirmed STORE stop all subsequent chunks and preserve their inflight", async () => {
+  for (const failure of ["delete false", "delete throws", "UID remains", "verification throws", "search false", "search undefined", "search NO swallowed", "mailbox lost"]) {
+    const calls = [];
+    let verificationCalled = false;
+    const { node, sends } = createAckNode({ batchSize: 4, maxUidPerCommand: 2, flushMs: 60000 }, () =>
+      deleteProtocolClient(calls, {
+        async messageDelete(range) {
+          calls.push(["DELETE", range]);
+          if (failure === "delete false") return false;
+          if (failure === "delete throws") throw new Error("synthetic DELETE refusal");
+          if (failure === "mailbox lost") this.mailbox = false;
+          return true;
+        },
+        async search(query, options) {
+          calls.push(["VERIFY", query.uid]);
+          assert.deepEqual(query, { uid: "1:2" });
+          assert.deepEqual(options, { uid: true });
+          verificationCalled = true;
+          if (failure === "UID remains") return [1, 2];
+          if (failure === "verification throws") throw new Error("synthetic verification failure");
+          if (failure === "search false") return false;
+          if (failure === "search undefined") return undefined;
+          if (failure === "search NO swallowed") this.emit("response", { response: "NO" });
+          return [];
+        }
+      }));
+    const outputs = [];
+    let done = 0;
+    pushPendingAckItems(node, [1, 2, 3, 4], outputs, () => { done += 1; });
+    const tokens = node.pending.map(item => item.token);
+    await node.flush();
+    assert.ok(calls.every(call => call[1] === "1:2"), failure);
+    assert.equal(done, 4, failure);
+    assert.equal(outputs.length, 4, failure);
+    assert.equal(outputs.every(output => output[1] && output[1].imapAck.ok === false
+      && output[1].imapAck.completed === false && output[1].imapAck.partial === true), true, failure);
+    for (const token of tokens) {
+      assert.equal(registry.matchesAckToken(token.queueKey, token), true, failure);
+      assert.ok(registry.claimAckToken(token.queueKey, token), failure);
+      registry.releaseAckToken(token.queueKey, token);
+    }
+    if (["UID remains", "verification throws", "search false", "search undefined", "search NO swallowed"].includes(failure)) {
+      assert.equal(verificationCalled, true, failure);
+    }
+    const stats = sends.find(output => output[2])[2].payload;
+    assert.equal(stats.okCount, 0, failure);
+    assert.equal(stats.errorCount, 4, failure);
+  }
 });
 
 test("ack runtime rejects unsafe delete without UIDPLUS and keeps inflight", async () => {

@@ -2,6 +2,59 @@
 
 All notable changes to `@compeso/node-red-contrib-imap-email` are documented here.
 
+## 1.1.0 - 2026-09-16
+
+### Added
+
+- Check the IMAP connection and authenticated session automatically when an
+  active input or ACK node starts. Concurrent users of one account share the
+  short-lived check, with a fixed 30-second overall timeout, safe status messages
+  and cancellation on close or redeploy.
+- Keep regular message processing independent of the startup check. No mailbox
+  is selected and no mail or ACK action is performed by the check.
+
+### Changed
+
+- Update runtime dependency requirements to ImapFlow `^2.0.5` and Mailparser
+  `^3.9.28`, retaining Node.js `>=22.0.0` and Node-RED `>=4.0.0`. The ImapFlow
+  update includes bounded downloads when a server ignores partial-fetch limits.
+- Check production dependencies in CI and update GitHub checkout/setup-node
+  actions to v7.
+- Update maintenance and release documentation, including the historical 1.0.1
+  changes, actual-library checks and isolated Node-RED deploy acceptance tests.
+
+### Fixed
+
+- Guard ACK deletion and input window expunge against a false success from
+  ImapFlow: confirm setting `\Deleted`, check the delete result and verify that
+  no UIDs remain through a successful search restricted to the same bounded
+  UID chunk, with connection and mailbox identity checks throughout. Retain
+  `UIDPLUS` as a requirement; perform no mailbox-wide search.
+- Preserve ACK inflight and stop later chunks in the group after a partial
+  deletion failure. Abort input cleanup on partial or connection failures
+  without counting unconfirmed removals. Earlier side effects are not rolled
+  back. See [the historical reproduction and validation limits](docs/KNOWN_ISSUES.md).
+
+## 1.0.1
+
+### Fixed
+
+- Abort active input fetches, downloads and parsing streams when the node
+  closes. Bound close completion, suppress late outputs and preserve retry
+  cursors and already-emitted inflight messages during interrupted batches.
+
+### Changed
+
+- Move input and ACK nodes to the Node-RED `network` palette group and use the
+  IMAP mail color.
+- Update dependency declarations from ImapFlow `1.0.76` to `^1.4.2` and from
+  Mailparser `3.9.10` to `^3.9.11`, with an updated lockfile.
+- Add regression coverage for input close behavior and update package metadata
+  checks for the released version.
+
+These entries were reconstructed from the repository changes between tags
+`v1.0.0` and `v1.0.1`.
+
 ## 1.0.0 - Stable public release
 
 ### Added
