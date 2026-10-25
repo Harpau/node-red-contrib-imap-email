@@ -54,8 +54,9 @@ Stand 25.10.2026: Ein unveroeffentlichter Patch-Kandidat `1.1.1` hebt die
 Laufzeitanforderungen auf ImapFlow `^2.9.1` und Mailparser `^3.12.4` an
 (Advisories in Nodemailer und ip-address) und ist im
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) dokumentiert. PR #9 ist
-gemergt, CI und Provider-Abnahme sind erledigt; die Veroeffentlichungsfreigabe
-ist ein eigener Schritt.
+gemergt, CI und Provider-Abnahme sind erledigt, der Release-Commit ist
+vorbereitet ([Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md)); Tag,
+npm-Veroeffentlichung und Katalog-Refresh sind eigene Schritte.
 
 ## 4. Pull-Request-Pruefung
 

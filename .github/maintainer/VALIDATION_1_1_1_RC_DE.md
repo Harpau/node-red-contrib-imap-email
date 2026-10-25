@@ -138,13 +138,13 @@ lief mit Node-RED 4.1.15, die manuelle Abnahme mit Node-RED 5.0.7.
    identifizierten Tarball.
 3. Erledigt: Die Anhebung der Abhängigkeitsbereiche (`48cfb39`) wurde mit dem
    Merge von PR #9 übernommen.
-4. Offen: gesonderte menschliche Freigabe für den Release-Commit (Entfernen
-   der Kandidatenhinweise in README, Changelog, `docs/INSTALL_DE.md` und
-   `docs/RELEASE_DE.md`, Release-Datum), Tag `v1.1.1`, npm-Veröffentlichung
-   und Aktualisierung des Node-RED-Katalogs. Der Release-Commit ändert
-   Paketdateien und erzeugt deshalb einen neuen Tarball; dessen automatische
-   Prüfungen sind zu wiederholen, Runtime-Dateien müssen bytegleich bleiben.
-   Danach einen zentralen Release-Nachweis `RELEASE_1_1_1_DE.md` anlegen und
-   die Einstiegsdokumente aktualisieren.
+4. Erledigt: Release-Commit mit entfernten Kandidatenhinweisen und
+   Changelog-Datum 25.10.2026 vorbereitet. Der daraus erzeugte Tarball, der
+   Vergleich mit dem Kandidaten-Tarball und die wiederholten Prüfungen stehen
+   im [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md).
+5. Offen: gesonderte menschliche Freigabe für Push/PR und Merge des
+   Release-Commits, Tag `v1.1.1`, npm-Veröffentlichung und Aktualisierung des
+   Node-RED-Katalogs; danach den Release-Nachweis abschließen und die
+   Einstiegsdokumente aktualisieren.
 
 Die Freigaben für Release `1.1.0` gelten nicht für diesen Kandidaten.

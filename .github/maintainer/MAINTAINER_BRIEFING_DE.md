@@ -15,7 +15,10 @@ Mailparser `^3.12.4`, Version in Paket und Lockfile, Changelog und
 Dokumentation. Nachweise stehen im
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): PR #9 als `c9e3c53` nach
 `main` gemergt, CI auf PR und `main` gruen, Provider-Abnahme vom 25.10.2026
-erfolgreich. Offen ist nur die Veroeffentlichungsfreigabe.
+erfolgreich. Der Release-Commit mit Changelog-Datum 25.10.2026 ist vorbereitet
+und im [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) dokumentiert. Tag,
+npm-Veroeffentlichung und Katalog-Refresh stehen aus und brauchen eigene
+Freigaben.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -49,7 +52,7 @@ Node-RED:       >=4.0.0
 Lizenz:         MIT
 Startversion:   0.1.0
 Release:       1.1.0 (Nachweise: RELEASE_1_1_0_DE.md)
-Kandidat:      1.1.1, unveroeffentlicht (Nachweise: VALIDATION_1_1_1_RC_DE.md)
+Vorbereitet:   1.1.1, nicht veroeffentlicht (Nachweise: VALIDATION_1_1_1_RC_DE.md, RELEASE_1_1_1_DE.md)
 ```
 
 Keine Veroeffentlichung auf npm oder flows.nodered.org ohne ausdrueckliche
@@ -213,10 +216,11 @@ stabilen Release auf Node.js `>=22.0.0` und Node-RED `>=4.0.0` um. `1.0.0` und
 `1.0.1` sind veroeffentlicht. Der abgeschlossene Release `1.1.0` vom 16.09.2026
 enthaelt die Startpruefung, DELETE-Absicherung und aktualisierte
 Laufzeitabhaengigkeiten; Details stehen im [Release-Nachweis](RELEASE_1_1_0_DE.md).
-Der unveroeffentlichte Kandidat `1.1.1` hebt die Laufzeitanforderungen auf
-ImapFlow `^2.9.1` und Mailparser `^3.12.4` an, aendert keine Runtime-Logik und
-keine Mindestversionen; Nachweise und offene Voraussetzungen stehen im
-[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md).
+Version `1.1.1` (vorbereitet, nicht veroeffentlicht) hebt die
+Laufzeitanforderungen auf ImapFlow `^2.9.1` und Mailparser `^3.12.4` an,
+aendert keine Runtime-Logik und keine Mindestversionen; Nachweise stehen im
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) und im
+[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md).
 
 Verbindlicher Ablauf: [Release-Checkliste](../../docs/RELEASE_DE.md).
 Technischer Abschluss verlangt einen frischen Tarball, echte Bibliotheksvertraege,

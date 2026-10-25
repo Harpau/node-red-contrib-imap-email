@@ -11,8 +11,8 @@ Upstream, ImapFlow `2.0.8` (published 2026-09-27) started checking the result
 of the internal `\Deleted` STORE in `commands/expunge.js`: `messageDelete()`
 now returns `false` and sends no EXPUNGE when that STORE is rejected. The
 published `1.1.0` declares `^2.0.5`, which still allows `2.0.5` to `2.0.7`.
-The unpublished `1.1.1` release candidate raises the declared range to
-`^2.9.1`, so a fresh install always receives the upstream check; the
+Version `1.1.1` raises the declared range to `^2.9.1`, so a fresh install
+always receives the upstream check; the
 package-level protection below is kept unchanged as defense in depth. Since
 2026-10-25 the repository lockfile pins ImapFlow `2.9.1`.
 
@@ -157,6 +157,6 @@ retention and stopped subsequent chunks. Both
 ACK and input cleanup require coverage. See the [release checklist](RELEASE_DE.md).
 Exact tested package states and results are recorded separately in the
 repository's `.github/maintainer/` validation records, including the local
-candidate checks and the provider acceptance dated 2026-09-16. Those records
+candidate checks and the provider acceptances dated 2026-09-16 and 2026-10-25. Those records
 identify their own tested tarballs. The startup connection check does not test
 DELETE permissions or outcomes.

@@ -2,10 +2,6 @@
 
 Diese Anleitung gilt fuer das eigenstaendige Paket `@compeso/node-red-contrib-imap-email`.
 
-Aktueller Stand: **unveroeffentlichter Release-Kandidat `1.1.1`**.
-Die letzte veroeffentlichte Version ist `1.1.0`. Aktuelle GitHub-CI-Laeufe,
-Provider-Test und Veroeffentlichungsfreigabe stehen noch aus.
-
 ## Voraussetzungen
 
 - Node.js `>=22.0.0`
@@ -38,9 +34,6 @@ npm run pack:check
 ## 3. Installation in Node-RED aus npm Registry
 
 Im Node-RED User-Verzeichnis:
-
-Dieser Registry-Weg installiert die veroeffentlichte Version `1.1.0`, nicht den
-lokalen Kandidaten `1.1.1`.
 
 ```powershell
 cd $env:USERPROFILE\.node-red
