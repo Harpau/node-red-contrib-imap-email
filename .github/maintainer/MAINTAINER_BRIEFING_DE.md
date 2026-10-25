@@ -12,9 +12,10 @@ gemergt (PR #7 Advisories in Nodemailer/ip-address, PR #8 ImapFlow 2.9.1 mit
 angeglichenen Vertragstests). Ein **unveroeffentlichter Release-Kandidat
 `1.1.1`** ist vorbereitet: Laufzeitanforderungen ImapFlow `^2.9.1` und
 Mailparser `^3.12.4`, Version in Paket und Lockfile, Changelog und
-Dokumentation. Lokale Nachweise stehen im
-[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md). Aktuelle GitHub-CI auf dem
-finalen Stand, Provider-Test und Veroeffentlichungsfreigabe sind offen.
+Dokumentation. Nachweise stehen im
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): PR #9 als `c9e3c53` nach
+`main` gemergt, CI auf PR und `main` gruen, Provider-Abnahme vom 25.10.2026
+erfolgreich. Offen ist nur die Veroeffentlichungsfreigabe.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.

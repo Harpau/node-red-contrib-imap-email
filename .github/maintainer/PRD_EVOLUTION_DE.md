@@ -7,9 +7,10 @@ CI und Abnahmen sind im zentralen [Release-Nachweis](RELEASE_1_1_0_DE.md)
 dokumentiert. Die damalige Freigabe gilt nur fuer diesen Release.
 
 Stand 25.10.2026: Ein unveroeffentlichter Release-Kandidat `1.1.1` ist
-vorbereitet (siehe Abschnitt 5). Lokale Nachweise stehen im
-[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md); aktuelle GitHub-CI,
-Provider-Test und Veroeffentlichungsfreigabe bleiben offen.
+vorbereitet und mit PR #9 nach `main` gemergt (siehe Abschnitt 5). Nachweise
+stehen im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): CI gruen,
+Provider-Abnahme vom 25.10.2026 erfolgreich; nur die
+Veroeffentlichungsfreigabe bleibt offen.
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.

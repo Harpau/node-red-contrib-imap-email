@@ -15,9 +15,11 @@ Stand 25.10.2026: Nach dem Release wurden zwei Lockfile-Updates gemergt
 angeglichenen Vertragstests). Ein unveröffentlichter Release-Kandidat `1.1.1`
 ist vorbereitet: Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser
 `^3.12.4`, Version 1.1.1 in Paket und Lockfile, CHANGELOG und Dokumentation.
-Der Kandidat ist nicht getaggt und nicht veröffentlicht. Aktuelle GitHub-CI auf
-dem finalen Stand, Provider-Test und Veröffentlichungsfreigabe stehen aus; die
-Freigaben für 1.1.0 gelten nicht für 1.1.1.
+Der Kandidat ist mit PR #9 als `c9e3c53` nach `main` gemergt, die GitHub-CI
+auf PR und `main` ist grün, und die Provider-Abnahme vom 25.10.2026 war
+erfolgreich (Nachweis im RC-Prüfprotokoll). Er ist nicht getaggt und nicht
+veröffentlicht; die Veröffentlichungsfreigabe für Release-Commit, Tag, npm und
+Katalog steht aus. Die Freigaben für 1.1.0 gelten nicht für 1.1.1.
 
 Vor neuen Änderungen lesen:
 
@@ -143,7 +145,7 @@ Konfigurierbare Flags:
 - Die Entwicklungsfassung begann mit Version 0.1.0.
 - Version 0.2.0 dokumentiert die Pre-1.0-Kompatibilitätsumstellung auf Node.js >=22.0.0 und Node-RED >=4.0.0.
 - Versionen 1.0.0, 1.0.1 und 1.1.0 sind veröffentlicht. Für künftige Releases gelten die aktuellen Prüfungen in docs/RELEASE_DE.md; historische Nachweise ersetzen keine neue Abnahme geänderter Laufzeit.
-- Version 1.1.1 ist als unveröffentlichter Release-Kandidat vorbereitet: Laufzeitanforderungen ImapFlow ^2.9.1 und Mailparser ^3.12.4 bei unveränderten Mindestversionen. Push, aktuelle CI, Provider-Test und Veröffentlichungsfreigabe sind eigene Schritte.
+- Version 1.1.1 ist als unveröffentlichter Release-Kandidat vorbereitet: Laufzeitanforderungen ImapFlow ^2.9.1 und Mailparser ^3.12.4 bei unveränderten Mindestversionen. Push, CI und Provider-Test sind erledigt; die Veröffentlichungsfreigabe ist ein eigener Schritt.
 
 ## package.json-Regeln
 
