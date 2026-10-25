@@ -19,6 +19,24 @@ historischen RC- und Provider-Protokolle ihrem jeweiligen Artefakt zu.
 Spaetere Aenderungen dieser Checkliste im Repository sind kein Bestandteil
 des bereits veroeffentlichten Tarballs.
 
+## Release-Kandidat 1.1.1 (unveroeffentlicht)
+
+Stand 25.10.2026: Paket und Lockfile tragen die Version `1.1.1`. Der Kandidat
+ist **nicht veroeffentlicht**; es gibt weder Tag noch Veroeffentlichungsdatum.
+Die letzte veroeffentlichte Version bleibt `1.1.0`. Umfang: angehobene
+Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser `^3.12.4` wegen der am
+22. und 23.10.2026 veroeffentlichten Advisories in Nodemailer und ip-address,
+an ImapFlow 2.9.1 angeglichene Bibliotheksvertragstests sowie aktualisierte
+Dokumentation. Runtime-Logik, Flow-Vertraege und die Mindestversionen
+Node.js `>=22.0.0` / Node-RED `>=4.0.0` sind unveraendert.
+
+Die lokalen Nachweise stehen im
+[RC-Pruefprotokoll 1.1.1](https://github.com/Harpau/node-red-contrib-imap-email/blob/main/.github/maintainer/VALIDATION_1_1_1_RC_DE.md)
+im Quellrepository. Offen bleiben: aktuelle GitHub-CI auf dem finalen Stand
+nach freigegebenem Push, externer Provider-Test mit dem finalen Tarball und
+die gesonderte menschliche Freigabe fuer Merge, Tag, npm-Veroeffentlichung und
+Katalog-Refresh. Die Freigaben des Release 1.1.0 gelten dafuer nicht.
+
 ## 1. Stand und Voraussetzungen
 
 - Version in Paket, Lockfile, Changelog und Dokumentation konsistent halten.

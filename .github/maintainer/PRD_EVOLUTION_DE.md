@@ -6,6 +6,11 @@ zeigen `1.1.0`; die Registryinstallation ist geprueft. Commit, Artefakt,
 CI und Abnahmen sind im zentralen [Release-Nachweis](RELEASE_1_1_0_DE.md)
 dokumentiert. Die damalige Freigabe gilt nur fuer diesen Release.
 
+Stand 25.10.2026: Ein unveroeffentlichter Release-Kandidat `1.1.1` ist
+vorbereitet (siehe Abschnitt 5). Lokale Nachweise stehen im
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md); aktuelle GitHub-CI,
+Provider-Test und Veroeffentlichungsfreigabe bleiben offen.
+
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
 
@@ -118,6 +123,19 @@ Diese Aenderungen wurden am 16.09.2026 als `1.1.0` veroeffentlicht und sind in
 `1.0.1` nicht enthalten. Der [Release-Nachweis](RELEASE_1_1_0_DE.md) unterscheidet
 Provider-Kandidat, finales Release-Artefakt und deren jeweilige Pruefungen.
 Historische Protokolle werden nicht nachtraeglich auf neue Staende umgedeutet.
+
+### Unveroeffentlichter Release-Kandidat 1.1.1
+
+- Laufzeitanforderungen auf ImapFlow `^2.9.1` und Mailparser `^3.12.4`
+  angehoben; damit sind die am 22./23.10.2026 veroeffentlichten Advisories in
+  Nodemailer (Adress-Parser) fuer frische Installationen ausgeschlossen.
+  ip-address wird nur ueber das Lockfile aufgeloest, weil es transitiv ueber
+  socks/ImapFlow kommt.
+- Bibliotheksvertragstests an ImapFlow 2.9.1 angeglichen; der Paket-Loeschhelfer
+  behaelt seine explizite STORE-Pruefung als zusaetzliche Absicherung.
+- Keine Aenderung an Runtime-Logik, Flow-Vertraegen oder Mindestversionen.
+- Paket und Lockfile tragen `1.1.1`; nicht getaggt, nicht veroeffentlicht.
+  Nachweise im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md).
 
 ### Spaetere Ideen ohne Versionszusage
 

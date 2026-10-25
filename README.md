@@ -2,6 +2,14 @@
 
 Node-RED nodes for externally triggered IMAP email processing with bounded cursor-window fetch and at-least-once ACK handling.
 
+**Release candidate 1.1.1 — not published.** This checkout prepares a
+compatible maintenance release that raises the runtime dependency requirements
+to ImapFlow `^2.9.1` and Mailparser `^3.12.4` for the dependency advisories
+listed in the [changelog](CHANGELOG.md). The latest published version remains
+`1.1.0`. GitHub CI on the final state, external provider testing and
+publication approval are still pending; see the
+[release checklist](docs/RELEASE_DE.md).
+
 ## Nodes
 
 The package registers these Node-RED types:
@@ -29,6 +37,9 @@ From the npm registry:
 cd ~/.node-red
 npm install @compeso/node-red-contrib-imap-email
 ```
+
+This installs the latest published version, currently `1.1.0`. The unpublished
+`1.1.1` candidate is only available by packing this checkout.
 
 From GitHub during development:
 
