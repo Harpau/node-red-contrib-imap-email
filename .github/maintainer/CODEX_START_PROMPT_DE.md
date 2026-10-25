@@ -31,31 +31,29 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 ## Projektkontext
 
 Stand 16.09.2026: **Release `1.1.0` ist abgeschlossen und veroeffentlicht**
-(npm `latest`, GitHub-Release, Node-RED-Katalog). Enthalten sind Startpruefung,
+(damals npm `latest`, GitHub-Release, Node-RED-Katalog). Enthalten sind Startpruefung,
 DELETE-Absicherung und aktualisierte Laufzeitabhaengigkeiten.
 Der [Release-Nachweis](RELEASE_1_1_0_DE.md) ist die zentrale Quelle fuer
 Commit, Tag, CI, Artefakt-Pruefsummen, Registry-Installation und lokale
 Testumgebung. Das voruebergehende npm-README-Anzeigeproblem ist laut Nutzer
 erledigt; dafuer keine Reparatur oder weitere Veroeffentlichung planen.
 
-Stand 25.10.2026: Auf `main` liegen zwei nach dem Release gemergte
-Lockfile-Updates (PR #7, PR #8). Ein **unveroeffentlichter Release-Kandidat
-`1.1.1`** mit Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser `^3.12.4`
-ist vorbereitet und mit PR #9 als `c9e3c53` nach `main` gemergt; letzte
-veroeffentlichte Version bleibt `1.1.0`. Nachweise stehen im
-[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): CI auf PR und `main`
-gruen, Provider-Abnahme vom 25.10.2026 erfolgreich. Der Release-Commit mit
-Changelog-Datum 25.10.2026 ist vorbereitet und im
-[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) dokumentiert; Tag,
-npm-Veroeffentlichung und Katalog-Refresh stehen aus. Paketnummer,
-Changelog-Datum und historische Tests allein sind kein
-Veroeffentlichungsnachweis.
+Stand 25.10.2026: **Release `1.1.1` ist abgeschlossen und veroeffentlicht**
+(npm `latest`, Tag `v1.1.1`, GitHub-Release; Registry-Installation geprueft).
+Enthalten sind die Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser
+`^3.12.4` wegen der Advisories in Nodemailer und ip-address sowie an ImapFlow
+2.9.1 angeglichene Vertragstests; Runtime unveraendert. Der Node-RED-Katalog
+zeigt nach dem Refresh `1.1.1`. Der
+[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) ist die zentrale Quelle; das
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) enthaelt Kandidatenabnahme,
+CI-Laeufe und Provider-Abnahme. Paketnummer, Changelog-Datum und historische
+Tests allein sind kein Veroeffentlichungsnachweis.
 
 Vor Beginn des neuen Auftrags:
 
 1. `git status --short --branch`, `git log -1 --oneline` und
-   `git rev-parse 'v1.1.0^{}'` lesen. Der Release-Tag zeigt auf
-   `f086643b93155ab6adee17bae6431cf8802b187e`; ein neuerer Arbeitsbaum kann
+   `git rev-parse 'v1.1.1^{}'` lesen. Der Release-Tag zeigt auf
+   `b5456864eedbcb602edc186675a760ffbbf92428`; ein neuerer Arbeitsbaum kann
    zusaetzliche Uebergabedokumentation oder spaetere Aenderungen enthalten.
 2. Die bisherigen RC-, Deploy- und Provider-Protokolle als datierte historische
    Nachweise lesen. Ihre damaligen offenen Freigabe-/CI-/Publish-Punkte sind
@@ -64,12 +62,10 @@ Vor Beginn des neuen Auftrags:
    `~/.node-red` behielt den Provider-Kandidaten mit gleicher Versionsnummer
    und Runtime, aber aelterer Dokumentation. Nicht ungeprueft den finalen
    Registry-Tarball als dort installiert annehmen.
-4. Den neuen Nutzerauftrag bestimmen. Release `1.1.0` braucht keine weiteren
-   Schritte. Die dazu erteilten Freigaben gelten nicht pauschal fuer spaetere
-   Releases; vorhandene ausdrueckliche Freigaben im jeweiligen Chat beruecksichtigen.
-   Fuer `1.1.1` sind Kandidatenabnahme, CI, Provider-Test und Release-Commit
-   erledigt; Tag, npm-Veroeffentlichung und Katalog-Refresh sind eigene, noch
-   nicht erteilte Schritte, sofern der aktuelle Chat nichts anderes festhaelt.
+4. Den neuen Nutzerauftrag bestimmen. Die Releases `1.1.0` und `1.1.1`
+   brauchen keine weiteren Schritte.
+   Die dazu erteilten Freigaben gelten nicht pauschal fuer spaetere Releases;
+   vorhandene ausdrueckliche Freigaben im jeweiligen Chat beruecksichtigen.
 
 Das Paket registriert genau diese Node-RED-Typen:
 

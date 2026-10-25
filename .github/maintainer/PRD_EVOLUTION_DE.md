@@ -1,17 +1,13 @@
 # PRD / Evolution Plan: @compeso/node-red-contrib-imap-email
 
-Stand 16.09.2026: Release `1.1.0` ist abgeschlossen. PR #5 ist gemergt,
-GitHub-Release und Tag sind oeffentlich, npm `latest` und Node-RED-Katalog
-zeigen `1.1.0`; die Registryinstallation ist geprueft. Commit, Artefakt,
-CI und Abnahmen sind im zentralen [Release-Nachweis](RELEASE_1_1_0_DE.md)
-dokumentiert. Die damalige Freigabe gilt nur fuer diesen Release.
-
-Stand 25.10.2026: Ein unveroeffentlichter Release-Kandidat `1.1.1` ist
-vorbereitet und mit PR #9 nach `main` gemergt (siehe Abschnitt 5). Nachweise
-stehen im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): CI gruen,
-Provider-Abnahme vom 25.10.2026 erfolgreich. Der Release-Commit ist
-vorbereitet ([Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md)); Tag,
-npm-Veroeffentlichung und Katalog-Refresh stehen aus.
+Stand 25.10.2026: Release `1.1.1` ist abgeschlossen. PR #11 ist gemergt,
+Tag und GitHub-Release sind oeffentlich, npm `latest` zeigt `1.1.1` und die
+Registryinstallation ist geprueft; der Node-RED-Katalog zeigt `1.1.1`
+(siehe Abschnitt 5). Nachweise stehen im
+[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) und im
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md). Release `1.1.0` vom
+16.09.2026 ist im [Release-Nachweis 1.1.0](RELEASE_1_1_0_DE.md) dokumentiert.
+Die jeweilige Freigabe gilt nur fuer den jeweiligen Release.
 
 Dieses Dokument beschreibt die Produktpflege und Weiterentwicklung des
 eigenstaendigen Pakets `@compeso/node-red-contrib-imap-email`.
@@ -126,7 +122,7 @@ Diese Aenderungen wurden am 16.09.2026 als `1.1.0` veroeffentlicht und sind in
 Provider-Kandidat, finales Release-Artefakt und deren jeweilige Pruefungen.
 Historische Protokolle werden nicht nachtraeglich auf neue Staende umgedeutet.
 
-### Release 1.1.1 (vorbereitet, nicht veroeffentlicht)
+### Release 1.1.1
 
 - Laufzeitanforderungen auf ImapFlow `^2.9.1` und Mailparser `^3.12.4`
   angehoben; damit sind die am 22./23.10.2026 veroeffentlichten Advisories in
@@ -136,8 +132,8 @@ Historische Protokolle werden nicht nachtraeglich auf neue Staende umgedeutet.
 - Bibliotheksvertragstests an ImapFlow 2.9.1 angeglichen; der Paket-Loeschhelfer
   behaelt seine explizite STORE-Pruefung als zusaetzliche Absicherung.
 - Keine Aenderung an Runtime-Logik, Flow-Vertraegen oder Mindestversionen.
-- Paket und Lockfile tragen `1.1.1`; nicht getaggt, nicht veroeffentlicht.
-  Nachweise im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) und im
+- Am 25.10.2026 als `1.1.1` veroeffentlicht, Katalog aktualisiert. Nachweise
+  im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) und im
   [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md).
 
 ### Spaetere Ideen ohne Versionszusage

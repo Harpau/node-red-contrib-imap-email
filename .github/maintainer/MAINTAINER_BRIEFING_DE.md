@@ -1,24 +1,15 @@
 # Maintainer-Briefing: @compeso/node-red-contrib-imap-email
 
-Stand 16.09.2026: Release `1.1.0` ist abgeschlossen. PR #5 ist gemergt,
-`v1.1.0` und der oeffentliche GitHub-Release sind vorhanden; npm `latest` und
-der Node-RED-Katalog zeigen `1.1.0`. Die Installation aus der Registry ist
-geprueft. Der zentrale [Release-Nachweis](RELEASE_1_1_0_DE.md) ordnet Commit,
-Tarball, CI, Tests und Veroeffentlichung zu. Die damaligen Freigaben gelten
-ausschliesslich fuer diesen Release.
-
-Stand 25.10.2026: Nach dem Release sind zwei Lockfile-Updates auf `main`
-gemergt (PR #7 Advisories in Nodemailer/ip-address, PR #8 ImapFlow 2.9.1 mit
-angeglichenen Vertragstests). Ein **unveroeffentlichter Release-Kandidat
-`1.1.1`** ist vorbereitet: Laufzeitanforderungen ImapFlow `^2.9.1` und
-Mailparser `^3.12.4`, Version in Paket und Lockfile, Changelog und
-Dokumentation. Nachweise stehen im
-[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): PR #9 als `c9e3c53` nach
-`main` gemergt, CI auf PR und `main` gruen, Provider-Abnahme vom 25.10.2026
-erfolgreich. Der Release-Commit mit Changelog-Datum 25.10.2026 ist vorbereitet
-und im [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) dokumentiert. Tag,
-npm-Veroeffentlichung und Katalog-Refresh stehen aus und brauchen eigene
-Freigaben.
+Stand 25.10.2026: Release `1.1.1` ist abgeschlossen. PR #11 ist gemergt,
+`v1.1.1` und der oeffentliche GitHub-Release sind vorhanden, npm `latest`
+zeigt `1.1.1` und die Installation aus der Registry ist geprueft. Der
+Node-RED-Katalog zeigt nach dem Refresh `1.1.1`. Der zentrale
+[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) ordnet
+Commit, Tarball, CI, Tests und Veroeffentlichung zu; das
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) enthaelt Kandidatenabnahme,
+CI-Laeufe und Provider-Abnahme. Release `1.1.0` vom 16.09.2026 ist im
+[Release-Nachweis 1.1.0](RELEASE_1_1_0_DE.md) dokumentiert. Die jeweiligen
+Freigaben gelten ausschliesslich fuer den jeweiligen Release.
 
 Dieses Dokument ist ein kompaktes Briefing fuer spaetere Wartung, Bugfixes
 und Erweiterungen des Pakets `@compeso/node-red-contrib-imap-email`.
@@ -51,8 +42,8 @@ Node.js:        >=22.0.0
 Node-RED:       >=4.0.0
 Lizenz:         MIT
 Startversion:   0.1.0
-Release:       1.1.0 (Nachweise: RELEASE_1_1_0_DE.md)
-Vorbereitet:   1.1.1, nicht veroeffentlicht (Nachweise: VALIDATION_1_1_1_RC_DE.md, RELEASE_1_1_1_DE.md)
+Release:       1.1.1 (Nachweise: RELEASE_1_1_1_DE.md, VALIDATION_1_1_1_RC_DE.md)
+Vorherige:     1.1.0 (Nachweise: RELEASE_1_1_0_DE.md)
 ```
 
 Keine Veroeffentlichung auf npm oder flows.nodered.org ohne ausdrueckliche
@@ -216,7 +207,7 @@ stabilen Release auf Node.js `>=22.0.0` und Node-RED `>=4.0.0` um. `1.0.0` und
 `1.0.1` sind veroeffentlicht. Der abgeschlossene Release `1.1.0` vom 16.09.2026
 enthaelt die Startpruefung, DELETE-Absicherung und aktualisierte
 Laufzeitabhaengigkeiten; Details stehen im [Release-Nachweis](RELEASE_1_1_0_DE.md).
-Version `1.1.1` (vorbereitet, nicht veroeffentlicht) hebt die
+Der abgeschlossene Release `1.1.1` vom 25.10.2026 hebt die
 Laufzeitanforderungen auf ImapFlow `^2.9.1` und Mailparser `^3.12.4` an,
 aendert keine Runtime-Logik und keine Mindestversionen; Nachweise stehen im
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) und im
