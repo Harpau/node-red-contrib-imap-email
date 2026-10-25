@@ -19,23 +19,29 @@ historischen RC- und Provider-Protokolle ihrem jeweiligen Artefakt zu.
 Spaetere Aenderungen dieser Checkliste im Repository sind kein Bestandteil
 des bereits veroeffentlichten Tarballs.
 
-## Release-Kandidat 1.1.1 (unveroeffentlicht)
+## Release 1.1.1 am 25. Oktober 2026
 
-Stand 25.10.2026: Paket und Lockfile tragen die Version `1.1.1`. Der Kandidat
-ist **nicht veroeffentlicht**; es gibt weder Tag noch Veroeffentlichungsdatum.
-Die letzte veroeffentlichte Version bleibt `1.1.0`. Umfang: angehobene
-Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser `^3.12.4` wegen der am
-22. und 23.10.2026 veroeffentlichten Advisories in Nodemailer und ip-address,
-an ImapFlow 2.9.1 angeglichene Bibliotheksvertragstests sowie aktualisierte
-Dokumentation. Runtime-Logik, Flow-Vertraege und die Mindestversionen
-Node.js `>=22.0.0` / Node-RED `>=4.0.0` sind unveraendert.
+Kompatibles Wartungsrelease: Laufzeitanforderungen auf ImapFlow `^2.9.1` und
+Mailparser `^3.12.4` angehoben wegen der am 22. und 23.10.2026
+veroeffentlichten Advisories in Nodemailer und ip-address,
+Bibliotheksvertragstests an ImapFlow 2.9.1 angeglichen und Dokumentation
+aktualisiert. Runtime-Logik, Flow-Vertraege und die Mindestversionen
+Node.js `>=22.0.0` / Node-RED `>=4.0.0` sind gegenueber `1.1.0` unveraendert.
 
-Die lokalen Nachweise stehen im
-[RC-Pruefprotokoll 1.1.1](https://github.com/Harpau/node-red-contrib-imap-email/blob/main/.github/maintainer/VALIDATION_1_1_1_RC_DE.md)
-im Quellrepository. Offen bleiben: aktuelle GitHub-CI auf dem finalen Stand
-nach freigegebenem Push, externer Provider-Test mit dem finalen Tarball und
-die gesonderte menschliche Freigabe fuer Merge, Tag, npm-Veroeffentlichung und
-Katalog-Refresh. Die Freigaben des Release 1.1.0 gelten dafuer nicht.
+Die lokale Kandidatenabnahme, die GitHub-CI auf PR #9 und `main` sowie die
+Provider-Abnahme vom 25.10.2026 sind im Quellrepository dokumentiert:
+
+- `.github/maintainer/VALIDATION_1_1_1_RC_DE.md`: lokale Kandidatenpruefungen,
+  CI-Laeufe und Provider-Abnahme des Kandidaten-Tarballs.
+- `.github/maintainer/RELEASE_1_1_1_DE.md`: finaler Release-Stand, Tarball und
+  tatsaechlich ausgefuehrte Veroeffentlichungsschritte.
+
+Mit der finalen Release-Dokumentation entsteht ein neuer Tarball. Seine
+Runtime-Dateien muessen bytegleich zum provider-geprueften Kandidaten bleiben,
+und die automatischen Pruefungen werden fuer ihn wiederholt. Tag,
+npm-Veroeffentlichung und Katalog-Refresh erfolgen nur nach gesonderter
+menschlicher Freigabe; ein Changelog-Datum allein bestaetigt keine
+erfolgreiche npm-Veroeffentlichung.
 
 ## 1. Stand und Voraussetzungen
 
@@ -195,8 +201,10 @@ noch im Repository oder Pruefprotokoll speichern.
 Protokollieren: Paket-/Git-Stand, Tarball-Pruefsumme, Node.js-/Node-RED-Version,
 Zeitpunkt, gepruefte Szenarien, Ergebnis und offene Punkte. Historischer Nachweis:
 Strato und IONOS wurden am 2026-06-17 manuell erfolgreich getestet.
-Dieser alte Test bestaetigt keine spaeteren Aenderungen. Fehlt die externe
-Testumgebung, bleibt der Provider-Test als offene Release-Voraussetzung stehen.
+Dieser alte Test bestaetigt keine spaeteren Aenderungen. Die Provider-Abnahme
+des Kandidaten `1.1.1` vom 2026-10-25 ist im RC-Pruefprotokoll 1.1.1
+dokumentiert. Fehlt die externe Testumgebung, bleibt der Provider-Test als
+offene Release-Voraussetzung stehen.
 
 ## 6. Release vorbereiten und gesondert freigeben
 

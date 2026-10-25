@@ -22,6 +22,7 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 - `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`
 - `.github/maintainer/VALIDATION_PROVIDER_1_1_0_DE.md`
 - `.github/maintainer/VALIDATION_1_1_1_RC_DE.md`
+- `.github/maintainer/RELEASE_1_1_1_DE.md`
 - alle Dateien in `nodes/`
 - alle Dateien in `lib/`
 - die relevanten Tests in `test/`
@@ -43,9 +44,12 @@ Lockfile-Updates (PR #7, PR #8). Ein **unveroeffentlichter Release-Kandidat
 ist vorbereitet und mit PR #9 als `c9e3c53` nach `main` gemergt; letzte
 veroeffentlichte Version bleibt `1.1.0`. Nachweise stehen im
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): CI auf PR und `main`
-gruen, Provider-Abnahme vom 25.10.2026 erfolgreich. Offen ist nur die
-Veroeffentlichungsfreigabe; Paketnummer und historische Tests allein sind
-kein Release-Nachweis.
+gruen, Provider-Abnahme vom 25.10.2026 erfolgreich. Der Release-Commit mit
+Changelog-Datum 25.10.2026 ist vorbereitet und im
+[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) dokumentiert; Tag,
+npm-Veroeffentlichung und Katalog-Refresh stehen aus. Paketnummer,
+Changelog-Datum und historische Tests allein sind kein
+Veroeffentlichungsnachweis.
 
 Vor Beginn des neuen Auftrags:
 
@@ -63,9 +67,9 @@ Vor Beginn des neuen Auftrags:
 4. Den neuen Nutzerauftrag bestimmen. Release `1.1.0` braucht keine weiteren
    Schritte. Die dazu erteilten Freigaben gelten nicht pauschal fuer spaetere
    Releases; vorhandene ausdrueckliche Freigaben im jeweiligen Chat beruecksichtigen.
-   Fuer den Kandidaten `1.1.1` sind Push, CI und Provider-Test erledigt; die
-   Veroeffentlichungsfreigabe ist ein eigener, noch nicht erteilter Schritt,
-   sofern der aktuelle Chat nichts anderes festhaelt.
+   Fuer `1.1.1` sind Kandidatenabnahme, CI, Provider-Test und Release-Commit
+   erledigt; Tag, npm-Veroeffentlichung und Katalog-Refresh sind eigene, noch
+   nicht erteilte Schritte, sofern der aktuelle Chat nichts anderes festhaelt.
 
 Das Paket registriert genau diese Node-RED-Typen:
 

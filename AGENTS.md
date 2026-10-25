@@ -17,9 +17,12 @@ ist vorbereitet: Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser
 `^3.12.4`, Version 1.1.1 in Paket und Lockfile, CHANGELOG und Dokumentation.
 Der Kandidat ist mit PR #9 als `c9e3c53` nach `main` gemergt, die GitHub-CI
 auf PR und `main` ist grün, und die Provider-Abnahme vom 25.10.2026 war
-erfolgreich (Nachweis im RC-Prüfprotokoll). Er ist nicht getaggt und nicht
-veröffentlicht; die Veröffentlichungsfreigabe für Release-Commit, Tag, npm und
-Katalog steht aus. Die Freigaben für 1.1.0 gelten nicht für 1.1.1.
+erfolgreich (Nachweis im RC-Prüfprotokoll). Der Release-Commit mit
+Changelog-Datum 25.10.2026 und entfernten Kandidatenhinweisen ist vorbereitet;
+der daraus erzeugte Tarball ist im [Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md)
+identifiziert. Version 1.1.1 ist nicht getaggt und nicht veröffentlicht; Tag,
+npm-Veröffentlichung, Katalog-Refresh und Abschluss des Release-Nachweises
+brauchen eigene Freigaben. Die Freigaben für 1.1.0 gelten nicht für 1.1.1.
 
 Vor neuen Änderungen lesen:
 
@@ -29,7 +32,9 @@ Vor neuen Änderungen lesen:
   und unveränderliche Anforderungen.
 - [Startprompt](.github/maintainer/CODEX_START_PROMPT_DE.md): Einstieg und Prüfablauf.
 - [RC-Prüfprotokoll 1.1.1](.github/maintainer/VALIDATION_1_1_1_RC_DE.md): lokale
-  Nachweise des unveröffentlichten Kandidaten 1.1.1 und offene Release-Voraussetzungen.
+  Nachweise des Kandidaten 1.1.1, CI-Läufe und Provider-Abnahme.
+- [Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md): vorbereiteter
+  Release-Stand, Tarball und Status der Veröffentlichungsschritte.
 
 Historische RC-/Provider-Protokolle beschreiben ihren damaligen Prüfstand.
 Dort noch offene Schritte nicht als heute offene Release-Aufgaben behandeln.
@@ -145,7 +150,7 @@ Konfigurierbare Flags:
 - Die Entwicklungsfassung begann mit Version 0.1.0.
 - Version 0.2.0 dokumentiert die Pre-1.0-Kompatibilitätsumstellung auf Node.js >=22.0.0 und Node-RED >=4.0.0.
 - Versionen 1.0.0, 1.0.1 und 1.1.0 sind veröffentlicht. Für künftige Releases gelten die aktuellen Prüfungen in docs/RELEASE_DE.md; historische Nachweise ersetzen keine neue Abnahme geänderter Laufzeit.
-- Version 1.1.1 ist als unveröffentlichter Release-Kandidat vorbereitet: Laufzeitanforderungen ImapFlow ^2.9.1 und Mailparser ^3.12.4 bei unveränderten Mindestversionen. Push, CI und Provider-Test sind erledigt; die Veröffentlichungsfreigabe ist ein eigener Schritt.
+- Version 1.1.1 ist für die Veröffentlichung vorbereitet, aber noch nicht veröffentlicht: Laufzeitanforderungen ImapFlow ^2.9.1 und Mailparser ^3.12.4 bei unveränderten Mindestversionen. Kandidatenabnahme, CI und Provider-Test sind erledigt; Tag, npm-Veröffentlichung und Katalog-Refresh brauchen eigene Freigaben.
 
 ## package.json-Regeln
 
