@@ -10,9 +10,9 @@ Stand 25.10.2026: Version `1.1.1` ist auf npm als `latest` veröffentlicht,
 Tag `v1.1.1` und GitHub-Release sind öffentlich, die Installation aus der
 Registry ist geprüft. Inhalt: Laufzeitanforderungen ImapFlow `^2.9.1` und
 Mailparser `^3.12.4` wegen der Advisories in Nodemailer und ip-address sowie
-an ImapFlow 2.9.1 angeglichene Vertragstests; Runtime unverändert. Der Release
-ist bis auf den Refresh des Node-RED-Katalogs abgeschlossen, der Katalog zeigte
-am Abschlusstag noch `1.1.0`. Alle Zuordnungen stehen im
+an ImapFlow 2.9.1 angeglichene Vertragstests; Runtime unverändert. Der
+Node-RED-Katalog ist aktualisiert und zeigt `1.1.1`; der Release ist
+abgeschlossen. Alle Zuordnungen stehen im
 [Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md). Release
 `1.1.0` vom 16.09.2026 ist historisch dokumentiert; das damalige
 npm-README-Anzeigeproblem hat sich laut Nutzer erledigt. Die Freigaben für
@@ -21,8 +21,8 @@ npm-README-Anzeigeproblem hat sich laut Nutzer erledigt. Die Freigaben für
 Vor neuen Änderungen lesen:
 
 - [Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md): verbindliche
-  Zuordnung von Commit, Tag, CI, Tarball, npm-Veröffentlichung und
-  Registry-Installation; Katalog-Refresh dort als offen vermerkt.
+  Zuordnung von Commit, Tag, CI, Tarball, npm-Veröffentlichung,
+  Registry-Installation und Katalog-Refresh.
 - [Release-Nachweis 1.1.0](.github/maintainer/RELEASE_1_1_0_DE.md): historische
   Zuordnung von Commit, Tag, CI, Tarball, Veröffentlichung und lokaler Testinstallation.
 - [Maintainer-Briefing](.github/maintainer/MAINTAINER_BRIEFING_DE.md): Architektur

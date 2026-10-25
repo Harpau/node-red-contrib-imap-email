@@ -2,8 +2,8 @@
 
 Stand 25.10.2026: Release `1.1.1` ist abgeschlossen. PR #11 ist gemergt,
 Tag und GitHub-Release sind oeffentlich, npm `latest` zeigt `1.1.1` und die
-Registryinstallation ist geprueft; offen ist nur der Refresh des
-Node-RED-Katalogs (siehe Abschnitt 5). Nachweise stehen im
+Registryinstallation ist geprueft; der Node-RED-Katalog zeigt `1.1.1`
+(siehe Abschnitt 5). Nachweise stehen im
 [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) und im
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md). Release `1.1.0` vom
 16.09.2026 ist im [Release-Nachweis 1.1.0](RELEASE_1_1_0_DE.md) dokumentiert.
@@ -132,7 +132,7 @@ Historische Protokolle werden nicht nachtraeglich auf neue Staende umgedeutet.
 - Bibliotheksvertragstests an ImapFlow 2.9.1 angeglichen; der Paket-Loeschhelfer
   behaelt seine explizite STORE-Pruefung als zusaetzliche Absicherung.
 - Keine Aenderung an Runtime-Logik, Flow-Vertraegen oder Mindestversionen.
-- Am 25.10.2026 als `1.1.1` veroeffentlicht; Katalog-Refresh offen. Nachweise
+- Am 25.10.2026 als `1.1.1` veroeffentlicht, Katalog aktualisiert. Nachweise
   im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) und im
   [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md).
 

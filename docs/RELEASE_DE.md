@@ -40,8 +40,8 @@ Release `1.1.1` ist abgeschlossen: PR #11 ist gemergt, `v1.1.1` und der
 GitHub-Release sind oeffentlich, npm `latest` zeigt `1.1.1` und die
 Installation aus der Registry ist geprueft. Der Release-Tarball unterscheidet
 sich vom provider-geprueften Kandidaten nur in Dokumentationsdateien; die
-automatischen Pruefungen wurden fuer ihn wiederholt. Der Refresh des
-Node-RED-Katalogs wird gesondert angefordert. Die ausdrueckliche menschliche
+automatischen Pruefungen wurden fuer ihn wiederholt. Der Node-RED-Katalog
+wurde aktualisiert und zeigt `1.1.1`. Die ausdrueckliche menschliche
 Freigabe galt fuer diesen Release. Spaetere Aenderungen dieser Checkliste im
 Repository sind kein Bestandteil des veroeffentlichten Tarballs.
 

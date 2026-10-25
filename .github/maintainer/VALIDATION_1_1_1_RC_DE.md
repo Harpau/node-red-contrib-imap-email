@@ -145,6 +145,6 @@ lief mit Node-RED 4.1.15, die manuelle Abnahme mit Node-RED 5.0.7.
 5. Erledigt am 25.10.2026: Push/PR #11, Merge `b545686`, Tag `v1.1.1`,
    GitHub-Release und npm-Veröffentlichung als `latest`, jeweils mit eigener
    Freigabe; Nachweise im [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md). Der
-   Refresh des Node-RED-Katalogs ist dort als offener Schritt vermerkt.
+   Refresh des Node-RED-Katalogs ist ebenfalls erfolgt.
 
 Die Freigaben für Release `1.1.0` gelten nicht für diesen Kandidaten.

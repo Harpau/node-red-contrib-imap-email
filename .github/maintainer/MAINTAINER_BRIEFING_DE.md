@@ -2,9 +2,9 @@
 
 Stand 25.10.2026: Release `1.1.1` ist abgeschlossen. PR #11 ist gemergt,
 `v1.1.1` und der oeffentliche GitHub-Release sind vorhanden, npm `latest`
-zeigt `1.1.1` und die Installation aus der Registry ist geprueft. Offen ist
-nur der Refresh des Node-RED-Katalogs, der am Abschlusstag noch `1.1.0`
-zeigte. Der zentrale [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) ordnet
+zeigt `1.1.1` und die Installation aus der Registry ist geprueft. Der
+Node-RED-Katalog zeigt nach dem Refresh `1.1.1`. Der zentrale
+[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) ordnet
 Commit, Tarball, CI, Tests und Veroeffentlichung zu; das
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) enthaelt Kandidatenabnahme,
 CI-Laeufe und Provider-Abnahme. Release `1.1.0` vom 16.09.2026 ist im

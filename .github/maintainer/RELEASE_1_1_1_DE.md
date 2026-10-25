@@ -1,14 +1,14 @@
 # Release-Nachweis 1.1.1
 
 Datum: 25.10.2026. Paket: `@compeso/node-red-contrib-imap-email`.
-**Status: Release abgeschlossen; Refresh des Node-RED-Katalogs offen.**
+**Status: Release abgeschlossen.**
 Version `1.1.1` ist auf npm als `latest` veroeffentlicht, Tag `v1.1.1` und der
 GitHub-Release sind oeffentlich, die Installation aus der Registry ist
 geprueft. Der Nutzer hatte Push, Merge, Tag, GitHub-Release und
 npm-Veroeffentlichung jeweils ausdruecklich freigegeben. Diese Freigaben
 gehoeren zu diesem abgeschlossenen Release und sind keine Freigabe fuer
-spaetere Releases. Der Node-RED-Katalog zeigte am 25.10.2026 noch `1.1.0`;
-der Refresh ueber die Flow Library ist der letzte offene Schritt.
+spaetere Releases. Der Node-RED-Katalog wurde am 25.10.2026 vom Nutzer ueber
+die Flow Library aktualisiert und zeigt `1.1.1`.
 
 ## Umfang
 
@@ -97,7 +97,7 @@ Release-Commit aendert gegenueber dem Kandidaten ausschliesslich Dokumentation.
 | npm | [Paket](https://www.npmjs.com/package/@compeso/node-red-contrib-imap-email), Version `1.1.1`, Dist-Tag `latest`, veroeffentlicht 2026-10-25 16:36 UTC; SHA1 und Integrity wie oben |
 | Registry-Tarball | Per `npm pack @compeso/node-red-contrib-imap-email@1.1.1` heruntergeladen: SHA256 identisch, bytegleich zum Release-Asset; README in den Registry-Metadaten bytegleich zur paketierten Datei |
 | Registry-Installation | Frische Installation mit `--engine-strict` neben Node-RED 4.1.15: ImapFlow 2.9.1, Mailparser 3.12.4, Nodemailer 10.2.1, ip-address 10.7.5; alle 24 Dateien bytegleich zum Release-Asset; Paketbaum im Produktions-Audit ohne Befund; 19/19 Integrationstests |
-| Node-RED-Katalog | **Offen.** Lesende Kontrolle am 25.10.2026: Eintrag zeigt `1.1.0`. Angemeldet ueber `request refresh` aktualisieren, danach Version und README kontrollieren |
+| Node-RED-Katalog | [Eintrag](https://flows.nodered.org/node/@compeso/node-red-contrib-imap-email), vom Nutzer angemeldet per `request refresh` aktualisiert; lesende Kontrolle am 25.10.2026 nach dem Refresh: Version `1.1.1`, Eintrag als wenige Minuten zuvor aktualisiert markiert, alle drei Node-Typen gelistet. Vor dem Refresh zeigte der Eintrag noch `1.1.0` |
 
 Hinweise zum Ablauf: `npm whoami` meldete vor der Veroeffentlichung
 `401 Unauthorized`; der Nutzer meldete sich mit `npm login` (Web-Login) an.

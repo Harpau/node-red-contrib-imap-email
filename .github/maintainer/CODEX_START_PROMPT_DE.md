@@ -42,8 +42,8 @@ Stand 25.10.2026: **Release `1.1.1` ist abgeschlossen und veroeffentlicht**
 (npm `latest`, Tag `v1.1.1`, GitHub-Release; Registry-Installation geprueft).
 Enthalten sind die Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser
 `^3.12.4` wegen der Advisories in Nodemailer und ip-address sowie an ImapFlow
-2.9.1 angeglichene Vertragstests; Runtime unveraendert. Offen ist nur der
-Refresh des Node-RED-Katalogs, der am Abschlusstag noch `1.1.0` zeigte. Der
+2.9.1 angeglichene Vertragstests; Runtime unveraendert. Der Node-RED-Katalog
+zeigt nach dem Refresh `1.1.1`. Der
 [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) ist die zentrale Quelle; das
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) enthaelt Kandidatenabnahme,
 CI-Laeufe und Provider-Abnahme. Paketnummer, Changelog-Datum und historische
@@ -63,7 +63,7 @@ Vor Beginn des neuen Auftrags:
    und Runtime, aber aelterer Dokumentation. Nicht ungeprueft den finalen
    Registry-Tarball als dort installiert annehmen.
 4. Den neuen Nutzerauftrag bestimmen. Die Releases `1.1.0` und `1.1.1`
-   brauchen bis auf den Katalog-Refresh fuer `1.1.1` keine weiteren Schritte.
+   brauchen keine weiteren Schritte.
    Die dazu erteilten Freigaben gelten nicht pauschal fuer spaetere Releases;
    vorhandene ausdrueckliche Freigaben im jeweiligen Chat beruecksichtigen.
 

@@ -53,8 +53,8 @@ Die damaligen Freigaben gelten nicht fuer spaetere Veroeffentlichungen.
 Stand 25.10.2026: Patch-Release `1.1.1` (Laufzeitanforderungen ImapFlow
 `^2.9.1` und Mailparser `^3.12.4` wegen Advisories in Nodemailer und
 ip-address) ist abgeschlossen: PR #11 gemergt, Tag und GitHub-Release
-oeffentlich, npm `latest` zeigt `1.1.1`, Registryinstallation geprueft. Offen
-ist der Refresh des Node-RED-Katalogs. Nachweise:
+oeffentlich, npm `latest` zeigt `1.1.1`, Registryinstallation geprueft, der
+Node-RED-Katalog zeigt `1.1.1`. Nachweise:
 [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) und
 [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md). Die Freigaben gelten
 nicht fuer spaetere Veroeffentlichungen.
