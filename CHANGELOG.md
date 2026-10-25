@@ -2,6 +2,49 @@
 
 All notable changes to `@compeso/node-red-contrib-imap-email` are documented here.
 
+## 1.1.1 - Unpublished release candidate
+
+Package and lockfile version: `1.1.1`. This compatible maintenance release is
+being prepared as a local candidate and has not been published. No release date
+is assigned. GitHub CI on the final state, external provider testing and
+publication approval remain pending; the entries below do not certify release
+readiness. The latest published version remains `1.1.0`.
+
+### Security
+
+- Resolve moderate advisories in production dependencies. Nodemailer below
+  `10.1.4` (GHSA-8c8m-p3m8-cjg8, GHSA-m943-m63m-w62w and GHSA-85x2-q946-cp5h
+  in the address parser that Mailparser uses for address headers) is excluded
+  by the new Mailparser requirement, which resolves Nodemailer `10.2.1`. The
+  lockfile resolves `ip-address` `10.7.5` instead of `10.7.2`
+  (GHSA-rxp7-6hxx-x8q5); that package is a transitive dependency of `socks`
+  via ImapFlow and is not constrained by this package's declared ranges, so
+  consumers with their own lockfile should refresh it, for example with
+  `npm audit fix`.
+
+### Changed
+
+- Update runtime dependency requirements to ImapFlow `^2.9.1` and Mailparser
+  `^3.12.4`, matching the tested lockfile, and retain Node.js `>=22.0.0` and
+  Node-RED `>=4.0.0`. ImapFlow `2.0.8` and later check the internal
+  `\Deleted` STORE result in `messageDelete()`; the package's bounded deletion
+  helper keeps its own explicit check as defense in depth and is otherwise
+  unchanged.
+- With ImapFlow `2.0.8` and later, a fetch whose server throttling is still
+  active after the library's own retries rejects with `ETHROTTLE` instead of
+  resolving to an empty window. `imap email in` reports this like any other
+  fetch error: red status, error object on output 2 and `node.error`, not as
+  a transient connection error. Fresh installations of `1.1.0` already resolve
+  these ImapFlow versions through the previous `^2.0.5` range.
+- Align the library contract tests with ImapFlow `2.9.1` behavior and add a
+  check that pins the upstream STORE result handling. The package's public
+  flow contracts are unchanged.
+
+### Documentation
+
+- Document the upstream ImapFlow fix and the retained package protection in
+  [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+
 ## 1.1.0 - 2026-09-16
 
 ### Added

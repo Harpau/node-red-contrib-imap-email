@@ -10,6 +10,15 @@ Stand 16.09.2026: Version `1.1.0` ist auf npm als `latest` veröffentlicht,
 GitHub-Release und Node-RED-Katalog sind aktualisiert. Der Release ist abgeschlossen.
 Das vorübergehende npm-README-Anzeigeproblem hat sich laut Nutzer erledigt.
 
+Stand 25.10.2026: Nach dem Release wurden zwei Lockfile-Updates gemergt
+(PR #7: Nodemailer-/ip-address-Advisories; PR #8: ImapFlow 2.9.1 mit
+angeglichenen Vertragstests). Ein unveröffentlichter Release-Kandidat `1.1.1`
+ist vorbereitet: Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser
+`^3.12.4`, Version 1.1.1 in Paket und Lockfile, CHANGELOG und Dokumentation.
+Der Kandidat ist nicht getaggt und nicht veröffentlicht. Aktuelle GitHub-CI auf
+dem finalen Stand, Provider-Test und Veröffentlichungsfreigabe stehen aus; die
+Freigaben für 1.1.0 gelten nicht für 1.1.1.
+
 Vor neuen Änderungen lesen:
 
 - [Release-Nachweis 1.1.0](.github/maintainer/RELEASE_1_1_0_DE.md): verbindliche
@@ -17,6 +26,8 @@ Vor neuen Änderungen lesen:
 - [Maintainer-Briefing](.github/maintainer/MAINTAINER_BRIEFING_DE.md): Architektur
   und unveränderliche Anforderungen.
 - [Startprompt](.github/maintainer/CODEX_START_PROMPT_DE.md): Einstieg und Prüfablauf.
+- [RC-Prüfprotokoll 1.1.1](.github/maintainer/VALIDATION_1_1_1_RC_DE.md): lokale
+  Nachweise des unveröffentlichten Kandidaten 1.1.1 und offene Release-Voraussetzungen.
 
 Historische RC-/Provider-Protokolle beschreiben ihren damaligen Prüfstand.
 Dort noch offene Schritte nicht als heute offene Release-Aufgaben behandeln.
@@ -132,6 +143,7 @@ Konfigurierbare Flags:
 - Die Entwicklungsfassung begann mit Version 0.1.0.
 - Version 0.2.0 dokumentiert die Pre-1.0-Kompatibilitätsumstellung auf Node.js >=22.0.0 und Node-RED >=4.0.0.
 - Versionen 1.0.0, 1.0.1 und 1.1.0 sind veröffentlicht. Für künftige Releases gelten die aktuellen Prüfungen in docs/RELEASE_DE.md; historische Nachweise ersetzen keine neue Abnahme geänderter Laufzeit.
+- Version 1.1.1 ist als unveröffentlichter Release-Kandidat vorbereitet: Laufzeitanforderungen ImapFlow ^2.9.1 und Mailparser ^3.12.4 bei unveränderten Mindestversionen. Push, aktuelle CI, Provider-Test und Veröffentlichungsfreigabe sind eigene Schritte.
 
 ## package.json-Regeln
 
@@ -200,4 +212,4 @@ Einrichtung und vollständige Abnahmematrix stehen in `docs/RELEASE_DE.md`.
   - offene Risiken
   - empfohlener nächster Commit
 - Keine neuen produktiven Abhängigkeiten hinzufügen, ohne vorher den Grund zu erklären.
-- Keine Veröffentlichung auf npm oder flows.nodered.org ohne ausdrückliche menschliche Freigabe für den konkreten Release durchführen. Die Freigaben für den abgeschlossenen Release 1.1.0 erlauben keine weiteren Veröffentlichungen.
+- Keine Veröffentlichung auf npm oder flows.nodered.org ohne ausdrückliche menschliche Freigabe für den konkreten Release durchführen. Die Freigaben für den abgeschlossenen Release 1.1.0 erlauben keine weiteren Veröffentlichungen, auch nicht für den Kandidaten 1.1.1.

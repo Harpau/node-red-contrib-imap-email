@@ -21,6 +21,7 @@ Bitte inspiziere zuerst den aktuellen Stand. Lies mindestens:
 - `docs/RELEASE_DE.md`
 - `.github/maintainer/VALIDATION_1_1_0_RC_DE.md`
 - `.github/maintainer/VALIDATION_PROVIDER_1_1_0_DE.md`
+- `.github/maintainer/VALIDATION_1_1_1_RC_DE.md`
 - alle Dateien in `nodes/`
 - alle Dateien in `lib/`
 - die relevanten Tests in `test/`
@@ -35,6 +36,15 @@ Der [Release-Nachweis](RELEASE_1_1_0_DE.md) ist die zentrale Quelle fuer
 Commit, Tag, CI, Artefakt-Pruefsummen, Registry-Installation und lokale
 Testumgebung. Das voruebergehende npm-README-Anzeigeproblem ist laut Nutzer
 erledigt; dafuer keine Reparatur oder weitere Veroeffentlichung planen.
+
+Stand 25.10.2026: Auf `main` liegen zwei nach dem Release gemergte
+Lockfile-Updates (PR #7, PR #8). Ein **unveroeffentlichter Release-Kandidat
+`1.1.1`** mit Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser `^3.12.4`
+ist vorbereitet; letzte veroeffentlichte Version bleibt `1.1.0`. Lokale
+Nachweise stehen im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md).
+Aktuelle GitHub-CI auf dem finalen Stand, Provider-Test und
+Veroeffentlichungsfreigabe bleiben offen; Paketnummer und historische Tests
+allein sind kein Release-Nachweis.
 
 Vor Beginn des neuen Auftrags:
 
@@ -52,6 +62,9 @@ Vor Beginn des neuen Auftrags:
 4. Den neuen Nutzerauftrag bestimmen. Release `1.1.0` braucht keine weiteren
    Schritte. Die dazu erteilten Freigaben gelten nicht pauschal fuer spaetere
    Releases; vorhandene ausdrueckliche Freigaben im jeweiligen Chat beruecksichtigen.
+   Fuer den Kandidaten `1.1.1` sind Push, aktuelle CI, Provider-Test und
+   Veroeffentlichungsfreigabe eigene, noch nicht erteilte Schritte, sofern der
+   aktuelle Chat nichts anderes festhaelt.
 
 Das Paket registriert genau diese Node-RED-Typen:
 

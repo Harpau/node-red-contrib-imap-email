@@ -10,8 +10,10 @@ does not include this fix.
 Upstream, ImapFlow `2.0.8` (published 2026-09-27) started checking the result
 of the internal `\Deleted` STORE in `commands/expunge.js`: `messageDelete()`
 now returns `false` and sends no EXPUNGE when that STORE is rejected. The
-package's declared range `^2.0.5` still allows `2.0.5` to `2.0.7`, so the
-package-level protection below remains required and is unchanged. Since
+published `1.1.0` declares `^2.0.5`, which still allows `2.0.5` to `2.0.7`.
+The unpublished `1.1.1` release candidate raises the declared range to
+`^2.9.1`, so a fresh install always receives the upstream check; the
+package-level protection below is kept unchanged as defense in depth. Since
 2026-10-25 the repository lockfile pins ImapFlow `2.9.1`.
 
 ### Package protection since 1.1.0
@@ -95,8 +97,9 @@ still ignore the STORE result, while `2.0.8` and later return `false` from
 `commands/expunge.js` without sending EXPUNGE. Against the same local server,
 ImapFlow `2.9.1` answers the reproduction below with `{ result: false,
 remaining: 1 }` and sends only the rejected `UID STORE`. The package helper
-keeps its own STORE check because the declared range still permits older
-versions and because the `response` guard covers other normalized replies.
+keeps its own STORE check as defense in depth, because the published `1.1.0`
+range still permits older versions and because the `response` guard covers
+other normalized replies.
 
 ### Direct-library reproduction
 
