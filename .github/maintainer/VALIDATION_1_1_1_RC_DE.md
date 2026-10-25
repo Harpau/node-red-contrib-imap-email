@@ -1,8 +1,9 @@
 # Lokale Abnahme: unveröffentlichter Kandidat 1.1.1
 
 Stand: 25. Oktober 2026. Paket:
-`@compeso/node-red-contrib-imap-email@1.1.1` auf `codex/release-1.1.1-candidate`.
-Dies ist ein lokaler Kandidat ohne Veröffentlichung oder Git-Tag. Eine lesende
+`@compeso/node-red-contrib-imap-email@1.1.1`, vorbereitet auf
+`codex/release-1.1.1-candidate` und mit PR #9 als Merge-Commit `c9e3c53` nach
+`main` übernommen. Dies ist ein Kandidat ohne Veröffentlichung oder Git-Tag. Eine lesende
 npm-Abfrage am Prüftag ergab ausschließlich die veröffentlichten Versionen
 `1.0.0`, `1.0.1` und `1.1.0` mit Dist-Tag `latest` auf `1.1.0`; `1.1.1` war
 unbenutzt.
@@ -60,8 +61,12 @@ Node.js 22.0.0, 22.x und 24.x wurden lokal nicht ausgeführt.
 
 Die GitHub-CI hat die Lockfile-Commits `8a14ebd` und `9ae6c6f`/`1d631e7` über
 PR #7 und PR #8 sowie die Merge-Commits auf `main` jeweils auf Node.js 22.0.0,
-22.x und 24.x erfolgreich geprüft. Für den Kandidatenstand selbst (Bereiche und
-Version `1.1.1`) liegt noch kein CI-Lauf vor.
+22.x und 24.x erfolgreich geprüft. Für den Kandidatenstand selbst liegen vor:
+der PR-#9-Lauf [40206947266](https://github.com/Harpau/node-red-contrib-imap-email/actions/runs/40206947266)
+auf `519062b` und der Main-Lauf [40207389607](https://github.com/Harpau/node-red-contrib-imap-email/actions/runs/40207389607)
+auf dem Merge-Commit `c9e3c53`, beide erfolgreich auf Node.js 22.0.0, 22.x und
+24.x einschließlich Produktions-Audit, Paketprüfung und isolierter
+Node-RED-Integration im 22.x-Job.
 
 ## Geprüfter Tarball
 
@@ -96,22 +101,50 @@ Spätere Änderungen am Paketinhalt erzeugen einen anderen Kandidaten.
 - Keine Änderung an Flow-Verträgen, Node-Typen, Konfigurationsfeldern oder
   Zustellsemantik.
 
+## Ergänzende Provider-Abnahme (25. Oktober 2026)
+
+Der Nutzer hat den oben identifizierten Tarball (SHA-256 `7e95034…`) in der
+lokalen Node-RED-Installation unter `~/.node-red` mit einem echten
+IMAP-Testpostfach geprüft. Der Provider wird hier nicht genannt; Zugangsdaten
+und Endpunkte sind nicht Bestandteil dieses Protokolls.
+
+| Punkt | Nachweis |
+| --- | --- |
+| Laufzeit | Node-RED 5.0.7 (global installiert), Node.js 26.12.1 |
+| Installierter Stand | `@compeso/node-red-contrib-imap-email@1.1.1`; alle 24 installierten Dateien bytegleich zum Kandidaten-Tarball |
+| Aufgelöste Abhängigkeiten | ImapFlow 2.9.1, Mailparser 3.12.4, Nodemailer 10.2.1, ip-address 10.7.5 |
+| Produktions-Audit der Testinstallation | Paketbaum ohne Befund; Befunde anderer Pakete dieser Installation gehören nicht zu diesem Paket |
+| `imap email in` mit Deleted = not deleted, ACK `delete` | erfolgreich |
+| `imap email in` mit Deleted = not deleted, ACK `move` | erfolgreich |
+| `imap email in` mit Seen = not seen, ACK `flag` mit Setzen von `\Seen` | erfolgreich |
+
+Ergebnis laut Nutzer: alle drei Szenarien erfolgreich. Nicht Bestandteil
+dieser Abnahme: ACK `copy`, Fehlanmeldung, partielle Fehler, Throttling,
+Lasttest und Verhalten nach Node-RED-Neustart. Die automatisierte Integration
+lief mit Node-RED 4.1.15, die manuelle Abnahme mit Node-RED 5.0.7.
+
 ## Nicht geprüft
 
-- Node.js 22.0.0, 22.x und 24.x lokal; Nachweis über die GitHub-CI nach Push.
-- Externer Provider-Test mit diesem Tarball.
-- Node-RED 5.x; die Integration lief ausschließlich mit Node-RED 4.1.15.
+- Node.js 22.0.0, 22.x und 24.x lokal; der Nachweis dafür ist die oben
+  genannte GitHub-CI.
+- ACK `copy`, Fehlanmeldung, partielle Fehler und Throttling gegen einen
+  echten Provider.
 
 ## Offene Release-Voraussetzungen
 
-1. Gesondert freigegebener Push/PR und erfolgreiche GitHub-Actions-Läufe für
-   diesen Stand auf Node.js 22.0.0, 22.x und 24.x.
-2. Externer Provider-Test mit dem oben identifizierten Tarball nach
-   `docs/RELEASE_DE.md` Abschnitt 5, ohne Secrets im Protokoll.
-3. Entscheidung über die Anhebung der Abhängigkeitsbereiche (`48cfb39`).
-4. Separate Freigabe für Merge, Entfernen der Kandidatenhinweise mit
-   Release-Datum, Tag, npm-Veröffentlichung und Aktualisierung des
-   Node-RED-Katalogs. Danach einen zentralen Release-Nachweis `RELEASE_1_1_1_DE.md`
-   anlegen und die Einstiegsdokumente aktualisieren.
+1. Erledigt: Push, PR #9 und erfolgreiche GitHub-Actions-Läufe auf PR und
+   `main` (siehe oben).
+2. Erledigt: Provider-Abnahme vom 25. Oktober 2026 mit dem oben
+   identifizierten Tarball.
+3. Erledigt: Die Anhebung der Abhängigkeitsbereiche (`48cfb39`) wurde mit dem
+   Merge von PR #9 übernommen.
+4. Offen: gesonderte menschliche Freigabe für den Release-Commit (Entfernen
+   der Kandidatenhinweise in README, Changelog, `docs/INSTALL_DE.md` und
+   `docs/RELEASE_DE.md`, Release-Datum), Tag `v1.1.1`, npm-Veröffentlichung
+   und Aktualisierung des Node-RED-Katalogs. Der Release-Commit ändert
+   Paketdateien und erzeugt deshalb einen neuen Tarball; dessen automatische
+   Prüfungen sind zu wiederholen, Runtime-Dateien müssen bytegleich bleiben.
+   Danach einen zentralen Release-Nachweis `RELEASE_1_1_1_DE.md` anlegen und
+   die Einstiegsdokumente aktualisieren.
 
 Die Freigaben für Release `1.1.0` gelten nicht für diesen Kandidaten.

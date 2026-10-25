@@ -40,11 +40,12 @@ erledigt; dafuer keine Reparatur oder weitere Veroeffentlichung planen.
 Stand 25.10.2026: Auf `main` liegen zwei nach dem Release gemergte
 Lockfile-Updates (PR #7, PR #8). Ein **unveroeffentlichter Release-Kandidat
 `1.1.1`** mit Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser `^3.12.4`
-ist vorbereitet; letzte veroeffentlichte Version bleibt `1.1.0`. Lokale
-Nachweise stehen im [RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md).
-Aktuelle GitHub-CI auf dem finalen Stand, Provider-Test und
-Veroeffentlichungsfreigabe bleiben offen; Paketnummer und historische Tests
-allein sind kein Release-Nachweis.
+ist vorbereitet und mit PR #9 als `c9e3c53` nach `main` gemergt; letzte
+veroeffentlichte Version bleibt `1.1.0`. Nachweise stehen im
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md): CI auf PR und `main`
+gruen, Provider-Abnahme vom 25.10.2026 erfolgreich. Offen ist nur die
+Veroeffentlichungsfreigabe; Paketnummer und historische Tests allein sind
+kein Release-Nachweis.
 
 Vor Beginn des neuen Auftrags:
 
@@ -62,9 +63,9 @@ Vor Beginn des neuen Auftrags:
 4. Den neuen Nutzerauftrag bestimmen. Release `1.1.0` braucht keine weiteren
    Schritte. Die dazu erteilten Freigaben gelten nicht pauschal fuer spaetere
    Releases; vorhandene ausdrueckliche Freigaben im jeweiligen Chat beruecksichtigen.
-   Fuer den Kandidaten `1.1.1` sind Push, aktuelle CI, Provider-Test und
-   Veroeffentlichungsfreigabe eigene, noch nicht erteilte Schritte, sofern der
-   aktuelle Chat nichts anderes festhaelt.
+   Fuer den Kandidaten `1.1.1` sind Push, CI und Provider-Test erledigt; die
+   Veroeffentlichungsfreigabe ist ein eigener, noch nicht erteilter Schritt,
+   sofern der aktuelle Chat nichts anderes festhaelt.
 
 Das Paket registriert genau diese Node-RED-Typen:
 
