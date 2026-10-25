@@ -262,7 +262,7 @@ test("safe DELETE rejects the original STORE-NO bug before EXPUNGE with real Ima
   await client.logout();
 });
 
-test("safe DELETE detects a removed flag and failed second STORE despite upstream success", { timeout: 5000 }, async (t) => {
+test("safe DELETE detects a removed flag and failed second STORE; upstream no longer expunges after it", { timeout: 5000 }, async (t) => {
   let storeCount = 0;
   const { server, client } = await fixture(t, {
     failOperations: {
@@ -281,9 +281,27 @@ test("safe DELETE detects a removed flag and failed second STORE despite upstrea
     await assert.rejects(() => deleteUidRange(client, "1"), (error) => error.partial === true);
     assert.equal(storeCount, 2);
     assert.equal(server.mailboxes.get("INBOX").length, 1);
-    assert.ok(server.commands.some((command) => command.operation === "UID EXPUNGE"));
+    // ImapFlow 2.0.5-2.0.7 ignored the rejected internal STORE and still sent
+    // UID EXPUNGE; since 2.0.8 messageDelete() returns false without it. The
+    // helper must fail closed either way and never continue to verification.
+    assert.equal(server.commands.some((command) => command.operation === "UID EXPUNGE"), false);
     assert.equal(server.commands.some((command) => command.operation === "UID SEARCH"), false);
     assert.equal(server.commands.some((command) => command.operation === "UID STORE" && command.args.includes("-FLAGS")), false);
+  } finally { lock.release(); }
+  await client.logout();
+});
+
+test("upstream messageDelete() returns false and sends no EXPUNGE after a rejected STORE", { timeout: 5000 }, async (t) => {
+  // Direct-library contract for the historical false success in KNOWN_ISSUES.md:
+  // ImapFlow >= 2.0.8 checks its internal STORE result. The declared range still
+  // permits older versions, so the package helper keeps its own STORE check.
+  const { server, client } = await fixture(t, { failOperations: { "UID STORE": "NO" } });
+  await client.connect();
+  const lock = await client.getMailboxLock("INBOX");
+  try {
+    assert.equal(await client.messageDelete("1", { uid: true }), false);
+    assert.equal(server.mailboxes.get("INBOX").length, 1);
+    assert.deepEqual(server.commands.filter((command) => /STORE|EXPUNGE/.test(command.operation)).map((command) => command.operation), ["UID STORE"]);
   } finally { lock.release(); }
   await client.logout();
 });
@@ -347,18 +365,21 @@ test("safe DELETE reports EXPUNGE refusal as partial after a confirmed flag muta
   await client.logout();
 });
 
-test("safe DELETE requires a real selected mailbox even though public fetch silently returns no rows", { timeout: 5000 }, async (t) => {
+test("safe DELETE requires a real selected mailbox; upstream fetch rejects without one", { timeout: 5000 }, async (t) => {
   const { server, client } = await fixture(t);
   await client.connect();
-  assert.deepEqual(await client.fetchAll("1", { uid: true }, { uid: true }), []);
   const before = server.commands.length;
+  // ImapFlow 2.0.5 resolved fetch() without a selected mailbox as no rows;
+  // since 2.6.0 it rejects with NoMailboxSelected. Missing rows never prove
+  // anything to the helper, which must refuse before sending any command.
+  await assert.rejects(() => client.fetchAll("1", { uid: true }, { uid: true }), (error) => error.code === "NoMailboxSelected");
   await assert.rejects(() => deleteUidRange(client, "1"), /selected mailbox/);
   assert.deepEqual(server.commands.slice(before), []);
   assert.equal(server.mailboxes.get("INBOX").length, 1);
   await client.logout();
 });
 
-test("upstream exhausted FETCH throttling looks empty while the requested UID still exists", { timeout: 25000 }, async (t) => {
+test("upstream exhausted FETCH throttling rejects while the requested UID still exists", { timeout: 25000 }, async (t) => {
   const { server, client } = await fixture(t, {
     failOperations: {
       "UID FETCH": { status: "BAD", text: "Request is throttled. Suggested Backoff Time: 1 milliseconds" }
@@ -367,10 +388,11 @@ test("upstream exhausted FETCH throttling looks empty while the requested UID st
   await client.connect();
   const lock = await client.getMailboxLock("INBOX");
   try {
-    // Keep this actual wire-level regression evidence: ImapFlow 2.0.5 retries
-    // four times, then resolves its public iterator as empty instead of failing.
-    // It is therefore not a safe proof that deletion completed.
-    assert.deepEqual(await client.fetchAll("1", { uid: true }, { uid: true }), []);
+    // Wire-level evidence: ImapFlow 2.0.5 retried four times and then resolved
+    // its public iterator as empty, which looked like an empty window. Since
+    // 2.0.8 the fourth throttled attempt rejects with ETHROTTLE instead. Either
+    // way FETCH never proves that deletion completed; the helper uses SEARCH.
+    await assert.rejects(() => client.fetchAll("1", { uid: true }, { uid: true }), (error) => error.code === "ETHROTTLE");
     assert.equal(server.commands.filter((command) => command.operation === "UID FETCH").length, 4);
     assert.equal(server.mailboxes.get("INBOX")[0].uid, 1);
     assert.equal(client.usable, true);

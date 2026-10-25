@@ -7,8 +7,12 @@ It is not a release-readiness statement.
 
 **Status:** fixed at the package level in **version `1.1.0`**. Version `1.0.1`
 does not include this fix.
-The underlying ImapFlow behavior described below has not been changed upstream
-by this package.
+Upstream, ImapFlow `2.0.8` (published 2026-09-27) started checking the result
+of the internal `\Deleted` STORE in `commands/expunge.js`: `messageDelete()`
+now returns `false` and sends no EXPUNGE when that STORE is rejected. The
+package's declared range `^2.0.5` still allows `2.0.5` to `2.0.7`, so the
+package-level protection below remains required and is unchanged. Since
+2026-10-25 the repository lockfile pins ImapFlow `2.9.1`.
 
 ### Package protection since 1.1.0
 
@@ -63,8 +67,8 @@ messageDelete()              -> true
 Message UID 1 remains in INBOX.
 ```
 
-The library does not propagate the failed flag update in this path. Before the
-1.1.0 fix, the package's ACK executor accepted the returned `true`;
+ImapFlow `2.0.5` does not propagate the failed flag update in this path. Before
+the 1.1.0 fix, the package's ACK executor accepted the returned `true`;
 consequently an ACK could report success and remove its inflight entry even
 though the message remained. The retained message could be delivered again.
 Server support for `UIDPLUS` prevented a mailbox-wide expunge fallback, but alone
@@ -85,6 +89,14 @@ source-level defect predates the update from `1.4.2` to `2.0.5`; this is not a
 new 2.x regression. The wire-level reproduction above was run with `2.0.5`,
 not repeated with `1.4.2` or `1.7.8`. No claim is made about every older version
 or every real provider.
+
+Upstream fix: by inspection of the published npm archives, `2.0.6` and `2.0.7`
+still ignore the STORE result, while `2.0.8` and later return `false` from
+`commands/expunge.js` without sending EXPUNGE. Against the same local server,
+ImapFlow `2.9.1` answers the reproduction below with `{ result: false,
+remaining: 1 }` and sends only the rejected `UID STORE`. The package helper
+keeps its own STORE check because the declared range still permits older
+versions and because the `response` guard covers other normalized replies.
 
 ### Direct-library reproduction
 
@@ -116,7 +128,8 @@ async function reproduce() {
     lock = await client.getMailboxLock("INBOX");
     const result = await client.messageDelete("1", { uid: true });
     console.log({ result, remaining: server.mailboxes.get("INBOX").length });
-    // Observed: { result: true, remaining: 1 }
+    // Observed with ImapFlow 2.0.5: { result: true, remaining: 1 }
+    // Observed with ImapFlow 2.9.1: { result: false, remaining: 1 }, no UID EXPUNGE
   } finally {
     if (lock) lock.release();
     client.close();
