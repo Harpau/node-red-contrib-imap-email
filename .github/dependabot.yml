@@ -16,9 +16,16 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     # Runtime ranges have reviewed minimums; package-lock.json pins CI installs.
-    # Review IMAP-facing updates manually, including protocol compatibility.
+    # Review IMAP-facing version updates manually, including protocol
+    # compatibility. Only version updates are ignored here: Dependabot
+    # security updates for imapflow are still created once security updates
+    # are enabled in the repository settings.
     ignore:
       - dependency-name: "imapflow"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     groups:
       npm-production:
         dependency-type: "production"

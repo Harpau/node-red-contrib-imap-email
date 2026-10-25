@@ -151,7 +151,7 @@ macOS/Linux, aus dem Repository mit einer passenden Node.js-Version starten:
 ```bash
 imap_test_dir="$(mktemp -d)"
 npm pack --pack-destination "$imap_test_dir"
-npm install --prefix "$imap_test_dir" --engine-strict --no-audit --no-fund node-red@4.1.15 "$imap_test_dir"/compeso-node-red-contrib-imap-email-*.tgz
+npm install --prefix "$imap_test_dir" --engine-strict --no-audit --no-fund node-red@4.1.17 "$imap_test_dir"/compeso-node-red-contrib-imap-email-*.tgz
 NODE_RED_TEST_DIR="$imap_test_dir" npm run test:integration
 ```
 

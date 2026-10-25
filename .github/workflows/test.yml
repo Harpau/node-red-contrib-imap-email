@@ -52,7 +52,7 @@ jobs:
         if: matrix.node-version == '22.x'
         run: |
           npm pack --pack-destination "$RUNNER_TEMP"
-          npm install --prefix "$RUNNER_TEMP/imap-email-integration" --engine-strict --no-audit --no-fund node-red@4.1.15 "$RUNNER_TEMP"/compeso-node-red-contrib-imap-email-*.tgz
+          npm install --prefix "$RUNNER_TEMP/imap-email-integration" --engine-strict --no-audit --no-fund node-red@4.1.17 "$RUNNER_TEMP"/compeso-node-red-contrib-imap-email-*.tgz
 
       - name: Test Node-RED deployments
         if: matrix.node-version == '22.x'
