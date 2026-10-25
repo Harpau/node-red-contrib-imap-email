@@ -8,7 +8,7 @@ menschliche Freigaben gelten fuer den jeweils ausdruecklich genehmigten Umfang.
 ## Release 1.1.0 am 16. September 2026
 
 Release `1.1.0` ist abgeschlossen: PR #5 ist gemergt, `v1.1.0` und der
-GitHub-Release sind oeffentlich. npm `latest` und der Node-RED-Katalog zeigen
+GitHub-Release sind oeffentlich. npm `latest` und der Node-RED-Katalog zeigten
 `1.1.0`; die Installation aus der Registry ist geprueft. Die ausdrueckliche
 menschliche Freigabe galt fuer diesen Release.
 
@@ -36,12 +36,14 @@ Provider-Abnahme vom 25.10.2026 sind im Quellrepository dokumentiert:
 - `.github/maintainer/RELEASE_1_1_1_DE.md`: finaler Release-Stand, Tarball und
   tatsaechlich ausgefuehrte Veroeffentlichungsschritte.
 
-Mit der finalen Release-Dokumentation entsteht ein neuer Tarball. Seine
-Runtime-Dateien muessen bytegleich zum provider-geprueften Kandidaten bleiben,
-und die automatischen Pruefungen werden fuer ihn wiederholt. Tag,
-npm-Veroeffentlichung und Katalog-Refresh erfolgen nur nach gesonderter
-menschlicher Freigabe; ein Changelog-Datum allein bestaetigt keine
-erfolgreiche npm-Veroeffentlichung.
+Release `1.1.1` ist abgeschlossen: PR #11 ist gemergt, `v1.1.1` und der
+GitHub-Release sind oeffentlich, npm `latest` zeigt `1.1.1` und die
+Installation aus der Registry ist geprueft. Der Release-Tarball unterscheidet
+sich vom provider-geprueften Kandidaten nur in Dokumentationsdateien; die
+automatischen Pruefungen wurden fuer ihn wiederholt. Der Refresh des
+Node-RED-Katalogs wird gesondert angefordert. Die ausdrueckliche menschliche
+Freigabe galt fuer diesen Release. Spaetere Aenderungen dieser Checkliste im
+Repository sind kein Bestandteil des veroeffentlichten Tarballs.
 
 ## 1. Stand und Voraussetzungen
 

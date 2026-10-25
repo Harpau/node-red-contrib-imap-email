@@ -142,9 +142,9 @@ lief mit Node-RED 4.1.15, die manuelle Abnahme mit Node-RED 5.0.7.
    Changelog-Datum 25.10.2026 vorbereitet. Der daraus erzeugte Tarball, der
    Vergleich mit dem Kandidaten-Tarball und die wiederholten Prüfungen stehen
    im [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md).
-5. Offen: gesonderte menschliche Freigabe für Push/PR und Merge des
-   Release-Commits, Tag `v1.1.1`, npm-Veröffentlichung und Aktualisierung des
-   Node-RED-Katalogs; danach den Release-Nachweis abschließen und die
-   Einstiegsdokumente aktualisieren.
+5. Erledigt am 25.10.2026: Push/PR #11, Merge `b545686`, Tag `v1.1.1`,
+   GitHub-Release und npm-Veröffentlichung als `latest`, jeweils mit eigener
+   Freigabe; Nachweise im [Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md). Der
+   Refresh des Node-RED-Katalogs ist dort als offener Schritt vermerkt.
 
 Die Freigaben für Release `1.1.0` gelten nicht für diesen Kandidaten.

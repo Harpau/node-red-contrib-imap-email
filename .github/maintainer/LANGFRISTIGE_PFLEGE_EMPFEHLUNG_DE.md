@@ -46,17 +46,18 @@ Major  Breaking Changes
 Stand 16.09.2026: Release `1.1.0` mit Startpruefung, DELETE-Absicherung und
 aktualisierten Laufzeitabhaengigkeiten ist abgeschlossen. PR #5 ist gemergt,
 Tag und GitHub-Release sind oeffentlich; npm `latest` und Node-RED-Katalog
-zeigen `1.1.0`. Die Registryinstallation ist geprueft. Alle Zuordnungen und
+zeigten `1.1.0`. Die Registryinstallation ist geprueft. Alle Zuordnungen und
 Nachweise stehen zentral im [Release-Nachweis](RELEASE_1_1_0_DE.md).
 Die damaligen Freigaben gelten nicht fuer spaetere Veroeffentlichungen.
 
-Stand 25.10.2026: Ein unveroeffentlichter Patch-Kandidat `1.1.1` hebt die
-Laufzeitanforderungen auf ImapFlow `^2.9.1` und Mailparser `^3.12.4` an
-(Advisories in Nodemailer und ip-address) und ist im
-[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md) dokumentiert. PR #9 ist
-gemergt, CI und Provider-Abnahme sind erledigt, der Release-Commit ist
-vorbereitet ([Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md)); Tag,
-npm-Veroeffentlichung und Katalog-Refresh sind eigene Schritte.
+Stand 25.10.2026: Patch-Release `1.1.1` (Laufzeitanforderungen ImapFlow
+`^2.9.1` und Mailparser `^3.12.4` wegen Advisories in Nodemailer und
+ip-address) ist abgeschlossen: PR #11 gemergt, Tag und GitHub-Release
+oeffentlich, npm `latest` zeigt `1.1.1`, Registryinstallation geprueft. Offen
+ist der Refresh des Node-RED-Katalogs. Nachweise:
+[Release-Nachweis 1.1.1](RELEASE_1_1_1_DE.md) und
+[RC-Pruefprotokoll 1.1.1](VALIDATION_1_1_1_RC_DE.md). Die Freigaben gelten
+nicht fuer spaetere Veroeffentlichungen.
 
 ## 4. Pull-Request-Pruefung
 

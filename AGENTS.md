@@ -6,35 +6,30 @@ Dieses Repository ist ein eigenständiges Node-RED npm-Paket.
 
 ## Aktueller Stand und Einstieg für neue Chats
 
-Stand 16.09.2026: Version `1.1.0` ist auf npm als `latest` veröffentlicht,
-GitHub-Release und Node-RED-Katalog sind aktualisiert. Der Release ist abgeschlossen.
-Das vorübergehende npm-README-Anzeigeproblem hat sich laut Nutzer erledigt.
-
-Stand 25.10.2026: Nach dem Release wurden zwei Lockfile-Updates gemergt
-(PR #7: Nodemailer-/ip-address-Advisories; PR #8: ImapFlow 2.9.1 mit
-angeglichenen Vertragstests). Ein unveröffentlichter Release-Kandidat `1.1.1`
-ist vorbereitet: Laufzeitanforderungen ImapFlow `^2.9.1` und Mailparser
-`^3.12.4`, Version 1.1.1 in Paket und Lockfile, CHANGELOG und Dokumentation.
-Der Kandidat ist mit PR #9 als `c9e3c53` nach `main` gemergt, die GitHub-CI
-auf PR und `main` ist grün, und die Provider-Abnahme vom 25.10.2026 war
-erfolgreich (Nachweis im RC-Prüfprotokoll). Der Release-Commit mit
-Changelog-Datum 25.10.2026 und entfernten Kandidatenhinweisen ist vorbereitet;
-der daraus erzeugte Tarball ist im [Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md)
-identifiziert. Version 1.1.1 ist nicht getaggt und nicht veröffentlicht; Tag,
-npm-Veröffentlichung, Katalog-Refresh und Abschluss des Release-Nachweises
-brauchen eigene Freigaben. Die Freigaben für 1.1.0 gelten nicht für 1.1.1.
+Stand 25.10.2026: Version `1.1.1` ist auf npm als `latest` veröffentlicht,
+Tag `v1.1.1` und GitHub-Release sind öffentlich, die Installation aus der
+Registry ist geprüft. Inhalt: Laufzeitanforderungen ImapFlow `^2.9.1` und
+Mailparser `^3.12.4` wegen der Advisories in Nodemailer und ip-address sowie
+an ImapFlow 2.9.1 angeglichene Vertragstests; Runtime unverändert. Der Release
+ist bis auf den Refresh des Node-RED-Katalogs abgeschlossen, der Katalog zeigte
+am Abschlusstag noch `1.1.0`. Alle Zuordnungen stehen im
+[Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md). Release
+`1.1.0` vom 16.09.2026 ist historisch dokumentiert; das damalige
+npm-README-Anzeigeproblem hat sich laut Nutzer erledigt. Die Freigaben für
+1.1.0 und 1.1.1 gelten nicht für spätere Releases.
 
 Vor neuen Änderungen lesen:
 
-- [Release-Nachweis 1.1.0](.github/maintainer/RELEASE_1_1_0_DE.md): verbindliche
+- [Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md): verbindliche
+  Zuordnung von Commit, Tag, CI, Tarball, npm-Veröffentlichung und
+  Registry-Installation; Katalog-Refresh dort als offen vermerkt.
+- [Release-Nachweis 1.1.0](.github/maintainer/RELEASE_1_1_0_DE.md): historische
   Zuordnung von Commit, Tag, CI, Tarball, Veröffentlichung und lokaler Testinstallation.
 - [Maintainer-Briefing](.github/maintainer/MAINTAINER_BRIEFING_DE.md): Architektur
   und unveränderliche Anforderungen.
 - [Startprompt](.github/maintainer/CODEX_START_PROMPT_DE.md): Einstieg und Prüfablauf.
 - [RC-Prüfprotokoll 1.1.1](.github/maintainer/VALIDATION_1_1_1_RC_DE.md): lokale
   Nachweise des Kandidaten 1.1.1, CI-Läufe und Provider-Abnahme.
-- [Release-Nachweis 1.1.1](.github/maintainer/RELEASE_1_1_1_DE.md): vorbereiteter
-  Release-Stand, Tarball und Status der Veröffentlichungsschritte.
 
 Historische RC-/Provider-Protokolle beschreiben ihren damaligen Prüfstand.
 Dort noch offene Schritte nicht als heute offene Release-Aufgaben behandeln.
@@ -149,8 +144,8 @@ Konfigurierbare Flags:
 - Neue Laufzeit- oder Node-RED-Anforderungen nur nach Begründung einführen.
 - Die Entwicklungsfassung begann mit Version 0.1.0.
 - Version 0.2.0 dokumentiert die Pre-1.0-Kompatibilitätsumstellung auf Node.js >=22.0.0 und Node-RED >=4.0.0.
-- Versionen 1.0.0, 1.0.1 und 1.1.0 sind veröffentlicht. Für künftige Releases gelten die aktuellen Prüfungen in docs/RELEASE_DE.md; historische Nachweise ersetzen keine neue Abnahme geänderter Laufzeit.
-- Version 1.1.1 ist für die Veröffentlichung vorbereitet, aber noch nicht veröffentlicht: Laufzeitanforderungen ImapFlow ^2.9.1 und Mailparser ^3.12.4 bei unveränderten Mindestversionen. Kandidatenabnahme, CI und Provider-Test sind erledigt; Tag, npm-Veröffentlichung und Katalog-Refresh brauchen eigene Freigaben.
+- Versionen 1.0.0, 1.0.1, 1.1.0 und 1.1.1 sind veröffentlicht. Für künftige Releases gelten die aktuellen Prüfungen in docs/RELEASE_DE.md; historische Nachweise ersetzen keine neue Abnahme geänderter Laufzeit.
+- Version 1.1.1 (25.10.2026) hebt die Laufzeitanforderungen auf ImapFlow ^2.9.1 und Mailparser ^3.12.4 bei unveränderten Mindestversionen Node.js >=22.0.0 und Node-RED >=4.0.0.
 
 ## package.json-Regeln
 
@@ -219,4 +214,4 @@ Einrichtung und vollständige Abnahmematrix stehen in `docs/RELEASE_DE.md`.
   - offene Risiken
   - empfohlener nächster Commit
 - Keine neuen produktiven Abhängigkeiten hinzufügen, ohne vorher den Grund zu erklären.
-- Keine Veröffentlichung auf npm oder flows.nodered.org ohne ausdrückliche menschliche Freigabe für den konkreten Release durchführen. Die Freigaben für den abgeschlossenen Release 1.1.0 erlauben keine weiteren Veröffentlichungen, auch nicht für den Kandidaten 1.1.1.
+- Keine Veröffentlichung auf npm oder flows.nodered.org ohne ausdrückliche menschliche Freigabe für den konkreten Release durchführen. Die Freigaben für die abgeschlossenen Releases 1.1.0 und 1.1.1 erlauben keine weiteren Veröffentlichungen.

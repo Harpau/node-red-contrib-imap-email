@@ -1,12 +1,14 @@
 # Release-Nachweis 1.1.1
 
 Datum: 25.10.2026. Paket: `@compeso/node-red-contrib-imap-email`.
-**Status: Release vorbereitet, nicht veroeffentlicht.** Version `1.1.1` ist
-weder getaggt noch auf npm oder im Node-RED-Katalog veroeffentlicht. Dieses
-Dokument identifiziert den vorbereiteten Release-Stand und seinen Tarball. Die
-Veroeffentlichungsschritte werden erst nach gesonderter menschlicher Freigabe
-ausgefuehrt und danach hier nachgetragen. Die Freigaben fuer Release 1.1.0
-gelten nicht fuer 1.1.1.
+**Status: Release abgeschlossen; Refresh des Node-RED-Katalogs offen.**
+Version `1.1.1` ist auf npm als `latest` veroeffentlicht, Tag `v1.1.1` und der
+GitHub-Release sind oeffentlich, die Installation aus der Registry ist
+geprueft. Der Nutzer hatte Push, Merge, Tag, GitHub-Release und
+npm-Veroeffentlichung jeweils ausdruecklich freigegeben. Diese Freigaben
+gehoeren zu diesem abgeschlossenen Release und sind keine Freigabe fuer
+spaetere Releases. Der Node-RED-Katalog zeigte am 25.10.2026 noch `1.1.0`;
+der Refresh ueber die Flow Library ist der letzte offene Schritt.
 
 ## Umfang
 
@@ -33,17 +35,22 @@ Commits auf `main` seit `v1.1.0`:
 | `519062b` | Unveroeffentlichter Kandidat 1.1.1: Version, Changelog, Kandidatendokumentation, RC-Protokoll | PR #9, `c9e3c53` |
 | `d93117f` | Provider-Abnahme des Kandidaten dokumentiert | PR #10, `0b554ba` |
 
-Der Release-Commit, der dieses Dokument einfuehrt, entfernt die
+Der Release-Commit `ab70a81` (PR #11, Merge `b545686`) entfernt die
 Kandidatenhinweise aus README, Changelog, `docs/INSTALL_DE.md` und
 `docs/RELEASE_DE.md`, setzt das Changelog-Datum `2026-10-25` und aktualisiert
-`docs/KNOWN_ISSUES.md` sowie die Maintainer-Dokumente.
+`docs/KNOWN_ISSUES.md` sowie die Maintainer-Dokumente. Die Nachtraege in
+diesem Dokument nach der Veroeffentlichung aendern den veroeffentlichten
+Tarball und den Tag nicht.
 
-## Vorbereiteter Release-Tarball
+## Veroeffentlichter Release-Tarball
 
 - Datei: `compeso-node-red-contrib-imap-email-1.1.1.tgz`, erzeugt mit
-  `npm pack` aus dem Release-Commit.
+  `npm pack` aus dem Merge-Commit `b545686`; als GitHub-Release-Asset
+  angehaengt und unveraendert auf npm veroeffentlicht.
 - SHA256: `3aac19d23f8e589bdeed7e8892d904f0f7d10588ab96a6104ffde96410890dba`
-- 24 Dateien; 67,1 kB komprimiert, 254,7 kB entpackt.
+- npm SHA1: `7ed1d570dedd433965c8f87bc2a55eef68db1304`
+- npm Integrity: `sha512-Wri1MBtKn52GJs0s9Xtn9LoZauGiSJXOVGPq3fRx3JMYq1ajfMk6kACxd9smFAu745VRIr1/xx1eLQ+d55QZzw==`
+- 24 Dateien; 67.140 Bytes komprimiert, 254.712 Bytes entpackt.
 
 Der provider-gepruefte Kandidaten-Tarball aus dem
 [RC-Pruefprotokoll](VALIDATION_1_1_1_RC_DE.md) hat die SHA256
@@ -70,34 +77,39 @@ Umgebung: Node.js 26.12.1, npm 11.20.0, macOS.
 | Frischer Tarball als Verbraucher ohne Repository-Lockfile mit `--engine-strict` neben Node-RED 4.1.15 | Erfolgreich; Aufloesung ImapFlow 2.9.1, Mailparser 3.12.4, Nodemailer 10.2.1, ip-address 10.7.5 |
 | Isolierte Node-RED-4.1.15-Integration mit diesem Tarball | 19/19 Tests bestanden |
 
-Node.js 22.0.0, 22.x und 24.x wurden fuer den Release-Commit noch nicht durch
-die GitHub-CI geprueft; die vorangegangenen Staende (PR #9 Lauf 40206947266,
-Main-Lauf 40207389607 auf `c9e3c53`, PR #10) waren auf der gesamten Matrix
-erfolgreich. Der Release-Commit aendert ausschliesslich Dokumentation.
+Die GitHub-CI hat den Release-Stand auf Node.js 22.0.0, 22.x und 24.x
+geprueft: PR-#11-Lauf auf `ab70a81`, Main-Lauf und Tag-Lauf auf `b545686`,
+jeweils erfolgreich einschliesslich Produktions-Audit, Paketpruefung und
+Node-RED-Integration im 22.x-Job (Links in der Tabelle unten). Der
+Release-Commit aendert gegenueber dem Kandidaten ausschliesslich Dokumentation.
 
 ## Zuordnung zu Git und Veroeffentlichung
 
-| Schritt | Stand am 25.10.2026 |
+| Schritt | Abgeschlossener Nachweis |
 | --- | --- |
-| Release-Commit | Vorbereitet auf `codex/release-1.1.1`, nicht gepusht |
-| PR und GitHub-CI | Offen; Push braucht eine eigene Freigabe |
-| Merge-Commit / Tag-Ziel | Offen |
-| Tag `v1.1.1` und GitHub-Release | Offen |
-| npm `1.1.1` als `latest` | Offen; lesende Abfrage am 25.10.2026: `latest` ist `1.1.0`, `1.1.1` unbenutzt |
-| Registry-Installation in frischer Testinstanz | Offen |
-| Node-RED-Katalog (`request refresh`) | Offen |
+| PR | [#11](https://github.com/Harpau/node-red-contrib-imap-email/pull/11), am 25.10.2026 gemergt |
+| Gepruefter PR-Head | `ab70a819c9d0fd3c276cadd97f983cc1d77a36b0` |
+| Merge-Commit / Tag-Ziel | `b5456864eedbcb602edc186675a760ffbbf92428`; annotierter Tag `v1.1.1` (Tag-Objekt `afe65a42a844049805cf15a1cea7fde8319588f8`); Git-Tree identisch mit dem geprueften PR-Head |
+| PR-CI | [40211395626](https://github.com/Harpau/node-red-contrib-imap-email/actions/runs/40211395626), erfolgreich |
+| Main-CI des Merge-Commits | [40211513103](https://github.com/Harpau/node-red-contrib-imap-email/actions/runs/40211513103), erfolgreich |
+| Tag-CI | [40211689098](https://github.com/Harpau/node-red-contrib-imap-email/actions/runs/40211689098), erfolgreich |
+| GitHub-Release | [v1.1.1](https://github.com/Harpau/node-red-contrib-imap-email/releases/tag/v1.1.1), oeffentlich, kein Prerelease; Tarball und `imap-email-1.1.1-SHA256SUMS.txt` angehaengt; Notes nach der Veroeffentlichung um Registry-Nachweise ergaenzt |
+| npm | [Paket](https://www.npmjs.com/package/@compeso/node-red-contrib-imap-email), Version `1.1.1`, Dist-Tag `latest`, veroeffentlicht 2026-10-25 16:36 UTC; SHA1 und Integrity wie oben |
+| Registry-Tarball | Per `npm pack @compeso/node-red-contrib-imap-email@1.1.1` heruntergeladen: SHA256 identisch, bytegleich zum Release-Asset; README in den Registry-Metadaten bytegleich zur paketierten Datei |
+| Registry-Installation | Frische Installation mit `--engine-strict` neben Node-RED 4.1.15: ImapFlow 2.9.1, Mailparser 3.12.4, Nodemailer 10.2.1, ip-address 10.7.5; alle 24 Dateien bytegleich zum Release-Asset; Paketbaum im Produktions-Audit ohne Befund; 19/19 Integrationstests |
+| Node-RED-Katalog | **Offen.** Lesende Kontrolle am 25.10.2026: Eintrag zeigt `1.1.0`. Angemeldet ueber `request refresh` aktualisieren, danach Version und README kontrollieren |
 
-Nach der Veroeffentlichung sind hier Merge-Commit, Tag, CI-Laeufe, npm-SHA1
-und Integrity, Registry-Installation und Katalog-Refresh nachzutragen und die
-Einstiegsdokumente (`AGENTS.md`, Briefing, Startprompt, PRD, Pflegeempfehlung)
-auf den abgeschlossenen Release zu aktualisieren.
+Hinweise zum Ablauf: `npm whoami` meldete vor der Veroeffentlichung
+`401 Unauthorized`; der Nutzer meldete sich mit `npm login` (Web-Login) an.
+Der erste `npm publish` aus einer nicht-interaktiven Sitzung scheiterte vor
+dem Upload mit `EOTP` (Web-Authentifizierung erforderlich). Der zweite
+Versuch im Terminal des Nutzers veroeffentlichte nach abgeschlossener
+Authentifizierung dasselbe Asset. Die Registry stellte die Version weniger als
+eine Minute nach der Erfolgsmeldung bereit.
 
 ## Grenzen
 
-- Das Changelog-Datum `2026-10-25` setzt eine Veroeffentlichung an diesem Tag
-  voraus. Bei spaeterer Veroeffentlichung sind Changelog, `docs/RELEASE_DE.md`
-  und dieses Dokument vor dem Tag anzupassen; das erzeugt einen neuen Tarball
-  mit erneuten automatischen Pruefungen.
+- Das Changelog-Datum `2026-10-25` entspricht dem Veroeffentlichungstag.
 - Die Provider-Abnahme deckte `delete`, `move` und `flag` (`\Seen`) ab, nicht
   `copy`, Fehlanmeldung, partielle Fehler oder Throttling.
 - Keine lokale Pruefung unter Node.js 22.x/24.x; Nachweis nur ueber die CI.
