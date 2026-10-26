@@ -4,8 +4,9 @@ These tests load the packed npm package into an actual Node-RED runtime. They us
 only the loopback IMAP fixture and synthetic credentials. Each run creates and
 removes an isolated Node-RED user directory; it never uses the normal user profile.
 
-Prepare a separate installation with Node-RED 4.x and the freshly generated package
-tarball. Set `NODE_RED_TEST_DIR` to that installation directory, then run:
+Prepare a separate installation with a supported Node-RED release and the freshly
+generated package tarball; CI runs this suite against pinned current 4.x and 5.x
+releases. Set `NODE_RED_TEST_DIR` to that installation directory, then run:
 
 ```sh
 NODE_RED_TEST_DIR=/private/tmp/imap-email-integration-env node --test test/integration/*.test.js

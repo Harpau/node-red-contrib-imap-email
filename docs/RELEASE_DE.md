@@ -140,8 +140,11 @@ Repository und Verbraucher, Versionen und Audit-Ergebnis dokumentieren.
 
 Diese Pruefung ist auch ohne externen Provider verpflichtend. Einen lokalen
 synthetischen IMAP-Server auf Loopback und temporaeren Ports verwenden.
-Mindestens die unterstuetzte Node-RED-4.x-Linie und die vorgesehene
-Zielinstallation pruefen. Synthetische Credentials ebenfalls ueber den
+Mindestens die unterstuetzte Node-RED-4.x-Linie, die aktuelle 5.x-Linie und
+die vorgesehene Zielinstallation pruefen. Die GitHub-CI fuehrt die
+Integrationssuite im Job `integration` gegen die gepinnten Versionen
+Node-RED `4.1.17` und `5.0.9` aus; Dependabot aktualisiert diese Pins nicht,
+sie werden manuell angehoben. Synthetische Credentials ebenfalls ueber den
 Node-RED-Credential-Pfad einsetzen.
 
 Die Integrationssuite verwendet eine separate Installation von Node-RED und
@@ -157,7 +160,8 @@ NODE_RED_TEST_DIR="$imap_test_dir" npm run test:integration
 
 `NODE_RED_TEST_DIR` zeigt auf das Installationsverzeichnis, das beide Pakete
 unter `node_modules` enthaelt. Die Suite verwaltet ihre isolierten User-Verzeichnisse
-fuer Testflows separat. Fuer die reproduzierbare Einrichtung die verwendete
+fuer Testflows separat. Fuer die 5.x-Linie im Beispiel `node-red@5.0.9`
+einsetzen. Fuer die reproduzierbare Einrichtung die verwendete
 Node-RED-Version festhalten; reale Credentials werden nicht benoetigt.
 
 - Drei Typen laden und deaktivierten Beispiel-Flow importieren.

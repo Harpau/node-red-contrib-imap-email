@@ -317,6 +317,13 @@ create another copy in the target mailbox.
 
 - OAuth2 token acquisition and refresh are not implemented. The account node supports username/password and an optional static access token field.
 
+## Security
+
+Report suspected vulnerabilities privately as described in the
+[security policy](https://github.com/Harpau/node-red-contrib-imap-email/blob/main/SECURITY.md),
+not in a public issue. Never post passwords, tokens, private hostnames, raw
+mails or attachments.
+
 ## Development Checks
 
 ```bash
