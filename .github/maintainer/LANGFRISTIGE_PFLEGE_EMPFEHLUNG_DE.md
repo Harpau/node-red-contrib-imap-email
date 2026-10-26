@@ -89,8 +89,10 @@ needs-repro
 
 ## 6. Security
 
-Das Paket ist oeffentlich. Ein eigener `SECURITY.md` kann den Meldeweg fuer
-Schwachstellen ergaenzen. Issues und Templates sollen weiterhin klar sagen:
+Das Paket ist oeffentlich. `SECURITY.md` im Repository beschreibt den Meldeweg
+fuer Schwachstellen ueber die private Schwachstellenmeldung von GitHub; diese
+Funktion muss in den Repository-Einstellungen aktiviert bleiben. Issues und
+Templates sollen weiterhin klar sagen:
 
 - keine Passwoerter, Tokens oder privaten Hostnamen posten
 - Flow-Ausschnitte nur ohne Credentials teilen
@@ -105,7 +107,9 @@ Der Standard-Workflow prueft:
 - `npm audit --omit=dev`
 - `npm test`
 - `npm run pack:check`
-- isolierte Node-RED-Integration auf 4.x aus einem frisch gepackten Tarball
+- isolierte Node-RED-Integration aus einem frisch gepackten Tarball im
+  eigenen Job `integration` gegen die gepinnten Versionen der 4.x- und
+  5.x-Linie (derzeit `4.1.17` und `5.0.9`; Pins manuell anheben)
 
 CI darf keine Veroeffentlichungsschritte enthalten. Aktuelle GitHub-Laeufe
 werden erst nach freigegebenem Push als Nachweis verwendet; alte PR-Laeufe
